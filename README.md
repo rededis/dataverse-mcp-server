@@ -31,6 +31,7 @@ DATAVERSE_TENANT_ID=your-azure-tenant-id
 DATAVERSE_CLIENT_ID=your-app-registration-client-id
 DATAVERSE_CLIENT_SECRET=your-client-secret
 DATAVERSE_RESOURCE_URL=https://your-org.crm.dynamics.com
+DATAVERSE_ENTITY_PREFIX=contoso_          # optional, default prefix filter for list_entities
 ```
 
 ### Azure App Registration
@@ -61,7 +62,8 @@ Add to your Claude settings (`~/.claude/settings.json` or project `.claude/setti
         "DATAVERSE_TENANT_ID": "your-tenant-id",
         "DATAVERSE_CLIENT_ID": "your-client-id",
         "DATAVERSE_CLIENT_SECRET": "your-client-secret",
-        "DATAVERSE_RESOURCE_URL": "https://your-org.crm.dynamics.com"
+        "DATAVERSE_RESOURCE_URL": "https://your-org.crm.dynamics.com",
+        "DATAVERSE_ENTITY_PREFIX": "contoso_"
       }
     }
   }

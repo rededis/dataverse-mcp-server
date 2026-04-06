@@ -20,6 +20,8 @@ const clientId = getRequiredEnv("DATAVERSE_CLIENT_ID");
 const clientSecret = getRequiredEnv("DATAVERSE_CLIENT_SECRET");
 const resourceUrl = getRequiredEnv("DATAVERSE_RESOURCE_URL");
 
+const entityPrefix = process.env.DATAVERSE_ENTITY_PREFIX || undefined;
+
 const auth = new DataverseAuth(tenantId, clientId, clientSecret, resourceUrl);
 const client = new DataverseClient(auth, resourceUrl);
 
@@ -28,7 +30,7 @@ const server = new McpServer({
   version: "0.1.0",
 });
 
-registerDataTools(server, client);
+registerDataTools(server, client, entityPrefix);
 registerSchemaTools(server, client);
 
 const transport = new StdioServerTransport();

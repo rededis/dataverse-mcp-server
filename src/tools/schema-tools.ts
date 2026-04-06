@@ -3,7 +3,7 @@ import { z } from "zod";
 import { DataverseClient } from "../client.js";
 
 const AttributeSchema = z.object({
-  logical_name: z.string().describe("Logical name (e.g. 'fundai_amount')"),
+  logical_name: z.string().describe("Logical name (e.g. 'contoso_amount')"),
   type: z.enum([
     "String", "Integer", "BigInt", "Decimal", "Double", "Money",
     "Boolean", "DateTime", "Uniqueidentifier", "Memo", "Picklist", "Lookup",
@@ -67,7 +67,7 @@ export function registerSchemaTools(server: McpServer, client: DataverseClient):
     "create_entity",
     "Create a new Dataverse table (entity) with specified attributes",
     {
-      logical_name: z.string().describe("Logical name with publisher prefix (e.g. 'fundai_newtable')"),
+      logical_name: z.string().describe("Logical name with publisher prefix (e.g. 'contoso_newtable')"),
       display_name: z.string().describe("Display name"),
       display_collection_name: z.string().describe("Plural display name"),
       description: z.string().optional().describe("Table description"),

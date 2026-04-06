@@ -2,17 +2,18 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { DataverseClient } from "../client.js";
 
-export function registerDataTools(server: McpServer, client: DataverseClient): void {
+export function registerDataTools(server: McpServer, client: DataverseClient, defaultPrefix?: string): void {
   server.tool(
     "list_entities",
     "List Dataverse tables (entities) with optional prefix filter",
     {
-      prefix: z.string().optional().describe("Filter entities by logical name prefix (e.g. 'fundai_')"),
+      prefix: z.string().optional().describe("Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified."),
     },
     async ({ prefix }) => {
+      const effectivePrefix = prefix ?? defaultPrefix;
       let path = "/EntityDefinitions?$select=LogicalName,DisplayName,EntitySetName,Description,IsCustomEntity";
-      if (prefix) {
-        path += `&$filter=startswith(LogicalName,'${prefix}')`;
+      if (effectivePrefix) {
+        path += `&$filter=startswith(LogicalName,'${effectivePrefix}')`;
       }
       const result = await client.get(path) as { value: unknown[] };
       return {
@@ -25,7 +26,7 @@ export function registerDataTools(server: McpServer, client: DataverseClient): v
     "get_entity_schema",
     "Get attributes (columns) of a specific Dataverse table",
     {
-      entity_logical_name: z.string().describe("Logical name of the entity (e.g. 'account', 'contact', 'fundai_bankaccount')"),
+      entity_logical_name: z.string().describe("Logical name of the entity (e.g. 'account', 'contact', 'contoso_bankaccount')"),
     },
     async ({ entity_logical_name }) => {
       const path = `/EntityDefinitions(LogicalName='${entity_logical_name}')/Attributes?$select=LogicalName,AttributeType,DisplayName,RequiredLevel,IsCustomAttribute,Description`;
