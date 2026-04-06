@@ -1,0 +1,28 @@
+{
+  "name": "dataverse-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for Microsoft Dataverse API",
+  "main": "dist/index.js",
+  "bin": {
+    "dataverse-mcp-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "keywords": [
+    "mcp",
+    "dataverse",
+    "dynamics365",
+    "microsoft"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
