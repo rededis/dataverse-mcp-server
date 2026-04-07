@@ -38,19 +38,20 @@ export function registerDataTools(
       const params: Record<string, string | undefined> = {
         $select:
           "LogicalName,DisplayName,EntitySetName,Description,IsCustomEntity",
+        $filter: "IsCustomEntity eq true",
       };
-      if (effectivePrefix) {
-        params.$filter = `startswith(LogicalName,'${escapeODataString(effectivePrefix)}')`;
-      }
       const query = buildODataQuery(params);
       const result = (await client.get(`/EntityDefinitions${query}`)) as {
-        value: unknown[];
+        value: Array<{ LogicalName: string; [key: string]: unknown }>;
       };
+      const filtered = effectivePrefix
+        ? result.value.filter((e) => e.LogicalName.startsWith(effectivePrefix))
+        : result.value;
       return {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(result.value, null, 2),
+            text: JSON.stringify(filtered, null, 2),
           },
         ],
       };
