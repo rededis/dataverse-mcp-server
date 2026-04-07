@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
-import { existsSync } from "fs";
-import { resolve } from "path";
-import { config } from "dotenv";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { config } from "dotenv";
 import { DataverseAuth } from "./auth.js";
 import { DataverseClient } from "./client.js";
 import { registerDataTools } from "./tools/data-tools.js";
@@ -20,7 +20,7 @@ if (existsSync(cwdEnvPath)) {
   config({ path: projectEnvPath });
 } else {
   console.error(
-    "Warning: .env file not found. Using environment variables only."
+    "Warning: .env file not found. Using environment variables only.",
   );
 }
 
@@ -63,13 +63,13 @@ if (missing.length > 0) {
         "After filling in the values, restart Claude Code to apply changes.",
       ];
       return { content: [{ type: "text", text: lines.join("\n") }] };
-    }
+    },
   );
 } else {
-  const tenantId = process.env.DATAVERSE_TENANT_ID!;
-  const clientId = process.env.DATAVERSE_CLIENT_ID!;
-  const clientSecret = process.env.DATAVERSE_CLIENT_SECRET!;
-  const resourceUrl = process.env.DATAVERSE_RESOURCE_URL!;
+  const tenantId = process.env.DATAVERSE_TENANT_ID as string;
+  const clientId = process.env.DATAVERSE_CLIENT_ID as string;
+  const clientSecret = process.env.DATAVERSE_CLIENT_SECRET as string;
+  const resourceUrl = process.env.DATAVERSE_RESOURCE_URL as string;
   const entityPrefix = process.env.DATAVERSE_ENTITY_PREFIX || undefined;
 
   const auth = new DataverseAuth(tenantId, clientId, clientSecret, resourceUrl);
