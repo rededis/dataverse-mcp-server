@@ -12,12 +12,9 @@ const AttributeSchema = z.object({
       "Decimal",
       "Double",
       "Money",
-      "Boolean",
       "DateTime",
       "Uniqueidentifier",
       "Memo",
-      "Picklist",
-      "Lookup",
     ])
     .describe("Attribute type"),
   display_name: z.string().describe("Display name"),
@@ -37,7 +34,9 @@ const AttributeSchema = z.object({
 
 type AttributeInput = z.infer<typeof AttributeSchema>;
 
-function buildAttributeBody(attr: AttributeInput): Record<string, unknown> {
+export function buildAttributeBody(
+  attr: AttributeInput,
+): Record<string, unknown> {
   const typeMap: Record<string, string> = {
     String: "Microsoft.Dynamics.CRM.StringAttributeMetadata",
     Integer: "Microsoft.Dynamics.CRM.IntegerAttributeMetadata",
@@ -45,13 +44,10 @@ function buildAttributeBody(attr: AttributeInput): Record<string, unknown> {
     Decimal: "Microsoft.Dynamics.CRM.DecimalAttributeMetadata",
     Double: "Microsoft.Dynamics.CRM.DoubleAttributeMetadata",
     Money: "Microsoft.Dynamics.CRM.MoneyAttributeMetadata",
-    Boolean: "Microsoft.Dynamics.CRM.BooleanAttributeMetadata",
     DateTime: "Microsoft.Dynamics.CRM.DateTimeAttributeMetadata",
     Uniqueidentifier:
       "Microsoft.Dynamics.CRM.UniqueIdentifierAttributeMetadata",
     Memo: "Microsoft.Dynamics.CRM.MemoAttributeMetadata",
-    Picklist: "Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
-    Lookup: "Microsoft.Dynamics.CRM.LookupAttributeMetadata",
   };
 
   const body: Record<string, unknown> = {
@@ -129,7 +125,16 @@ export function registerSchemaTools(
         .describe("Additional attributes to create with the entity"),
     },
     async (params) => {
-      const prefix = params.logical_name.split("_")[0];
+      const separatorIndex = params.logical_name.indexOf("_");
+      if (
+        separatorIndex <= 0 ||
+        separatorIndex === params.logical_name.length - 1
+      ) {
+        throw new Error(
+          "Invalid logical_name. Expected format '<publisherprefix>_<name>' (e.g. 'contoso_newtable').",
+        );
+      }
+      const prefix = params.logical_name.slice(0, separatorIndex);
       const primaryAttrName = params.primary_attribute_name || `${prefix}_name`;
 
       const body: Record<string, unknown> = {
@@ -209,14 +214,18 @@ export function registerSchemaTools(
             /\(([^)]+)\)/,
           )?.[1];
 
-        if (entityId) {
-          for (const attr of params.attributes) {
-            const attrBody = buildAttributeBody(attr);
-            await client.post(
-              `/EntityDefinitions(${entityId})/Attributes`,
-              attrBody,
-            );
-          }
+        if (!entityId) {
+          throw new Error(
+            "Entity was created but additional attributes could not be created because the entity ID was not returned by the create-entity response.",
+          );
+        }
+
+        for (const attr of params.attributes) {
+          const attrBody = buildAttributeBody(attr);
+          await client.post(
+            `/EntityDefinitions(${entityId})/Attributes`,
+            attrBody,
+          );
         }
       }
 

@@ -14,7 +14,8 @@ export class DataverseClient {
     resourceUrl: string,
     apiVersion: string = "v9.2",
   ) {
-    this.baseUrl = `${resourceUrl}/api/data/${apiVersion}`;
+    const normalizedUrl = resourceUrl.replace(/\/+$/, "");
+    this.baseUrl = `${normalizedUrl}/api/data/${apiVersion}`;
   }
 
   async request(
@@ -32,14 +33,15 @@ export class DataverseClient {
       ...options.headers,
     };
 
-    if (options.body) {
+    if (options.body !== undefined) {
       headers["Content-Type"] = "application/json";
     }
 
     const response = await fetch(url, {
       method: options.method || "GET",
       headers,
-      body: options.body ? JSON.stringify(options.body) : undefined,
+      body:
+        options.body !== undefined ? JSON.stringify(options.body) : undefined,
     });
 
     if (response.status === 204) {
