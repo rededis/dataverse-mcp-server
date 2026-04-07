@@ -10,9 +10,14 @@ import { DataverseClient } from "./client.js";
 import { registerDataTools } from "./tools/data-tools.js";
 import { registerSchemaTools } from "./tools/schema-tools.js";
 
-const envPath = resolve(__dirname, "..", ".env");
-if (existsSync(envPath)) {
-  config({ path: envPath });
+const projectRoot = resolve(__dirname, "..");
+const cwdEnvPath = resolve(process.cwd(), ".env");
+const projectEnvPath = resolve(projectRoot, ".env");
+
+if (existsSync(cwdEnvPath)) {
+  config({ path: cwdEnvPath });
+} else if (existsSync(projectEnvPath)) {
+  config({ path: projectEnvPath });
 } else {
   console.error(
     "Warning: .env file not found. Using environment variables only."
@@ -34,8 +39,8 @@ const server = new McpServer({
 });
 
 if (missing.length > 0) {
-  const envExamplePath = resolve(__dirname, "..", ".env.example");
-  const envFilePath = resolve(__dirname, "..", ".env");
+  const envExamplePath = resolve(projectRoot, ".env.example");
+  const envFilePath = resolve(projectRoot, ".env");
   const hasEnvFile = existsSync(envFilePath);
 
   server.tool(

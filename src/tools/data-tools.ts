@@ -2,6 +2,19 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { DataverseClient } from "../client.js";
 
+function escapeODataString(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+function buildODataQuery(params: Record<string, string | number | undefined>): string {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) qs.set(key, String(value));
+  }
+  const str = qs.toString();
+  return str ? `?${str}` : "";
+}
+
 export function registerDataTools(server: McpServer, client: DataverseClient, defaultPrefix?: string): void {
   server.tool(
     "list_entities",
@@ -11,11 +24,14 @@ export function registerDataTools(server: McpServer, client: DataverseClient, de
     },
     async ({ prefix }) => {
       const effectivePrefix = prefix ?? defaultPrefix;
-      let path = "/EntityDefinitions?$select=LogicalName,DisplayName,EntitySetName,Description,IsCustomEntity";
+      const params: Record<string, string | undefined> = {
+        $select: "LogicalName,DisplayName,EntitySetName,Description,IsCustomEntity",
+      };
       if (effectivePrefix) {
-        path += `&$filter=startswith(LogicalName,'${effectivePrefix}')`;
+        params.$filter = `startswith(LogicalName,'${escapeODataString(effectivePrefix)}')`;
       }
-      const result = await client.get(path) as { value: unknown[] };
+      const query = buildODataQuery(params);
+      const result = await client.get(`/EntityDefinitions${query}`) as { value: unknown[] };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }],
       };
@@ -29,8 +45,11 @@ export function registerDataTools(server: McpServer, client: DataverseClient, de
       entity_logical_name: z.string().describe("Logical name of the entity (e.g. 'account', 'contact', 'contoso_bankaccount')"),
     },
     async ({ entity_logical_name }) => {
-      const path = `/EntityDefinitions(LogicalName='${entity_logical_name}')/Attributes?$select=LogicalName,AttributeType,DisplayName,RequiredLevel,IsCustomAttribute,Description`;
-      const result = await client.get(path) as { value: unknown[] };
+      const escaped = escapeODataString(entity_logical_name);
+      const query = buildODataQuery({
+        $select: "LogicalName,AttributeType,DisplayName,RequiredLevel,IsCustomAttribute,Description",
+      });
+      const result = await client.get(`/EntityDefinitions(LogicalName='${escaped}')/Attributes${query}`) as { value: unknown[] };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }],
       };
@@ -49,14 +68,13 @@ export function registerDataTools(server: McpServer, client: DataverseClient, de
       expand: z.string().optional().describe("Related entities to expand ($expand)"),
     },
     async ({ entity_set, select, filter, top, orderby, expand }) => {
-      const params: string[] = [];
-      if (select) params.push(`$select=${select}`);
-      if (filter) params.push(`$filter=${filter}`);
-      if (top) params.push(`$top=${top}`);
-      if (orderby) params.push(`$orderby=${orderby}`);
-      if (expand) params.push(`$expand=${expand}`);
-
-      const query = params.length ? `?${params.join("&")}` : "";
+      const query = buildODataQuery({
+        $select: select,
+        $filter: filter,
+        $top: top !== undefined ? top : undefined,
+        $orderby: orderby,
+        $expand: expand,
+      });
       const result = await client.get(`/${entity_set}${query}`) as { value: unknown[] };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result.value, null, 2) }],
@@ -74,11 +92,7 @@ export function registerDataTools(server: McpServer, client: DataverseClient, de
       expand: z.string().optional().describe("Related entities to expand ($expand)"),
     },
     async ({ entity_set, id, select, expand }) => {
-      const params: string[] = [];
-      if (select) params.push(`$select=${select}`);
-      if (expand) params.push(`$expand=${expand}`);
-
-      const query = params.length ? `?${params.join("&")}` : "";
+      const query = buildODataQuery({ $select: select, $expand: expand });
       const result = await client.get(`/${entity_set}(${id})${query}`);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],

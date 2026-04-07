@@ -152,8 +152,9 @@ export function registerSchemaTools(server: McpServer, client: DataverseClient):
     },
     async ({ entity_logical_name, attribute }) => {
       const body = buildAttributeBody(attribute);
+      const escaped = entity_logical_name.replace(/'/g, "''");
       const result = await client.post(
-        `/EntityDefinitions(LogicalName='${entity_logical_name}')/Attributes`,
+        `/EntityDefinitions(LogicalName='${escaped}')/Attributes`,
         body
       );
       return {
