@@ -71,11 +71,12 @@ if (missing.length > 0) {
   const clientSecret = process.env.DATAVERSE_CLIENT_SECRET as string;
   const resourceUrl = process.env.DATAVERSE_RESOURCE_URL as string;
   const entityPrefix = process.env.DATAVERSE_ENTITY_PREFIX || undefined;
+  const allowDelete = process.env.DATAVERSE_ALLOW_DELETE === "true";
 
   const auth = new DataverseAuth(tenantId, clientId, clientSecret, resourceUrl);
   const client = new DataverseClient(auth, resourceUrl);
 
-  registerDataTools(server, client, entityPrefix);
+  registerDataTools(server, client, entityPrefix, allowDelete);
   registerSchemaTools(server, client);
 }
 
