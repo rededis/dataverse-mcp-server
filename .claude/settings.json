@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "dataverse": {
+      "command": "node",
+      "args": ["/Users/vredkin/Projects/x-dataverse-mcp-server/dist/index.js"],
+      "env": {
+        "DATAVERSE_TENANT_ID": "your-tenant-id",
+        "DATAVERSE_CLIENT_ID": "your-client-id",
+        "DATAVERSE_CLIENT_SECRET": "your-client-secret",
+        "DATAVERSE_RESOURCE_URL": "https://your-org.crm.dynamics.com"
+      }
+    }
+  }
+}
