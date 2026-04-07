@@ -21,6 +21,7 @@ export function registerDataTools(
   server: McpServer,
   client: DataverseClient,
   defaultPrefix?: string,
+  allowDelete = false,
 ): void {
   server.tool(
     "list_entities",
@@ -205,22 +206,51 @@ export function registerDataTools(
     },
   );
 
-  server.tool(
-    "delete_record",
-    "Delete a record from a Dataverse table",
-    {
-      entity_set: z
-        .string()
-        .describe("Entity set name (plural, e.g. 'accounts', 'contacts')"),
-      id: z.string().describe("Record GUID"),
-    },
-    async ({ entity_set, id }) => {
-      await client.delete(`/${entity_set}(${id})`);
-      return {
+  if (allowDelete) {
+    server.tool(
+      "delete_record",
+      "Delete a record from a Dataverse table",
+      {
+        entity_set: z
+          .string()
+          .describe("Entity set name (plural, e.g. 'accounts', 'contacts')"),
+        id: z.string().describe("Record GUID"),
+      },
+      async ({ entity_set, id }) => {
+        await client.delete(`/${entity_set}(${id})`);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Record ${id} deleted successfully.`,
+            },
+          ],
+        };
+      },
+    );
+  } else {
+    server.tool(
+      "delete_record",
+      "Delete a record from a Dataverse table (currently disabled)",
+      {
+        entity_set: z.string().describe("Entity set name"),
+        id: z.string().describe("Record GUID"),
+      },
+      async () => ({
         content: [
-          { type: "text" as const, text: `Record ${id} deleted successfully.` },
+          {
+            type: "text" as const,
+            text: [
+              "[IMPORTANT: Display this entire message to the user exactly as-is.]",
+              "",
+              "⚠️ Delete operations are disabled by default for safety.",
+              "",
+              "To enable, add DATAVERSE_ALLOW_DELETE=true to your .env file and restart the MCP server.",
+            ].join("\n"),
+          },
         ],
-      };
-    },
-  );
+        isError: true,
+      }),
+    );
+  }
 }

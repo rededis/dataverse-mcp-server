@@ -13,7 +13,7 @@ MCP (Model Context Protocol) server for Microsoft Dataverse API. Works with any 
 | `get_record` | Get a single record by ID |
 | `create_record` | Create a record |
 | `update_record` | Update a record |
-| `delete_record` | Delete a record |
+| `delete_record` | Delete a record (disabled by default, see [Safety](#safety)) |
 
 ### Schema operations
 | Tool | Description |
@@ -32,6 +32,7 @@ DATAVERSE_CLIENT_ID=your-app-registration-client-id
 DATAVERSE_CLIENT_SECRET=your-client-secret
 DATAVERSE_RESOURCE_URL=https://your-org.crm.dynamics.com
 DATAVERSE_ENTITY_PREFIX=contoso_          # optional, default prefix filter for list_entities
+DATAVERSE_ALLOW_DELETE=true               # optional, enable delete operations (disabled by default)
 ```
 
 ### Azure App Registration
@@ -64,6 +65,12 @@ Add `.mcp.json` to your project root:
 ```
 
 Create a `.env` file with your credentials (see `.env.example`).
+
+## Safety
+
+Delete operations are **disabled by default** to prevent accidental data loss. The `delete_record` tool is registered but returns an error message explaining how to enable it.
+
+To enable, add `DATAVERSE_ALLOW_DELETE=true` to your `.env` file and restart the MCP server.
 
 ## License
 
