@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "dataverse": {
+      "command": "node",
+      "args": ["./dist/index.js"]
+    }
+  }
+}

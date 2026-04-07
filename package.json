@@ -1,0 +1,39 @@
+{
+  "name": "dataverse-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for Microsoft Dataverse API",
+  "main": "dist/index.js",
+  "bin": {
+    "dataverse-mcp-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "lint": "biome check src/",
+    "lint:fix": "biome check --write src/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "mcp",
+    "dataverse",
+    "dynamics365",
+    "microsoft"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "dotenv": "^17.4.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.10",
+    "@types/node": "^22.0.0",
+    "husky": "^9.1.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.2"
+  }
+}
