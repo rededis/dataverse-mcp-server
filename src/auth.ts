@@ -10,7 +10,7 @@ export class DataverseAuth {
     private tenantId: string,
     private clientId: string,
     private clientSecret: string,
-    private resourceUrl: string
+    private resourceUrl: string,
   ) {}
 
   async getToken(): Promise<string> {
@@ -34,7 +34,9 @@ export class DataverseAuth {
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`OAuth token request failed (${response.status}): ${text}`);
+      throw new Error(
+        `OAuth token request failed (${response.status}): ${text}`,
+      );
     }
 
     const data = await response.json();

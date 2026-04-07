@@ -1,4 +1,4 @@
-import { DataverseAuth } from "./auth.js";
+import type { DataverseAuth } from "./auth.js";
 
 export interface DataverseRequestOptions {
   method?: string;
@@ -12,12 +12,15 @@ export class DataverseClient {
   constructor(
     private auth: DataverseAuth,
     resourceUrl: string,
-    private apiVersion: string = "v9.2"
+    apiVersion: string = "v9.2",
   ) {
     this.baseUrl = `${resourceUrl}/api/data/${apiVersion}`;
   }
 
-  async request(path: string, options: DataverseRequestOptions = {}): Promise<unknown> {
+  async request(
+    path: string,
+    options: DataverseRequestOptions = {},
+  ): Promise<unknown> {
     const token = await this.auth.getToken();
     const url = path.startsWith("http") ? path : `${this.baseUrl}${path}`;
 

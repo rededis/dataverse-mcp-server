@@ -1,21 +1,38 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { DataverseClient } from "../client.js";
+import type { DataverseClient } from "../client.js";
 
 const AttributeSchema = z.object({
   logical_name: z.string().describe("Logical name (e.g. 'contoso_amount')"),
-  type: z.enum([
-    "String", "Integer", "BigInt", "Decimal", "Double", "Money",
-    "Boolean", "DateTime", "Uniqueidentifier", "Memo", "Picklist", "Lookup",
-  ]).describe("Attribute type"),
+  type: z
+    .enum([
+      "String",
+      "Integer",
+      "BigInt",
+      "Decimal",
+      "Double",
+      "Money",
+      "Boolean",
+      "DateTime",
+      "Uniqueidentifier",
+      "Memo",
+      "Picklist",
+      "Lookup",
+    ])
+    .describe("Attribute type"),
   display_name: z.string().describe("Display name"),
   description: z.string().optional().describe("Description"),
-  required: z.enum(["None", "ApplicationRequired", "SystemRequired"]).optional()
+  required: z
+    .enum(["None", "ApplicationRequired", "SystemRequired"])
+    .optional()
     .describe("Required level (default: None)"),
   max_length: z.number().optional().describe("Max length for String/Memo"),
   min_value: z.number().optional().describe("Min value for numeric types"),
   max_value: z.number().optional().describe("Max value for numeric types"),
-  precision: z.number().optional().describe("Decimal precision for Decimal/Money"),
+  precision: z
+    .number()
+    .optional()
+    .describe("Decimal precision for Decimal/Money"),
 });
 
 type AttributeInput = z.infer<typeof AttributeSchema>;
@@ -30,7 +47,8 @@ function buildAttributeBody(attr: AttributeInput): Record<string, unknown> {
     Money: "Microsoft.Dynamics.CRM.MoneyAttributeMetadata",
     Boolean: "Microsoft.Dynamics.CRM.BooleanAttributeMetadata",
     DateTime: "Microsoft.Dynamics.CRM.DateTimeAttributeMetadata",
-    Uniqueidentifier: "Microsoft.Dynamics.CRM.UniqueIdentifierAttributeMetadata",
+    Uniqueidentifier:
+      "Microsoft.Dynamics.CRM.UniqueIdentifierAttributeMetadata",
     Memo: "Microsoft.Dynamics.CRM.MemoAttributeMetadata",
     Picklist: "Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
     Lookup: "Microsoft.Dynamics.CRM.LookupAttributeMetadata",
@@ -39,10 +57,17 @@ function buildAttributeBody(attr: AttributeInput): Record<string, unknown> {
   const body: Record<string, unknown> = {
     "@odata.type": typeMap[attr.type],
     LogicalName: attr.logical_name,
-    SchemaName: attr.logical_name.charAt(0).toUpperCase() + attr.logical_name.slice(1),
+    SchemaName:
+      attr.logical_name.charAt(0).toUpperCase() + attr.logical_name.slice(1),
     DisplayName: {
       "@odata.type": "Microsoft.Dynamics.CRM.Label",
-      LocalizedLabels: [{ "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel", Label: attr.display_name, LanguageCode: 1033 }],
+      LocalizedLabels: [
+        {
+          "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
+          Label: attr.display_name,
+          LanguageCode: 1033,
+        },
+      ],
     },
     RequiredLevel: { Value: attr.required || "None" },
   };
@@ -50,7 +75,13 @@ function buildAttributeBody(attr: AttributeInput): Record<string, unknown> {
   if (attr.description) {
     body.Description = {
       "@odata.type": "Microsoft.Dynamics.CRM.Label",
-      LocalizedLabels: [{ "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel", Label: attr.description, LanguageCode: 1033 }],
+      LocalizedLabels: [
+        {
+          "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
+          Label: attr.description,
+          LanguageCode: 1033,
+        },
+      ],
     };
   }
 
@@ -62,22 +93,39 @@ function buildAttributeBody(attr: AttributeInput): Record<string, unknown> {
   return body;
 }
 
-export function registerSchemaTools(server: McpServer, client: DataverseClient): void {
+export function registerSchemaTools(
+  server: McpServer,
+  client: DataverseClient,
+): void {
   server.tool(
     "create_entity",
     "Create a new Dataverse table (entity) with specified attributes",
     {
-      logical_name: z.string().describe("Logical name with publisher prefix (e.g. 'contoso_newtable')"),
+      logical_name: z
+        .string()
+        .describe(
+          "Logical name with publisher prefix (e.g. 'contoso_newtable')",
+        ),
       display_name: z.string().describe("Display name"),
       display_collection_name: z.string().describe("Plural display name"),
       description: z.string().optional().describe("Table description"),
-      primary_attribute_name: z.string().optional()
-        .describe("Logical name for primary name attribute (default: '{prefix}_name')"),
-      primary_attribute_display_name: z.string().optional()
+      primary_attribute_name: z
+        .string()
+        .optional()
+        .describe(
+          "Logical name for primary name attribute (default: '{prefix}_name')",
+        ),
+      primary_attribute_display_name: z
+        .string()
+        .optional()
         .describe("Display name for primary name attribute (default: 'Name')"),
-      ownership_type: z.enum(["UserOwned", "OrganizationOwned"]).optional()
+      ownership_type: z
+        .enum(["UserOwned", "OrganizationOwned"])
+        .optional()
         .describe("Ownership type (default: UserOwned)"),
-      attributes: z.array(AttributeSchema).optional()
+      attributes: z
+        .array(AttributeSchema)
+        .optional()
         .describe("Additional attributes to create with the entity"),
     },
     async (params) => {
@@ -87,14 +135,28 @@ export function registerSchemaTools(server: McpServer, client: DataverseClient):
       const body: Record<string, unknown> = {
         "@odata.type": "Microsoft.Dynamics.CRM.EntityMetadata",
         LogicalName: params.logical_name,
-        SchemaName: params.logical_name.charAt(0).toUpperCase() + params.logical_name.slice(1),
+        SchemaName:
+          params.logical_name.charAt(0).toUpperCase() +
+          params.logical_name.slice(1),
         DisplayName: {
           "@odata.type": "Microsoft.Dynamics.CRM.Label",
-          LocalizedLabels: [{ "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel", Label: params.display_name, LanguageCode: 1033 }],
+          LocalizedLabels: [
+            {
+              "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
+              Label: params.display_name,
+              LanguageCode: 1033,
+            },
+          ],
         },
         DisplayCollectionName: {
           "@odata.type": "Microsoft.Dynamics.CRM.Label",
-          LocalizedLabels: [{ "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel", Label: params.display_collection_name, LanguageCode: 1033 }],
+          LocalizedLabels: [
+            {
+              "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
+              Label: params.display_collection_name,
+              LanguageCode: 1033,
+            },
+          ],
         },
         OwnershipType: params.ownership_type || "UserOwned",
         HasActivities: false,
@@ -103,11 +165,19 @@ export function registerSchemaTools(server: McpServer, client: DataverseClient):
           {
             "@odata.type": "Microsoft.Dynamics.CRM.StringAttributeMetadata",
             LogicalName: primaryAttrName,
-            SchemaName: primaryAttrName.charAt(0).toUpperCase() + primaryAttrName.slice(1),
+            SchemaName:
+              primaryAttrName.charAt(0).toUpperCase() +
+              primaryAttrName.slice(1),
             MaxLength: 200,
             DisplayName: {
               "@odata.type": "Microsoft.Dynamics.CRM.Label",
-              LocalizedLabels: [{ "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel", Label: params.primary_attribute_display_name || "Name", LanguageCode: 1033 }],
+              LocalizedLabels: [
+                {
+                  "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
+                  Label: params.primary_attribute_display_name || "Name",
+                  LanguageCode: 1033,
+                },
+              ],
             },
             RequiredLevel: { Value: "ApplicationRequired" },
             IsPrimaryName: true,
@@ -118,7 +188,13 @@ export function registerSchemaTools(server: McpServer, client: DataverseClient):
       if (params.description) {
         body.Description = {
           "@odata.type": "Microsoft.Dynamics.CRM.Label",
-          LocalizedLabels: [{ "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel", Label: params.description, LanguageCode: 1033 }],
+          LocalizedLabels: [
+            {
+              "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
+              Label: params.description,
+              LanguageCode: 1033,
+            },
+          ],
         };
       }
 
@@ -127,20 +203,29 @@ export function registerSchemaTools(server: McpServer, client: DataverseClient):
       // Create additional attributes if specified
       if (params.attributes?.length) {
         const entityMeta = result as { MetadataId?: string };
-        const entityId = entityMeta.MetadataId || (result as Record<string, string>)["@odata.entityId"]?.match(/\(([^)]+)\)/)?.[1];
+        const entityId =
+          entityMeta.MetadataId ||
+          (result as Record<string, string>)["@odata.entityId"]?.match(
+            /\(([^)]+)\)/,
+          )?.[1];
 
         if (entityId) {
           for (const attr of params.attributes) {
             const attrBody = buildAttributeBody(attr);
-            await client.post(`/EntityDefinitions(${entityId})/Attributes`, attrBody);
+            await client.post(
+              `/EntityDefinitions(${entityId})/Attributes`,
+              attrBody,
+            );
           }
         }
       }
 
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        content: [
+          { type: "text" as const, text: JSON.stringify(result, null, 2) },
+        ],
       };
-    }
+    },
   );
 
   server.tool(
@@ -155,12 +240,14 @@ export function registerSchemaTools(server: McpServer, client: DataverseClient):
       const escaped = entity_logical_name.replace(/'/g, "''");
       const result = await client.post(
         `/EntityDefinitions(LogicalName='${escaped}')/Attributes`,
-        body
+        body,
       );
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+        content: [
+          { type: "text" as const, text: JSON.stringify(result, null, 2) },
+        ],
       };
-    }
+    },
   );
 
   server.tool(
@@ -168,12 +255,22 @@ export function registerSchemaTools(server: McpServer, client: DataverseClient):
     "Create a relationship between two Dataverse tables",
     {
       type: z.enum(["OneToMany", "ManyToMany"]).describe("Relationship type"),
-      primary_entity: z.string().describe("Primary (referenced) entity logical name"),
-      related_entity: z.string().describe("Related (referencing) entity logical name"),
-      schema_name: z.string().describe("Unique schema name for the relationship"),
-      lookup_name: z.string().optional()
+      primary_entity: z
+        .string()
+        .describe("Primary (referenced) entity logical name"),
+      related_entity: z
+        .string()
+        .describe("Related (referencing) entity logical name"),
+      schema_name: z
+        .string()
+        .describe("Unique schema name for the relationship"),
+      lookup_name: z
+        .string()
+        .optional()
         .describe("Logical name for lookup attribute (OneToMany only)"),
-      lookup_display_name: z.string().optional()
+      lookup_display_name: z
+        .string()
+        .optional()
         .describe("Display name for lookup attribute (OneToMany only)"),
     },
     async (params) => {
@@ -185,23 +282,43 @@ export function registerSchemaTools(server: McpServer, client: DataverseClient):
           ReferencingEntity: params.related_entity,
           Lookup: {
             "@odata.type": "Microsoft.Dynamics.CRM.LookupAttributeMetadata",
-            LogicalName: params.lookup_name || `${params.related_entity}_${params.primary_entity}id`,
-            SchemaName: (params.lookup_name || `${params.related_entity}_${params.primary_entity}id`)
-              .charAt(0).toUpperCase() + (params.lookup_name || `${params.related_entity}_${params.primary_entity}id`).slice(1),
+            LogicalName:
+              params.lookup_name ||
+              `${params.related_entity}_${params.primary_entity}id`,
+            SchemaName:
+              (
+                params.lookup_name ||
+                `${params.related_entity}_${params.primary_entity}id`
+              )
+                .charAt(0)
+                .toUpperCase() +
+              (
+                params.lookup_name ||
+                `${params.related_entity}_${params.primary_entity}id`
+              ).slice(1),
             DisplayName: {
               "@odata.type": "Microsoft.Dynamics.CRM.Label",
-              LocalizedLabels: [{ "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel", Label: params.lookup_display_name || params.primary_entity, LanguageCode: 1033 }],
+              LocalizedLabels: [
+                {
+                  "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
+                  Label: params.lookup_display_name || params.primary_entity,
+                  LanguageCode: 1033,
+                },
+              ],
             },
             RequiredLevel: { Value: "None" },
           },
         };
         const result = await client.post("/RelationshipDefinitions", body);
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+          content: [
+            { type: "text" as const, text: JSON.stringify(result, null, 2) },
+          ],
         };
       } else {
         const body = {
-          "@odata.type": "Microsoft.Dynamics.CRM.ManyToManyRelationshipMetadata",
+          "@odata.type":
+            "Microsoft.Dynamics.CRM.ManyToManyRelationshipMetadata",
           SchemaName: params.schema_name,
           Entity1LogicalName: params.primary_entity,
           Entity2LogicalName: params.related_entity,
@@ -209,9 +326,11 @@ export function registerSchemaTools(server: McpServer, client: DataverseClient):
         };
         const result = await client.post("/RelationshipDefinitions", body);
         return {
-          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+          content: [
+            { type: "text" as const, text: JSON.stringify(result, null, 2) },
+          ],
         };
       }
-    }
+    },
   );
 }
