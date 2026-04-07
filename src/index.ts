@@ -60,7 +60,7 @@ if (missing.length > 0) {
         "",
         `See .env.example at: ${envExamplePath}`,
         "",
-        "After filling in the values, restart Claude Code to apply changes.",
+        "After filling in the values, restart your MCP client to apply changes.",
       ];
       return { content: [{ type: "text", text: lines.join("\n") }] };
     },
