@@ -89,4 +89,82 @@ describe("buildAttributeBody", () => {
     });
     expect(body.SchemaName).toBe("Contoso_myfield");
   });
+
+  it("builds Boolean attribute with default Yes/No options", () => {
+    const body = buildAttributeBody({
+      logical_name: "contoso_active",
+      type: "Boolean",
+      display_name: "Active",
+    });
+    expect(body["@odata.type"]).toBe(
+      "Microsoft.Dynamics.CRM.BooleanAttributeMetadata",
+    );
+    const optionSet = body.OptionSet as Record<string, any>;
+    expect(optionSet.TrueOption.Value).toBe(1);
+    expect(optionSet.FalseOption.Value).toBe(0);
+    expect(optionSet.TrueOption.Label.LocalizedLabels[0].Label).toBe("Yes");
+    expect(optionSet.FalseOption.Label.LocalizedLabels[0].Label).toBe("No");
+  });
+
+  it("builds Boolean attribute with custom options", () => {
+    const body = buildAttributeBody({
+      logical_name: "contoso_verified",
+      type: "Boolean",
+      display_name: "Verified",
+      options: [
+        { label: "Unverified", value: 0 },
+        { label: "Verified", value: 1 },
+      ],
+    });
+    const optionSet = body.OptionSet as Record<string, any>;
+    expect(optionSet.TrueOption.Label.LocalizedLabels[0].Label).toBe("Verified");
+    expect(optionSet.FalseOption.Label.LocalizedLabels[0].Label).toBe("Unverified");
+  });
+
+  it("builds Boolean attribute with reversed option order", () => {
+    const body = buildAttributeBody({
+      logical_name: "contoso_reversed",
+      type: "Boolean",
+      display_name: "Reversed",
+      options: [
+        { label: "Yes", value: 1 },
+        { label: "No", value: 0 },
+      ],
+    });
+    const optionSet = body.OptionSet as Record<string, any>;
+    expect(optionSet.TrueOption.Value).toBe(1);
+    expect(optionSet.TrueOption.Label.LocalizedLabels[0].Label).toBe("Yes");
+    expect(optionSet.FalseOption.Value).toBe(0);
+    expect(optionSet.FalseOption.Label.LocalizedLabels[0].Label).toBe("No");
+  });
+
+  it("builds Picklist attribute with options", () => {
+    const body = buildAttributeBody({
+      logical_name: "contoso_status",
+      type: "Picklist",
+      display_name: "Status",
+      options: [
+        { label: "Active", value: 100000 },
+        { label: "Inactive", value: 100001 },
+        { label: "Pending", value: 100002 },
+      ],
+    });
+    expect(body["@odata.type"]).toBe(
+      "Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
+    );
+    const optionSet = body.OptionSet as Record<string, any>;
+    expect(optionSet.Options).toHaveLength(3);
+    expect(optionSet.Options[0].Value).toBe(100000);
+    expect(optionSet.Options[0].Label.LocalizedLabels[0].Label).toBe("Active");
+  });
+
+  it("throws when Picklist has no options", () => {
+    expect(() =>
+      buildAttributeBody({
+        logical_name: "contoso_status",
+        type: "Picklist",
+        display_name: "Status",
+      }),
+    ).toThrow("Picklist attributes require a non-empty 'options' array.");
+  });
 });
