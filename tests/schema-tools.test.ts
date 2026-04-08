@@ -89,4 +89,68 @@ describe("buildAttributeBody", () => {
     });
     expect(body.SchemaName).toBe("Contoso_myfield");
   });
+
+  it("builds Boolean attribute with default Yes/No options", () => {
+    const body = buildAttributeBody({
+      logical_name: "contoso_active",
+      type: "Boolean",
+      display_name: "Active",
+    });
+    expect(body["@odata.type"]).toBe(
+      "Microsoft.Dynamics.CRM.BooleanAttributeMetadata",
+    );
+    const optionSet = body.OptionSet as Record<string, any>;
+    expect(optionSet.TrueOption.Value).toBe(1);
+    expect(optionSet.FalseOption.Value).toBe(0);
+    expect(optionSet.TrueOption.Label.LocalizedLabels[0].Label).toBe("Yes");
+    expect(optionSet.FalseOption.Label.LocalizedLabels[0].Label).toBe("No");
+  });
+
+  it("builds Boolean attribute with custom options", () => {
+    const body = buildAttributeBody({
+      logical_name: "contoso_verified",
+      type: "Boolean",
+      display_name: "Verified",
+      options: [
+        { label: "Unverified", value: 0 },
+        { label: "Verified", value: 1 },
+      ],
+    });
+    const optionSet = body.OptionSet as Record<string, any>;
+    expect(optionSet.TrueOption.Label.LocalizedLabels[0].Label).toBe("Verified");
+    expect(optionSet.FalseOption.Label.LocalizedLabels[0].Label).toBe("Unverified");
+  });
+
+  it("builds Picklist attribute with options", () => {
+    const body = buildAttributeBody({
+      logical_name: "contoso_status",
+      type: "Picklist",
+      display_name: "Status",
+      options: [
+        { label: "Active", value: 100000 },
+        { label: "Inactive", value: 100001 },
+        { label: "Pending", value: 100002 },
+      ],
+    });
+    expect(body["@odata.type"]).toBe(
+      "Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
+    );
+    const optionSet = body.OptionSet as Record<string, any>;
+    expect(optionSet.Options).toHaveLength(3);
+    expect(optionSet.Options[0].Value).toBe(100000);
+    expect(optionSet.Options[0].Label.LocalizedLabels[0].Label).toBe("Active");
+  });
+
+  it("builds Lookup attribute with targets", () => {
+    const body = buildAttributeBody({
+      logical_name: "contoso_accountid",
+      type: "Lookup",
+      display_name: "Account",
+      targets: ["account"],
+    });
+    expect(body["@odata.type"]).toBe(
+      "Microsoft.Dynamics.CRM.LookupAttributeMetadata",
+    );
+    expect(body.Targets).toEqual(["account"]);
+  });
 });

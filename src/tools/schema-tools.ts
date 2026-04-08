@@ -15,6 +15,9 @@ const AttributeSchema = z.object({
       "DateTime",
       "Uniqueidentifier",
       "Memo",
+      "Boolean",
+      "Picklist",
+      "Lookup",
     ])
     .describe("Attribute type"),
   display_name: z.string().describe("Display name"),
@@ -30,6 +33,16 @@ const AttributeSchema = z.object({
     .number()
     .optional()
     .describe("Decimal precision for Decimal/Money"),
+  options: z
+    .array(z.object({ label: z.string(), value: z.number() }))
+    .optional()
+    .describe(
+      "Options for Boolean (2 items: false=0, true=1) or Picklist types",
+    ),
+  targets: z
+    .array(z.string())
+    .optional()
+    .describe("Target entity logical names for Lookup type"),
 });
 
 type AttributeInput = z.infer<typeof AttributeSchema>;
@@ -48,6 +61,9 @@ export function buildAttributeBody(
     Uniqueidentifier:
       "Microsoft.Dynamics.CRM.UniqueIdentifierAttributeMetadata",
     Memo: "Microsoft.Dynamics.CRM.MemoAttributeMetadata",
+    Boolean: "Microsoft.Dynamics.CRM.BooleanAttributeMetadata",
+    Picklist: "Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
+    Lookup: "Microsoft.Dynamics.CRM.LookupAttributeMetadata",
   };
 
   const body: Record<string, unknown> = {
@@ -85,6 +101,63 @@ export function buildAttributeBody(
   if (attr.min_value !== undefined) body.MinValue = attr.min_value;
   if (attr.max_value !== undefined) body.MaxValue = attr.max_value;
   if (attr.precision !== undefined) body.Precision = attr.precision;
+
+  if (attr.type === "Boolean") {
+    const falseOption = attr.options?.[0] ?? { label: "No", value: 0 };
+    const trueOption = attr.options?.[1] ?? { label: "Yes", value: 1 };
+    body.OptionSet = {
+      "@odata.type": "Microsoft.Dynamics.CRM.BooleanOptionSetMetadata",
+      TrueOption: {
+        Value: trueOption.value,
+        Label: {
+          "@odata.type": "Microsoft.Dynamics.CRM.Label",
+          LocalizedLabels: [
+            {
+              "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
+              Label: trueOption.label,
+              LanguageCode: 1033,
+            },
+          ],
+        },
+      },
+      FalseOption: {
+        Value: falseOption.value,
+        Label: {
+          "@odata.type": "Microsoft.Dynamics.CRM.Label",
+          LocalizedLabels: [
+            {
+              "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
+              Label: falseOption.label,
+              LanguageCode: 1033,
+            },
+          ],
+        },
+      },
+    };
+  }
+
+  if (attr.type === "Picklist" && attr.options?.length) {
+    body.OptionSet = {
+      "@odata.type": "Microsoft.Dynamics.CRM.OptionSetMetadata",
+      Options: attr.options.map((opt) => ({
+        Value: opt.value,
+        Label: {
+          "@odata.type": "Microsoft.Dynamics.CRM.Label",
+          LocalizedLabels: [
+            {
+              "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
+              Label: opt.label,
+              LanguageCode: 1033,
+            },
+          ],
+        },
+      })),
+    };
+  }
+
+  if (attr.type === "Lookup" && attr.targets?.length) {
+    body.Targets = attr.targets;
+  }
 
   return body;
 }
