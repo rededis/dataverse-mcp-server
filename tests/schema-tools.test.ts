@@ -121,6 +121,23 @@ describe("buildAttributeBody", () => {
     expect(optionSet.FalseOption.Label.LocalizedLabels[0].Label).toBe("Unverified");
   });
 
+  it("builds Boolean attribute with reversed option order", () => {
+    const body = buildAttributeBody({
+      logical_name: "contoso_reversed",
+      type: "Boolean",
+      display_name: "Reversed",
+      options: [
+        { label: "Yes", value: 1 },
+        { label: "No", value: 0 },
+      ],
+    });
+    const optionSet = body.OptionSet as Record<string, any>;
+    expect(optionSet.TrueOption.Value).toBe(1);
+    expect(optionSet.TrueOption.Label.LocalizedLabels[0].Label).toBe("Yes");
+    expect(optionSet.FalseOption.Value).toBe(0);
+    expect(optionSet.FalseOption.Label.LocalizedLabels[0].Label).toBe("No");
+  });
+
   it("builds Picklist attribute with options", () => {
     const body = buildAttributeBody({
       logical_name: "contoso_status",
@@ -152,5 +169,25 @@ describe("buildAttributeBody", () => {
       "Microsoft.Dynamics.CRM.LookupAttributeMetadata",
     );
     expect(body.Targets).toEqual(["account"]);
+  });
+
+  it("throws when Picklist has no options", () => {
+    expect(() =>
+      buildAttributeBody({
+        logical_name: "contoso_status",
+        type: "Picklist",
+        display_name: "Status",
+      }),
+    ).toThrow("Picklist attributes require a non-empty 'options' array.");
+  });
+
+  it("throws when Lookup has no targets", () => {
+    expect(() =>
+      buildAttributeBody({
+        logical_name: "contoso_accountid",
+        type: "Lookup",
+        display_name: "Account",
+      }),
+    ).toThrow("Lookup attributes require a non-empty 'targets' array.");
   });
 });

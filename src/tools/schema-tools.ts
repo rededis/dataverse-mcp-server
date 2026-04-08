@@ -103,8 +103,14 @@ export function buildAttributeBody(
   if (attr.precision !== undefined) body.Precision = attr.precision;
 
   if (attr.type === "Boolean") {
-    const falseOption = attr.options?.[0] ?? { label: "No", value: 0 };
-    const trueOption = attr.options?.[1] ?? { label: "Yes", value: 1 };
+    const falseOption = attr.options?.find((o) => o.value === 0) ?? {
+      label: "No",
+      value: 0,
+    };
+    const trueOption = attr.options?.find((o) => o.value === 1) ?? {
+      label: "Yes",
+      value: 1,
+    };
     body.OptionSet = {
       "@odata.type": "Microsoft.Dynamics.CRM.BooleanOptionSetMetadata",
       TrueOption: {
@@ -136,7 +142,12 @@ export function buildAttributeBody(
     };
   }
 
-  if (attr.type === "Picklist" && attr.options?.length) {
+  if (attr.type === "Picklist") {
+    if (!attr.options?.length) {
+      throw new Error(
+        "Picklist attributes require a non-empty 'options' array.",
+      );
+    }
     body.OptionSet = {
       "@odata.type": "Microsoft.Dynamics.CRM.OptionSetMetadata",
       Options: attr.options.map((opt) => ({
@@ -155,7 +166,10 @@ export function buildAttributeBody(
     };
   }
 
-  if (attr.type === "Lookup" && attr.targets?.length) {
+  if (attr.type === "Lookup") {
+    if (!attr.targets?.length) {
+      throw new Error("Lookup attributes require a non-empty 'targets' array.");
+    }
     body.Targets = attr.targets;
   }
 
