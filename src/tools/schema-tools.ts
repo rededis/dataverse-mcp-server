@@ -17,7 +17,6 @@ const AttributeSchema = z.object({
       "Memo",
       "Boolean",
       "Picklist",
-      "Lookup",
     ])
     .describe("Attribute type"),
   display_name: z.string().describe("Display name"),
@@ -39,10 +38,6 @@ const AttributeSchema = z.object({
     .describe(
       "Options for Boolean (2 items: false=0, true=1) or Picklist types",
     ),
-  targets: z
-    .array(z.string())
-    .optional()
-    .describe("Target entity logical names for Lookup type"),
 });
 
 type AttributeInput = z.infer<typeof AttributeSchema>;
@@ -63,7 +58,6 @@ export function buildAttributeBody(
     Memo: "Microsoft.Dynamics.CRM.MemoAttributeMetadata",
     Boolean: "Microsoft.Dynamics.CRM.BooleanAttributeMetadata",
     Picklist: "Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
-    Lookup: "Microsoft.Dynamics.CRM.LookupAttributeMetadata",
   };
 
   const body: Record<string, unknown> = {
@@ -150,6 +144,7 @@ export function buildAttributeBody(
     }
     body.OptionSet = {
       "@odata.type": "Microsoft.Dynamics.CRM.OptionSetMetadata",
+      IsGlobal: false,
       Options: attr.options.map((opt) => ({
         Value: opt.value,
         Label: {
@@ -164,13 +159,6 @@ export function buildAttributeBody(
         },
       })),
     };
-  }
-
-  if (attr.type === "Lookup") {
-    if (!attr.targets?.length) {
-      throw new Error("Lookup attributes require a non-empty 'targets' array.");
-    }
-    body.Targets = attr.targets;
   }
 
   return body;

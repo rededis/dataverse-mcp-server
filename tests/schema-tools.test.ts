@@ -158,19 +158,6 @@ describe("buildAttributeBody", () => {
     expect(optionSet.Options[0].Label.LocalizedLabels[0].Label).toBe("Active");
   });
 
-  it("builds Lookup attribute with targets", () => {
-    const body = buildAttributeBody({
-      logical_name: "contoso_accountid",
-      type: "Lookup",
-      display_name: "Account",
-      targets: ["account"],
-    });
-    expect(body["@odata.type"]).toBe(
-      "Microsoft.Dynamics.CRM.LookupAttributeMetadata",
-    );
-    expect(body.Targets).toEqual(["account"]);
-  });
-
   it("throws when Picklist has no options", () => {
     expect(() =>
       buildAttributeBody({
@@ -179,15 +166,5 @@ describe("buildAttributeBody", () => {
         display_name: "Status",
       }),
     ).toThrow("Picklist attributes require a non-empty 'options' array.");
-  });
-
-  it("throws when Lookup has no targets", () => {
-    expect(() =>
-      buildAttributeBody({
-        logical_name: "contoso_accountid",
-        type: "Lookup",
-        display_name: "Account",
-      }),
-    ).toThrow("Lookup attributes require a non-empty 'targets' array.");
   });
 });
