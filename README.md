@@ -1,6 +1,6 @@
 # dataverse-mcp-server
 
-MCP (Model Context Protocol) server for Microsoft Dataverse API. Works with any Dataverse / Dynamics 365 environment.
+MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-default](#safety) configuration. Works with any Dataverse / Dynamics 365 environment.
 
 ## Tools
 
