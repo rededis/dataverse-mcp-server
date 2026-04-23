@@ -17,15 +17,65 @@ export function buildODataQuery(
   return str ? `?${str}` : "";
 }
 
+const METADATA_ID_CHUNK_SIZE = 50;
+
+async function fetchAllPages<T>(
+  client: DataverseClient,
+  path: string,
+): Promise<T[]> {
+  const results: T[] = [];
+  let next: string | undefined = path;
+  while (next) {
+    const page = (await client.get(next)) as {
+      value: T[];
+      "@odata.nextLink"?: string;
+    };
+    results.push(...page.value);
+    next = page["@odata.nextLink"];
+  }
+  return results;
+}
+
+async function getEntityIdsInSolution(
+  client: DataverseClient,
+  solutionUniqueName: string,
+): Promise<string[]> {
+  const solutionsQuery = buildODataQuery({
+    $select: "solutionid",
+    $filter: `uniquename eq '${escapeODataString(solutionUniqueName)}'`,
+  });
+  const solutionsResult = (await client.get(`/solutions${solutionsQuery}`)) as {
+    value: Array<{ solutionid: string }>;
+  };
+  if (solutionsResult.value.length === 0) {
+    throw new Error(
+      `Solution not found: '${solutionUniqueName}'. Use list_solutions to see available solutions.`,
+    );
+  }
+  const solutionId = solutionsResult.value[0].solutionid;
+
+  // componenttype = 1 is Entity (table)
+  const componentsQuery = buildODataQuery({
+    $select: "objectid",
+    $filter: `_solutionid_value eq ${solutionId} and componenttype eq 1`,
+  });
+  const components = await fetchAllPages<{ objectid: string }>(
+    client,
+    `/solutioncomponents${componentsQuery}`,
+  );
+  return components.map((c) => c.objectid);
+}
+
 export function registerDataTools(
   server: McpServer,
   client: DataverseClient,
   defaultPrefix?: string,
   allowDelete = false,
+  defaultSolution?: string,
 ): void {
   server.tool(
     "list_entities",
-    "List Dataverse tables (entities) with optional prefix filter",
+    "List Dataverse tables (entities) with optional prefix and solution filters",
     {
       prefix: z
         .string()
@@ -33,15 +83,66 @@ export function registerDataTools(
         .describe(
           "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified.",
         ),
+      solution: z
+        .string()
+        .optional()
+        .describe(
+          "Filter entities by solution unique name (e.g. 'MySolution'). Uses DATAVERSE_SOLUTION_NAME env if not specified. Pass an empty string to disable the default filter.",
+        ),
     },
-    async ({ prefix }) => {
+    async ({ prefix, solution }) => {
       const effectivePrefix = prefix ?? defaultPrefix;
+      const effectiveSolution =
+        solution === undefined ? defaultSolution : solution || undefined;
+
+      const filterParts: string[] = [];
+
+      if (effectiveSolution) {
+        const entityIds = await getEntityIdsInSolution(
+          client,
+          effectiveSolution,
+        );
+        if (entityIds.length === 0) {
+          return {
+            content: [{ type: "text" as const, text: "[]" }],
+          };
+        }
+        // Dataverse Metadata entities reject `startswith` combined with `or`,
+        // so prefix is applied client-side when a solution filter is active.
+        const entities: Array<{ LogicalName?: string }> = [];
+        for (let i = 0; i < entityIds.length; i += METADATA_ID_CHUNK_SIZE) {
+          const chunk = entityIds.slice(i, i + METADATA_ID_CHUNK_SIZE);
+          const query = buildODataQuery({
+            $select:
+              "LogicalName,DisplayName,EntitySetName,Description,IsCustomEntity",
+            $filter: `(${chunk.map((id) => `MetadataId eq ${id}`).join(" or ")})`,
+          });
+          const result = (await client.get(`/EntityDefinitions${query}`)) as {
+            value: Array<{ LogicalName?: string }>;
+          };
+          entities.push(...result.value);
+        }
+        const filtered = effectivePrefix
+          ? entities.filter((e) => e.LogicalName?.startsWith(effectivePrefix))
+          : entities;
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(filtered, null, 2) },
+          ],
+        };
+      }
+
+      if (effectivePrefix) {
+        filterParts.push(
+          `startswith(LogicalName,'${escapeODataString(effectivePrefix)}')`,
+        );
+      }
       const params: Record<string, string | undefined> = {
         $select:
           "LogicalName,DisplayName,EntitySetName,Description,IsCustomEntity",
       };
-      if (effectivePrefix) {
-        params.$filter = `startswith(LogicalName,'${escapeODataString(effectivePrefix)}')`;
+      if (filterParts.length > 0) {
+        params.$filter = filterParts.join(" and ");
       }
       const query = buildODataQuery(params);
       const result = (await client.get(`/EntityDefinitions${query}`)) as {
@@ -52,6 +153,40 @@ export function registerDataTools(
           {
             type: "text" as const,
             text: JSON.stringify(result.value, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    "list_solutions",
+    "List Dataverse solutions (uniquename is used to filter list_entities)",
+    {
+      include_managed: z
+        .boolean()
+        .optional()
+        .describe(
+          "Include managed solutions (default: false — only unmanaged are returned)",
+        ),
+    },
+    async ({ include_managed }) => {
+      const filters = ["isvisible eq true"];
+      if (!include_managed) filters.push("ismanaged eq false");
+      const query = buildODataQuery({
+        $select: "solutionid,uniquename,friendlyname,version,ismanaged",
+        $filter: filters.join(" and "),
+        $orderby: "friendlyname",
+      });
+      const solutions = await fetchAllPages<unknown>(
+        client,
+        `/solutions${query}`,
+      );
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(solutions, null, 2),
           },
         ],
       };
