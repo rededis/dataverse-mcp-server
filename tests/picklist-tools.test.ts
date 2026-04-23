@@ -248,8 +248,10 @@ describe("get_picklist_options", () => {
     expect(url).toContain(
       "/EntityDefinitions(LogicalName='fundai_x')/Attributes/Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
     );
-    expect(url).toContain("$filter=LogicalName eq 'fundai_status'");
-    expect(url).toContain("$expand=OptionSet($select=Options)");
+    const qs = new URLSearchParams(url.slice(url.indexOf("?") + 1));
+    expect(qs.get("$filter")).toBe("LogicalName eq 'fundai_status'");
+    expect(qs.get("$select")).toBe("LogicalName");
+    expect(qs.get("$expand")).toBe("OptionSet($select=Options)");
 
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed).toEqual([
@@ -287,7 +289,9 @@ describe("get_picklist_options", () => {
     expect(url).toContain(
       "/GlobalOptionSetDefinitions/Microsoft.Dynamics.CRM.OptionSetMetadata",
     );
-    expect(url).toContain("$filter=Name eq 'MyGlobalSet'");
+    const qs = new URLSearchParams(url.slice(url.indexOf("?") + 1));
+    expect(qs.get("$filter")).toBe("Name eq 'MyGlobalSet'");
+    expect(qs.get("$select")).toBe("Options");
 
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed).toEqual([{ value: 1, label: "One" }]);

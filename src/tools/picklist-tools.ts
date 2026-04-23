@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DataverseClient } from "../client.js";
-import { escapeODataString } from "./data-tools.js";
+import { buildODataQuery, escapeODataString } from "./data-tools.js";
 
 interface PicklistLocation {
   entity_logical_name?: string;
@@ -227,9 +227,13 @@ export function registerPicklistTools(
       let options: RawOption[] = [];
       if (params.option_set_name) {
         const escaped = escapeODataString(params.option_set_name);
+        const query = buildODataQuery({
+          $filter: `Name eq '${escaped}'`,
+          $select: "Options",
+        });
         // Cast to OptionSetMetadata — Options lives on the derived type, not the base GlobalOptionSetDefinition
         const result = (await client.get(
-          `/GlobalOptionSetDefinitions/Microsoft.Dynamics.CRM.OptionSetMetadata?$filter=Name eq '${escaped}'&$select=Options`,
+          `/GlobalOptionSetDefinitions/Microsoft.Dynamics.CRM.OptionSetMetadata${query}`,
         )) as { value: Array<{ Options: RawOption[] }> };
         if (result.value.length === 0) {
           throw new Error(
@@ -243,8 +247,13 @@ export function registerPicklistTools(
         const attr = params.attribute_logical_name ?? "";
         const entityEscaped = escapeODataString(entity);
         const attrEscaped = escapeODataString(attr);
+        const query = buildODataQuery({
+          $filter: `LogicalName eq '${attrEscaped}'`,
+          $select: "LogicalName",
+          $expand: "OptionSet($select=Options)",
+        });
         const result = (await client.get(
-          `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes/Microsoft.Dynamics.CRM.PicklistAttributeMetadata?$filter=LogicalName eq '${attrEscaped}'&$select=LogicalName&$expand=OptionSet($select=Options)`,
+          `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes/Microsoft.Dynamics.CRM.PicklistAttributeMetadata${query}`,
         )) as {
           value: Array<{ OptionSet: { Options: RawOption[] } }>;
         };
