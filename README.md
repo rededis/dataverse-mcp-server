@@ -7,13 +7,16 @@ MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-de
 ### Data operations
 | Tool | Description |
 |------|-------------|
-| `list_entities` | List Dataverse tables with optional prefix filter |
+| `list_entities` | List Dataverse tables with optional prefix and solution filters |
+| `list_solutions` | List Dataverse solutions (use `uniquename` to filter `list_entities`) |
 | `get_entity_schema` | Get attributes of a specific table |
 | `query_records` | Query records with OData $filter, $select, $top, $orderby, $expand |
 | `get_record` | Get a single record by ID |
 | `create_record` | Create a record |
 | `update_record` | Update a record |
 | `delete_record` | Delete a record (disabled by default, see [Safety](#safety)) |
+
+> Note: `solution` / `DATAVERSE_SOLUTION_NAME` only scopes `list_entities` (schema browsing). Data tools (`query_records`, `get_record`, `create_record`, …) keep full access to any table regardless of solution membership — shared tables like `account` or `contact` remain reachable.
 
 ### Schema operations
 | Tool | Description |
@@ -32,6 +35,7 @@ DATAVERSE_CLIENT_ID=your-app-registration-client-id
 DATAVERSE_CLIENT_SECRET=your-client-secret
 DATAVERSE_RESOURCE_URL=https://your-org.crm.dynamics.com
 DATAVERSE_ENTITY_PREFIX=contoso_          # optional, default prefix filter for list_entities
+DATAVERSE_SOLUTION_NAME=MySolution        # optional, default solution unique name for list_entities
 DATAVERSE_ALLOW_DELETE=true               # optional, enable delete operations (disabled by default)
 ```
 
