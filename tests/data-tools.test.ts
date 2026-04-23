@@ -46,6 +46,28 @@ describe("list_solutions", () => {
     const qs = new URLSearchParams(url.slice(url.indexOf("?") + 1));
     expect(qs.get("$filter")).toBe("isvisible eq true");
   });
+
+  it("follows @odata.nextLink when solutions response is paginated", async () => {
+    const server = createMockServer();
+    const nextLink =
+      "https://org.crm.dynamics.com/api/data/v9.2/solutions?$skiptoken=page2";
+    const client = {
+      get: vi
+        .fn()
+        .mockResolvedValueOnce({
+          value: [{ uniquename: "A" }],
+          "@odata.nextLink": nextLink,
+        })
+        .mockResolvedValueOnce({ value: [{ uniquename: "B" }] }),
+    } as any;
+    registerDataTools(server as any, client);
+
+    const result = await server.tools.get("list_solutions")!.handler({});
+    expect(client.get).toHaveBeenCalledTimes(2);
+    expect(client.get.mock.calls[1][0]).toBe(nextLink);
+    expect(result.content[0].text).toContain('"A"');
+    expect(result.content[0].text).toContain('"B"');
+  });
 });
 
 describe("list_entities solution filter", () => {
@@ -213,6 +235,43 @@ describe("list_entities solution filter", () => {
       .handler({ solution: "Empty" });
     expect(client.get).toHaveBeenCalledTimes(2);
     expect(result.content[0].text).toBe("[]");
+  });
+
+  it("follows @odata.nextLink when solutioncomponents is paginated", async () => {
+    const server = createMockServer();
+    const solutionId = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+    const entityA = "11111111-2222-3333-4444-555555555555";
+    const entityB = "22222222-3333-4444-5555-666666666666";
+    const nextLink =
+      "https://org.crm.dynamics.com/api/data/v9.2/solutioncomponents?$skiptoken=page2";
+    const client = {
+      get: vi
+        .fn()
+        .mockResolvedValueOnce({ value: [{ solutionid: solutionId }] })
+        .mockResolvedValueOnce({
+          value: [{ objectid: entityA }],
+          "@odata.nextLink": nextLink,
+        })
+        .mockResolvedValueOnce({ value: [{ objectid: entityB }] })
+        .mockResolvedValueOnce({ value: [] }),
+    } as any;
+    registerDataTools(server as any, client);
+
+    await server.tools
+      .get("list_entities")!
+      .handler({ solution: "Paged" });
+
+    // solutions + components page1 + components page2 + entities chunk
+    expect(client.get).toHaveBeenCalledTimes(4);
+    expect(client.get.mock.calls[2][0]).toBe(nextLink);
+
+    const entitiesUrl = client.get.mock.calls[3][0] as string;
+    const entitiesQs = new URLSearchParams(
+      entitiesUrl.slice(entitiesUrl.indexOf("?") + 1),
+    );
+    expect(entitiesQs.get("$filter")).toBe(
+      `(MetadataId eq ${entityA} or MetadataId eq ${entityB})`,
+    );
   });
 
   it("chunks large MetadataId lists into multiple EntityDefinitions calls", async () => {

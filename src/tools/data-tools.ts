@@ -17,7 +17,24 @@ export function buildODataQuery(
   return str ? `?${str}` : "";
 }
 
-const SOLUTION_ID_CHUNK_SIZE = 50;
+const METADATA_ID_CHUNK_SIZE = 50;
+
+async function fetchAllPages<T>(
+  client: DataverseClient,
+  path: string,
+): Promise<T[]> {
+  const results: T[] = [];
+  let next: string | undefined = path;
+  while (next) {
+    const page = (await client.get(next)) as {
+      value: T[];
+      "@odata.nextLink"?: string;
+    };
+    results.push(...page.value);
+    next = page["@odata.nextLink"];
+  }
+  return results;
+}
 
 async function getEntityIdsInSolution(
   client: DataverseClient,
@@ -42,10 +59,11 @@ async function getEntityIdsInSolution(
     $select: "objectid",
     $filter: `_solutionid_value eq ${solutionId} and componenttype eq 1`,
   });
-  const componentsResult = (await client.get(
+  const components = await fetchAllPages<{ objectid: string }>(
+    client,
     `/solutioncomponents${componentsQuery}`,
-  )) as { value: Array<{ objectid: string }> };
-  return componentsResult.value.map((c) => c.objectid);
+  );
+  return components.map((c) => c.objectid);
 }
 
 export function registerDataTools(
@@ -92,8 +110,8 @@ export function registerDataTools(
         // Dataverse Metadata entities reject `startswith` combined with `or`,
         // so prefix is applied client-side when a solution filter is active.
         const entities: Array<{ LogicalName?: string }> = [];
-        for (let i = 0; i < entityIds.length; i += SOLUTION_ID_CHUNK_SIZE) {
-          const chunk = entityIds.slice(i, i + SOLUTION_ID_CHUNK_SIZE);
+        for (let i = 0; i < entityIds.length; i += METADATA_ID_CHUNK_SIZE) {
+          const chunk = entityIds.slice(i, i + METADATA_ID_CHUNK_SIZE);
           const query = buildODataQuery({
             $select:
               "LogicalName,DisplayName,EntitySetName,Description,IsCustomEntity",
@@ -160,14 +178,15 @@ export function registerDataTools(
         $filter: filters.join(" and "),
         $orderby: "friendlyname",
       });
-      const result = (await client.get(`/solutions${query}`)) as {
-        value: unknown[];
-      };
+      const solutions = await fetchAllPages<unknown>(
+        client,
+        `/solutions${query}`,
+      );
       return {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(result.value, null, 2),
+            text: JSON.stringify(solutions, null, 2),
           },
         ],
       };
