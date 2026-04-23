@@ -227,7 +227,7 @@ export function registerPicklistTools(
 
   server.tool(
     "get_picklist_options",
-    "Read options of a Local or Global OptionSet as a flat [{ value, label }] list. Uses collection-style queries to avoid the single-object metadata serializer path.",
+    "Read options of a Local or Global OptionSet as a flat [{ value, label }] list.",
     LOCATION_SHAPE,
     async (params) => {
       validatePicklistLocation(params);
