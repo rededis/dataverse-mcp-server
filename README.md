@@ -25,6 +25,16 @@ MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-de
 | `add_attribute` | Add a column to an existing table |
 | `create_relationship` | Create relationships between tables (1:N, N:N) |
 
+### Picklist option management
+| Tool | Description |
+|------|-------------|
+| `get_picklist_options` | Read options of a Local or Global OptionSet as `[{ value, label }]` |
+| `add_picklist_option` | Add an option to an existing OptionSet (`InsertOptionValue`) |
+| `update_picklist_option` | Rename an option on an OptionSet (`UpdateOptionValue`) |
+| `delete_picklist_option` | Remove an option from an OptionSet (`DeleteOptionValue`) |
+
+Picklist tools accept either `entity_logical_name` + `attribute_logical_name` (Local OptionSet) or `option_set_name` (Global OptionSet) — the two modes are mutually exclusive. Write operations require Customizer or System Administrator role on the connected service principal. Deleting an option does **not** update existing records that hold its numeric value — they are left with an orphan integer.
+
 ## Setup
 
 ### Environment variables

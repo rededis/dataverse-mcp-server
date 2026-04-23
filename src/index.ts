@@ -8,6 +8,7 @@ import { config } from "dotenv";
 import { DataverseAuth } from "./auth.js";
 import { DataverseClient } from "./client.js";
 import { registerDataTools } from "./tools/data-tools.js";
+import { registerPicklistTools } from "./tools/picklist-tools.js";
 import { registerSchemaTools } from "./tools/schema-tools.js";
 
 const projectRoot = resolve(__dirname, "..");
@@ -79,6 +80,7 @@ if (missing.length > 0) {
 
   registerDataTools(server, client, entityPrefix, allowDelete, solutionName);
   registerSchemaTools(server, client);
+  registerPicklistTools(server, client);
 }
 
 const transport = new StdioServerTransport();
