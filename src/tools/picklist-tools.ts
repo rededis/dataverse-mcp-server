@@ -157,6 +157,12 @@ export function registerPicklistTools(
         .optional()
         .describe("Language code for the label (default: 1033)"),
       description: z.string().optional().describe("New description"),
+      merge_labels: z
+        .boolean()
+        .optional()
+        .describe(
+          "If true, merge the new label with existing localized labels (other languages kept); if false (default), replace all localized labels with just the new one.",
+        ),
       solution_unique_name: z
         .string()
         .optional()
@@ -168,6 +174,7 @@ export function registerPicklistTools(
       const body: Record<string, unknown> = {
         Value: params.value,
         Label: buildLabel(params.label, lang),
+        MergeLabels: params.merge_labels ?? false,
       };
       addLocationToBody(body, params);
       if (params.description) {
@@ -227,20 +234,23 @@ export function registerPicklistTools(
       let options: RawOption[] = [];
       if (params.option_set_name) {
         const escaped = escapeODataString(params.option_set_name);
-        const query = buildODataQuery({
-          $filter: `Name eq '${escaped}'`,
-          $select: "Options",
-        });
-        // Cast to OptionSetMetadata — Options lives on the derived type, not the base GlobalOptionSetDefinition
-        const result = (await client.get(
-          `/GlobalOptionSetDefinitions/Microsoft.Dynamics.CRM.OptionSetMetadata${query}`,
-        )) as { value: Array<{ Options: RawOption[] }> };
-        if (result.value.length === 0) {
-          throw new Error(
-            `Global OptionSet not found: '${params.option_set_name}'`,
-          );
+        const query = buildODataQuery({ $select: "Options" });
+        // Dataverse rejects $filter on /GlobalOptionSetDefinitions (405), so address by alternate key (Name).
+        // Cast to OptionSetMetadata — Options lives on the derived type, not the base GlobalOptionSetDefinition.
+        let result: { Options?: RawOption[] };
+        try {
+          result = (await client.get(
+            `/GlobalOptionSetDefinitions(Name='${escaped}')/Microsoft.Dynamics.CRM.OptionSetMetadata${query}`,
+          )) as { Options?: RawOption[] };
+        } catch (err) {
+          if (err instanceof Error && /\b404\b/.test(err.message)) {
+            throw new Error(
+              `Global OptionSet not found: '${params.option_set_name}'`,
+            );
+          }
+          throw err;
         }
-        options = result.value[0].Options;
+        options = result.Options ?? [];
       } else {
         // validatePicklistLocation guarantees both are present when option_set_name is absent
         const entity = params.entity_logical_name ?? "";
