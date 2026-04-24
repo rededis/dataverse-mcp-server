@@ -465,13 +465,20 @@ export function registerSchemaTools(
 
       const entityEscaped = escapeODataString(params.entity_logical_name);
       const attrEscaped = escapeODataString(params.attribute_logical_name);
-      const path = `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes(LogicalName='${attrEscaped}')`;
+      const odataType = ATTRIBUTE_ODATA_TYPE_MAP[params.type];
+      const basePath = `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes(LogicalName='${attrEscaped}')`;
+      // GET must be cast to the concrete derived type — otherwise the response
+      // only contains base AttributeMetadata fields and type-specific ones
+      // (MaxLength, Precision, Format, OptionSet, …) are missing. A subsequent
+      // PUT with those fields absent would either 400 or reset them, because
+      // PUT replaces the full resource.
+      const getPath = `${basePath}/${odataType}`;
 
       // Dataverse metadata endpoint rejects PATCH with HTTP 405; updates go
       // through PUT, which REPLACES the full resource. To avoid resetting
-      // untouched fields (RequiredLevel, MaxLength, etc.) to defaults, fetch
-      // current metadata first and merge the user-supplied changes on top.
-      const current = (await client.get(path)) as Record<string, unknown>;
+      // untouched fields to defaults, fetch current metadata (with the type
+      // cast) and merge the user-supplied changes on top.
+      const current = (await client.get(getPath)) as Record<string, unknown>;
       const merged: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(current)) {
         // Strip control metadata (@odata.etag, @odata.context, ...) — the
@@ -479,7 +486,7 @@ export function registerSchemaTools(
         if (key.startsWith("@odata.")) continue;
         merged[key] = value;
       }
-      merged["@odata.type"] = ATTRIBUTE_ODATA_TYPE_MAP[params.type];
+      merged["@odata.type"] = odataType;
 
       const lang = params.language_code ?? 1033;
       if (params.display_name !== undefined) {
@@ -499,7 +506,7 @@ export function registerSchemaTools(
       const headers: Record<string, string> = { "If-Match": "*" };
       if (params.merge_labels) headers["MSCRM.MergeLabels"] = "true";
 
-      await client.request(path, { method: "PUT", body: merged, headers });
+      await client.request(basePath, { method: "PUT", body: merged, headers });
       return {
         content: [
           {
