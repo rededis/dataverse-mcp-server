@@ -252,6 +252,21 @@ describe("update_attribute", () => {
     expect(opts.headers["MSCRM.MergeLabels"]).toBeUndefined();
   });
 
+  it("returns isError when no mutable fields are provided (no-op PATCH guard)", async () => {
+    const server = createMockServer();
+    const client = { request: vi.fn() } as any;
+    registerSchemaTools(server as any, client);
+
+    const result = await server.tools.get("update_attribute")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_col",
+      type: "String",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("at least one of");
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
   it("forwards numeric bounds and precision", async () => {
     const server = createMockServer();
     const client = { request: vi.fn().mockResolvedValue({}) } as any;

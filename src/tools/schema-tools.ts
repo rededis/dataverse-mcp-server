@@ -1,6 +1,34 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DataverseClient } from "../client.js";
+import { escapeODataString } from "./data-tools.js";
+
+const ATTRIBUTE_ODATA_TYPE_MAP: Record<string, string> = {
+  String: "Microsoft.Dynamics.CRM.StringAttributeMetadata",
+  Integer: "Microsoft.Dynamics.CRM.IntegerAttributeMetadata",
+  BigInt: "Microsoft.Dynamics.CRM.BigIntAttributeMetadata",
+  Decimal: "Microsoft.Dynamics.CRM.DecimalAttributeMetadata",
+  Double: "Microsoft.Dynamics.CRM.DoubleAttributeMetadata",
+  Money: "Microsoft.Dynamics.CRM.MoneyAttributeMetadata",
+  DateTime: "Microsoft.Dynamics.CRM.DateTimeAttributeMetadata",
+  Uniqueidentifier: "Microsoft.Dynamics.CRM.UniqueIdentifierAttributeMetadata",
+  Memo: "Microsoft.Dynamics.CRM.MemoAttributeMetadata",
+  Boolean: "Microsoft.Dynamics.CRM.BooleanAttributeMetadata",
+  Picklist: "Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
+};
+
+function buildLabel(label: string, languageCode = 1033) {
+  return {
+    "@odata.type": "Microsoft.Dynamics.CRM.Label",
+    LocalizedLabels: [
+      {
+        "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
+        Label: label,
+        LanguageCode: languageCode,
+      },
+    ],
+  };
+}
 
 const AttributeSchema = z.object({
   logical_name: z.string().describe("Logical name (e.g. 'contoso_amount')"),
@@ -45,52 +73,16 @@ type AttributeInput = z.infer<typeof AttributeSchema>;
 export function buildAttributeBody(
   attr: AttributeInput,
 ): Record<string, unknown> {
-  const typeMap: Record<string, string> = {
-    String: "Microsoft.Dynamics.CRM.StringAttributeMetadata",
-    Integer: "Microsoft.Dynamics.CRM.IntegerAttributeMetadata",
-    BigInt: "Microsoft.Dynamics.CRM.BigIntAttributeMetadata",
-    Decimal: "Microsoft.Dynamics.CRM.DecimalAttributeMetadata",
-    Double: "Microsoft.Dynamics.CRM.DoubleAttributeMetadata",
-    Money: "Microsoft.Dynamics.CRM.MoneyAttributeMetadata",
-    DateTime: "Microsoft.Dynamics.CRM.DateTimeAttributeMetadata",
-    Uniqueidentifier:
-      "Microsoft.Dynamics.CRM.UniqueIdentifierAttributeMetadata",
-    Memo: "Microsoft.Dynamics.CRM.MemoAttributeMetadata",
-    Boolean: "Microsoft.Dynamics.CRM.BooleanAttributeMetadata",
-    Picklist: "Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
-  };
-
   const body: Record<string, unknown> = {
-    "@odata.type": typeMap[attr.type],
+    "@odata.type": ATTRIBUTE_ODATA_TYPE_MAP[attr.type],
     LogicalName: attr.logical_name,
     SchemaName:
       attr.logical_name.charAt(0).toUpperCase() + attr.logical_name.slice(1),
-    DisplayName: {
-      "@odata.type": "Microsoft.Dynamics.CRM.Label",
-      LocalizedLabels: [
-        {
-          "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
-          Label: attr.display_name,
-          LanguageCode: 1033,
-        },
-      ],
-    },
+    DisplayName: buildLabel(attr.display_name),
     RequiredLevel: { Value: attr.required || "None" },
   };
 
-  if (attr.description) {
-    body.Description = {
-      "@odata.type": "Microsoft.Dynamics.CRM.Label",
-      LocalizedLabels: [
-        {
-          "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
-          Label: attr.description,
-          LanguageCode: 1033,
-        },
-      ],
-    };
-  }
-
+  if (attr.description) body.Description = buildLabel(attr.description);
   if (attr.max_length !== undefined) body.MaxLength = attr.max_length;
   if (attr.min_value !== undefined) body.MinValue = attr.min_value;
   if (attr.max_value !== undefined) body.MaxValue = attr.max_value;
@@ -109,29 +101,11 @@ export function buildAttributeBody(
       "@odata.type": "Microsoft.Dynamics.CRM.BooleanOptionSetMetadata",
       TrueOption: {
         Value: trueOption.value,
-        Label: {
-          "@odata.type": "Microsoft.Dynamics.CRM.Label",
-          LocalizedLabels: [
-            {
-              "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
-              Label: trueOption.label,
-              LanguageCode: 1033,
-            },
-          ],
-        },
+        Label: buildLabel(trueOption.label),
       },
       FalseOption: {
         Value: falseOption.value,
-        Label: {
-          "@odata.type": "Microsoft.Dynamics.CRM.Label",
-          LocalizedLabels: [
-            {
-              "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
-              Label: falseOption.label,
-              LanguageCode: 1033,
-            },
-          ],
-        },
+        Label: buildLabel(falseOption.label),
       },
     };
   }
@@ -147,48 +121,12 @@ export function buildAttributeBody(
       IsGlobal: false,
       Options: attr.options.map((opt) => ({
         Value: opt.value,
-        Label: {
-          "@odata.type": "Microsoft.Dynamics.CRM.Label",
-          LocalizedLabels: [
-            {
-              "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
-              Label: opt.label,
-              LanguageCode: 1033,
-            },
-          ],
-        },
+        Label: buildLabel(opt.label),
       })),
     };
   }
 
   return body;
-}
-
-const ATTRIBUTE_ODATA_TYPE_MAP: Record<string, string> = {
-  String: "Microsoft.Dynamics.CRM.StringAttributeMetadata",
-  Integer: "Microsoft.Dynamics.CRM.IntegerAttributeMetadata",
-  BigInt: "Microsoft.Dynamics.CRM.BigIntAttributeMetadata",
-  Decimal: "Microsoft.Dynamics.CRM.DecimalAttributeMetadata",
-  Double: "Microsoft.Dynamics.CRM.DoubleAttributeMetadata",
-  Money: "Microsoft.Dynamics.CRM.MoneyAttributeMetadata",
-  DateTime: "Microsoft.Dynamics.CRM.DateTimeAttributeMetadata",
-  Uniqueidentifier: "Microsoft.Dynamics.CRM.UniqueIdentifierAttributeMetadata",
-  Memo: "Microsoft.Dynamics.CRM.MemoAttributeMetadata",
-  Boolean: "Microsoft.Dynamics.CRM.BooleanAttributeMetadata",
-  Picklist: "Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
-};
-
-function buildLabel(label: string, languageCode = 1033) {
-  return {
-    "@odata.type": "Microsoft.Dynamics.CRM.Label",
-    LocalizedLabels: [
-      {
-        "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
-        Label: label,
-        LanguageCode: languageCode,
-      },
-    ],
-  };
 }
 
 export function registerSchemaTools(
@@ -349,7 +287,7 @@ export function registerSchemaTools(
     },
     async ({ entity_logical_name, attribute }) => {
       const body = buildAttributeBody(attribute);
-      const escaped = entity_logical_name.replace(/'/g, "''");
+      const escaped = escapeODataString(entity_logical_name);
       const result = await client.post(
         `/EntityDefinitions(LogicalName='${escaped}')/Attributes`,
         body,
@@ -505,6 +443,26 @@ export function registerSchemaTools(
         ),
     },
     async (params) => {
+      const hasMutableField =
+        params.display_name !== undefined ||
+        params.description !== undefined ||
+        params.required !== undefined ||
+        params.max_length !== undefined ||
+        params.min_value !== undefined ||
+        params.max_value !== undefined ||
+        params.precision !== undefined;
+      if (!hasMutableField) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "update_attribute requires at least one of: display_name, description, required, max_length, min_value, max_value, precision. Nothing to update.",
+            },
+          ],
+          isError: true,
+        };
+      }
+
       const body: Record<string, unknown> = {
         "@odata.type": ATTRIBUTE_ODATA_TYPE_MAP[params.type],
       };
@@ -526,8 +484,8 @@ export function registerSchemaTools(
       const headers: Record<string, string> = {};
       if (params.merge_labels) headers["MSCRM.MergeLabels"] = "true";
 
-      const entityEscaped = params.entity_logical_name.replace(/'/g, "''");
-      const attrEscaped = params.attribute_logical_name.replace(/'/g, "''");
+      const entityEscaped = escapeODataString(params.entity_logical_name);
+      const attrEscaped = escapeODataString(params.attribute_logical_name);
       await client.request(
         `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes(LogicalName='${attrEscaped}')`,
         { method: "PATCH", body, headers },
@@ -554,8 +512,8 @@ export function registerSchemaTools(
           .describe("Logical name of the column to delete"),
       },
       async ({ entity_logical_name, attribute_logical_name }) => {
-        const entityEscaped = entity_logical_name.replace(/'/g, "''");
-        const attrEscaped = attribute_logical_name.replace(/'/g, "''");
+        const entityEscaped = escapeODataString(entity_logical_name);
+        const attrEscaped = escapeODataString(attribute_logical_name);
         await client.delete(
           `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes(LogicalName='${attrEscaped}')`,
         );
