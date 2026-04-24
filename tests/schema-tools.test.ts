@@ -266,7 +266,9 @@ describe("update_attribute", () => {
       });
 
       const getPath = client.get.mock.calls[0][0] as string;
-      expect(getPath).toMatch(new RegExp(`/${odataType}$`));
+      // Literal suffix check — RegExp would treat the dots in the odataType
+      // as wildcards and pass on false positives.
+      expect(getPath.endsWith(`/${odataType}`)).toBe(true);
     }
   });
 
