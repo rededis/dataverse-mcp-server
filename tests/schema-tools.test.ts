@@ -187,6 +187,75 @@ describe("buildAttributeBody", () => {
       }),
     ).toThrow("Picklist attributes require a non-empty 'options' array.");
   });
+
+  describe("DateTime Format/Behavior", () => {
+    it("builds DateOnly/DateOnly date-like column", () => {
+      const body = buildAttributeBody({
+        logical_name: "contoso_effectivedate",
+        type: "DateTime",
+        display_name: "Effective Date",
+        date_format: "DateOnly",
+        date_behavior: "DateOnly",
+      });
+      expect(body.Format).toBe("DateOnly");
+      expect(body.DateTimeBehavior).toEqual({ Value: "DateOnly" });
+    });
+
+    it("builds TimeZoneIndependent datetime without setting Format", () => {
+      const body = buildAttributeBody({
+        logical_name: "contoso_event",
+        type: "DateTime",
+        display_name: "Event",
+        date_behavior: "TimeZoneIndependent",
+      });
+      expect(body.Format).toBeUndefined();
+      expect(body.DateTimeBehavior).toEqual({ Value: "TimeZoneIndependent" });
+    });
+
+    it("omits Format and DateTimeBehavior when not provided (Dataverse defaults apply)", () => {
+      const body = buildAttributeBody({
+        logical_name: "contoso_ts",
+        type: "DateTime",
+        display_name: "Timestamp",
+      });
+      expect(body.Format).toBeUndefined();
+      expect(body.DateTimeBehavior).toBeUndefined();
+    });
+
+    it("rejects DateOnly format with a non-DateOnly behavior", () => {
+      expect(() =>
+        buildAttributeBody({
+          logical_name: "contoso_bad",
+          type: "DateTime",
+          display_name: "Bad",
+          date_format: "DateOnly",
+          date_behavior: "UserLocal",
+        }),
+      ).toThrow(/DateOnly format requires DateOnly behavior, got: UserLocal/);
+    });
+
+    it("rejects date_format on a non-DateTime type", () => {
+      expect(() =>
+        buildAttributeBody({
+          logical_name: "contoso_name",
+          type: "String",
+          display_name: "Name",
+          date_format: "DateOnly",
+        }),
+      ).toThrow(/apply only to DateTime/);
+    });
+
+    it("rejects date_behavior on a non-DateTime type", () => {
+      expect(() =>
+        buildAttributeBody({
+          logical_name: "contoso_count",
+          type: "Integer",
+          display_name: "Count",
+          date_behavior: "UserLocal",
+        }),
+      ).toThrow(/apply only to DateTime/);
+    });
+  });
 });
 
 describe("update_attribute", () => {
@@ -436,6 +505,65 @@ describe("update_attribute", () => {
     expect(opts.body.MinValue).toBe(0);
     expect(opts.body.MaxValue).toBe(9999);
     expect(opts.body.Precision).toBe(4);
+  });
+
+  it("merges date_format and date_behavior into PUT body (DateTime)", async () => {
+    const server = createMockServer();
+    const client = mockClient({
+      ...existingAttribute,
+      LogicalName: "fundai_effectivedate",
+      SchemaName: "Fundai_effectivedate",
+      "@odata.type": "#Microsoft.Dynamics.CRM.DateTimeAttributeMetadata",
+      Format: "DateAndTime",
+      DateTimeBehavior: { Value: "UserLocal" },
+    } as any);
+    registerSchemaTools(server as any, client);
+
+    await server.tools.get("update_attribute")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_effectivedate",
+      type: "DateTime",
+      date_format: "DateOnly",
+      date_behavior: "DateOnly",
+    });
+
+    const [, opts] = client.request.mock.calls[0];
+    expect(opts.body.Format).toBe("DateOnly");
+    expect(opts.body.DateTimeBehavior).toEqual({ Value: "DateOnly" });
+  });
+
+  it("rejects date_format on non-DateTime type without calling HTTP", async () => {
+    const server = createMockServer();
+    const client = mockClient();
+    registerSchemaTools(server as any, client);
+
+    await expect(
+      server.tools.get("update_attribute")!.handler({
+        entity_logical_name: "fundai_x",
+        attribute_logical_name: "fundai_col",
+        type: "String",
+        date_format: "DateOnly",
+      }),
+    ).rejects.toThrow(/apply only to DateTime/);
+    expect(client.get).not.toHaveBeenCalled();
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
+  it("rejects DateOnly format with mismatched behavior on update_attribute", async () => {
+    const server = createMockServer();
+    const client = mockClient();
+    registerSchemaTools(server as any, client);
+
+    await expect(
+      server.tools.get("update_attribute")!.handler({
+        entity_logical_name: "fundai_x",
+        attribute_logical_name: "fundai_col",
+        type: "DateTime",
+        date_format: "DateOnly",
+        date_behavior: "UserLocal",
+      }),
+    ).rejects.toThrow(/DateOnly format requires DateOnly behavior/);
+    expect(client.get).not.toHaveBeenCalled();
   });
 });
 
