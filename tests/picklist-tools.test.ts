@@ -30,7 +30,8 @@ describe("picklist location XOR validation", () => {
     it(`${name}: throws when both Local and Global fields are provided`, async () => {
       const server = createMockServer();
       const client = { post: vi.fn(), get: vi.fn() } as any;
-      registerPicklistTools(server as any, client);
+      // allowDelete=true so the delete_picklist_option real handler (not the stub) is registered
+      registerPicklistTools(server as any, client, true);
 
       await expect(
         server.tools.get(name)!.handler({
@@ -46,7 +47,7 @@ describe("picklist location XOR validation", () => {
     it(`${name}: throws when neither Local pair nor Global is provided`, async () => {
       const server = createMockServer();
       const client = { post: vi.fn(), get: vi.fn() } as any;
-      registerPicklistTools(server as any, client);
+      registerPicklistTools(server as any, client, true);
 
       await expect(
         server.tools.get(name)!.handler({ label: "L", value: 1 }),
@@ -56,7 +57,7 @@ describe("picklist location XOR validation", () => {
     it(`${name}: throws when Local pair is incomplete (entity only)`, async () => {
       const server = createMockServer();
       const client = { post: vi.fn(), get: vi.fn() } as any;
-      registerPicklistTools(server as any, client);
+      registerPicklistTools(server as any, client, true);
 
       await expect(
         server.tools.get(name)!.handler({
@@ -195,10 +196,10 @@ describe("update_picklist_option", () => {
 });
 
 describe("delete_picklist_option", () => {
-  it("posts DeleteOptionValue with Value and location", async () => {
+  it("posts DeleteOptionValue with Value and location when allowDelete is true", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerPicklistTools(server as any, client);
+    registerPicklistTools(server as any, client, true);
 
     const result = await server.tools
       .get("delete_picklist_option")!
@@ -215,11 +216,28 @@ describe("delete_picklist_option", () => {
     expect(result.content[0].text).toContain("deleted successfully");
   });
 
-  it("description warns about orphan values", async () => {
+  it("description warns about orphan values when allowDelete is true", async () => {
     const server = createMockServer();
-    registerPicklistTools(server as any, { post: vi.fn() } as any);
+    registerPicklistTools(server as any, { post: vi.fn() } as any, true);
     const tool = server.tools.get("delete_picklist_option")!;
     expect(tool.description.toLowerCase()).toContain("orphan");
+  });
+
+  it("returns isError when allowDelete is false (default)", async () => {
+    const server = createMockServer();
+    const client = { post: vi.fn() } as any;
+    registerPicklistTools(server as any, client);
+
+    const tool = server.tools.get("delete_picklist_option")!;
+    expect(tool.description).toContain("disabled");
+
+    const result = await tool.handler({
+      option_set_name: "MyGlobalSet",
+      value: 909890009,
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("DATAVERSE_ALLOW_DELETE");
+    expect(client.post).not.toHaveBeenCalled();
   });
 });
 

@@ -86,9 +86,12 @@ Create a `.env` file with your credentials (see `.env.example`).
 
 ## Safety
 
-Destructive operations are **disabled by default** to prevent accidental data loss. Both `delete_record` (removes rows) and `delete_attribute` (removes columns and ALL data stored in them — no recovery) are gated behind the same flag: they register as stubs that return an error message explaining how to enable them.
+Destructive operations are **disabled by default** to prevent accidental data loss. All three delete tools are gated behind the same `DATAVERSE_ALLOW_DELETE=true` flag:
+- `delete_record` — removes a row and all its data
+- `delete_attribute` — removes a column along with ALL values across every record (no recovery short of a full environment restore)
+- `delete_picklist_option` — removes an option from an OptionSet; records that hold the option's integer value are left with an orphan number (no label in UI, broken reports)
 
-To enable, add `DATAVERSE_ALLOW_DELETE=true` to your `.env` file and restart the MCP server.
+When the flag is off, each tool registers as a stub that returns an instructional error instead of performing the delete. To enable, add `DATAVERSE_ALLOW_DELETE=true` to your `.env` file and restart the MCP server.
 
 ## License
 
