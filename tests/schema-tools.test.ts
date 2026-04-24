@@ -190,9 +190,32 @@ describe("buildAttributeBody", () => {
 });
 
 describe("update_attribute", () => {
-  it("PATCHes only the provided fields with the correct @odata.type", async () => {
+  const existingAttribute = {
+    "@odata.context": "https://org/api/data/v9.2/$metadata#EntityDefinitions(...)/Attributes/$entity",
+    "@odata.etag": 'W/"12345"',
+    "@odata.type": "#Microsoft.Dynamics.CRM.StringAttributeMetadata",
+    MetadataId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    LogicalName: "fundai_settledat",
+    SchemaName: "Fundai_settledat",
+    EntityLogicalName: "fundai_x",
+    MaxLength: 200,
+    RequiredLevel: { Value: "ApplicationRequired" },
+    IsCustomAttribute: true,
+    DisplayName: {
+      LocalizedLabels: [{ Label: "Old Name", LanguageCode: 1033 }],
+    },
+  };
+
+  function mockClient(current = existingAttribute) {
+    return {
+      get: vi.fn().mockResolvedValue(current),
+      request: vi.fn().mockResolvedValue({}),
+    } as any;
+  }
+
+  it("GETs with the concrete type cast and PUTs the base path with If-Match: *", async () => {
     const server = createMockServer();
-    const client = { request: vi.fn().mockResolvedValue({}) } as any;
+    const client = mockClient();
     registerSchemaTools(server as any, client);
 
     const result = await server.tools.get("update_attribute")!.handler({
@@ -200,33 +223,111 @@ describe("update_attribute", () => {
       attribute_logical_name: "fundai_settledat",
       type: "String",
       display_name: "Settled At",
-      required: "None",
     });
 
+    const basePath =
+      "/EntityDefinitions(LogicalName='fundai_x')/Attributes(LogicalName='fundai_settledat')";
+    // GET must target the concrete derived-type cast — without it, type-specific
+    // fields (MaxLength, Format, …) are missing from the response and would be
+    // dropped from the PUT body, breaking the merge.
+    expect(client.get).toHaveBeenCalledWith(
+      `${basePath}/Microsoft.Dynamics.CRM.StringAttributeMetadata`,
+    );
+
     expect(client.request).toHaveBeenCalledTimes(1);
-    const [path, opts] = client.request.mock.calls[0];
-    expect(path).toBe(
-      "/EntityDefinitions(LogicalName='fundai_x')/Attributes(LogicalName='fundai_settledat')",
-    );
-    expect(opts.method).toBe("PATCH");
-    expect(opts.body["@odata.type"]).toBe(
-      "Microsoft.Dynamics.CRM.StringAttributeMetadata",
-    );
-    expect(opts.body.DisplayName.LocalizedLabels[0].Label).toBe("Settled At");
-    expect(opts.body.RequiredLevel).toEqual({ Value: "None" });
-    expect(opts.body.Description).toBeUndefined();
-    expect(opts.body.MaxLength).toBeUndefined();
+    const [putPath, opts] = client.request.mock.calls[0];
+    expect(putPath).toBe(basePath);
+    expect(opts.method).toBe("PUT");
+    // Dataverse metadata API does not expose ETags, so optimistic concurrency
+    // via If-Match: <etag> isn't possible. Use "*" (matches Microsoft's own
+    // docs example).
+    expect(opts.headers["If-Match"]).toBe("*");
     expect(result.content[0].text).toContain("updated successfully");
   });
 
-  it("sends MSCRM.MergeLabels header when merge_labels=true", async () => {
+  it("uses the correct cast for each attribute type", async () => {
+    for (const [userType, odataType] of [
+      ["Integer", "Microsoft.Dynamics.CRM.IntegerAttributeMetadata"],
+      ["Decimal", "Microsoft.Dynamics.CRM.DecimalAttributeMetadata"],
+      ["Money", "Microsoft.Dynamics.CRM.MoneyAttributeMetadata"],
+      ["DateTime", "Microsoft.Dynamics.CRM.DateTimeAttributeMetadata"],
+      ["Boolean", "Microsoft.Dynamics.CRM.BooleanAttributeMetadata"],
+      ["Picklist", "Microsoft.Dynamics.CRM.PicklistAttributeMetadata"],
+    ] as const) {
+      const server = createMockServer();
+      const client = mockClient();
+      registerSchemaTools(server as any, client);
+
+      await server.tools.get("update_attribute")!.handler({
+        entity_logical_name: "fundai_x",
+        attribute_logical_name: "fundai_col",
+        type: userType,
+        display_name: "X",
+      });
+
+      const getPath = client.get.mock.calls[0][0] as string;
+      // Literal suffix check — RegExp would treat the dots in the odataType
+      // as wildcards and pass on false positives.
+      expect(getPath.endsWith(`/${odataType}`)).toBe(true);
+    }
+  });
+
+  it("strips @odata.etag/@odata.context but keeps everything else from GET (merge preserves untouched fields)", async () => {
     const server = createMockServer();
-    const client = { request: vi.fn().mockResolvedValue({}) } as any;
+    const client = mockClient();
     registerSchemaTools(server as any, client);
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
-      attribute_logical_name: "fundai_col",
+      attribute_logical_name: "fundai_settledat",
+      type: "String",
+      display_name: "Settled At",
+    });
+
+    const [, opts] = client.request.mock.calls[0];
+    // discriminator reset to the plain @odata.type form expected by PUT
+    expect(opts.body["@odata.type"]).toBe(
+      "Microsoft.Dynamics.CRM.StringAttributeMetadata",
+    );
+    // control metadata stripped
+    expect(opts.body["@odata.etag"]).toBeUndefined();
+    expect(opts.body["@odata.context"]).toBeUndefined();
+    // untouched fields preserved from GET
+    expect(opts.body.MetadataId).toBe("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    expect(opts.body.MaxLength).toBe(200);
+    expect(opts.body.RequiredLevel).toEqual({ Value: "ApplicationRequired" });
+    expect(opts.body.IsCustomAttribute).toBe(true);
+    expect(opts.body.SchemaName).toBe("Fundai_settledat");
+    // user-supplied field overrides
+    expect(opts.body.DisplayName.LocalizedLabels[0].Label).toBe("Settled At");
+  });
+
+  it("user-supplied fields override values from GET", async () => {
+    const server = createMockServer();
+    const client = mockClient();
+    registerSchemaTools(server as any, client);
+
+    await server.tools.get("update_attribute")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_settledat",
+      type: "String",
+      required: "None",
+      max_length: 500,
+    });
+
+    const [, opts] = client.request.mock.calls[0];
+    expect(opts.body.RequiredLevel).toEqual({ Value: "None" }); // was ApplicationRequired
+    expect(opts.body.MaxLength).toBe(500); // was 200
+  });
+
+  it("sends MSCRM.MergeLabels header when merge_labels=true", async () => {
+    const server = createMockServer();
+    const client = mockClient();
+    registerSchemaTools(server as any, client);
+
+    await server.tools.get("update_attribute")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_settledat",
       type: "String",
       display_name: "Localized",
       merge_labels: true,
@@ -234,16 +335,17 @@ describe("update_attribute", () => {
 
     const [, opts] = client.request.mock.calls[0];
     expect(opts.headers["MSCRM.MergeLabels"]).toBe("true");
+    expect(opts.headers["If-Match"]).toBe("*");
   });
 
   it("does not send MSCRM.MergeLabels header by default", async () => {
     const server = createMockServer();
-    const client = { request: vi.fn().mockResolvedValue({}) } as any;
+    const client = mockClient();
     registerSchemaTools(server as any, client);
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
-      attribute_logical_name: "fundai_col",
+      attribute_logical_name: "fundai_settledat",
       type: "String",
       display_name: "Replaced",
     });
@@ -252,9 +354,9 @@ describe("update_attribute", () => {
     expect(opts.headers["MSCRM.MergeLabels"]).toBeUndefined();
   });
 
-  it("returns isError when no mutable fields are provided (no-op PATCH guard)", async () => {
+  it("returns isError when no mutable fields are provided (no-op guard); no HTTP calls made", async () => {
     const server = createMockServer();
-    const client = { request: vi.fn() } as any;
+    const client = mockClient();
     registerSchemaTools(server as any, client);
 
     const result = await server.tools.get("update_attribute")!.handler({
@@ -264,12 +366,56 @@ describe("update_attribute", () => {
     });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("at least one of");
+    expect(client.get).not.toHaveBeenCalled();
     expect(client.request).not.toHaveBeenCalled();
   });
 
-  it("forwards numeric bounds and precision", async () => {
+  it("preserves type-specific fields from the cast GET (MaxLength/Format for String)", async () => {
     const server = createMockServer();
-    const client = { request: vi.fn().mockResolvedValue({}) } as any;
+    // Simulates what a cast GET to .../StringAttributeMetadata returns:
+    // base fields + String-specific MaxLength and Format.
+    const stringAttr = {
+      ...existingAttribute,
+      LogicalName: "fundai_email",
+      SchemaName: "Fundai_email",
+      "@odata.type": "#Microsoft.Dynamics.CRM.StringAttributeMetadata",
+      MaxLength: 500,
+      Format: "Email",
+      FormatName: { Value: "Email" },
+    };
+    const client = mockClient(stringAttr as any);
+    registerSchemaTools(server as any, client);
+
+    // User only changes display_name — MaxLength/Format MUST survive.
+    await server.tools.get("update_attribute")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_email",
+      type: "String",
+      display_name: "Email",
+    });
+
+    const [, opts] = client.request.mock.calls[0];
+    expect(opts.body.MaxLength).toBe(500);
+    expect(opts.body.Format).toBe("Email");
+    expect(opts.body.FormatName).toEqual({ Value: "Email" });
+    // user-supplied override still wins
+    expect(opts.body.DisplayName.LocalizedLabels[0].Label).toBe("Email");
+  });
+
+  it("forwards numeric bounds and precision via merge", async () => {
+    const server = createMockServer();
+    const client = mockClient({
+      ...existingAttribute,
+      // Identity fields must match the URL the handler is called with,
+      // otherwise the test would pass even if the implementation PUT a body
+      // whose identity didn't match (which would be a real bug).
+      LogicalName: "fundai_amount",
+      SchemaName: "Fundai_amount",
+      "@odata.type": "#Microsoft.Dynamics.CRM.DecimalAttributeMetadata",
+      Precision: 2,
+      MinValue: -1000,
+      MaxValue: 1000,
+    } as any);
     registerSchemaTools(server as any, client);
 
     await server.tools.get("update_attribute")!.handler({
@@ -277,7 +423,7 @@ describe("update_attribute", () => {
       attribute_logical_name: "fundai_amount",
       type: "Decimal",
       min_value: 0,
-      max_value: 1000,
+      max_value: 9999,
       precision: 4,
     });
 
@@ -285,8 +431,10 @@ describe("update_attribute", () => {
     expect(opts.body["@odata.type"]).toBe(
       "Microsoft.Dynamics.CRM.DecimalAttributeMetadata",
     );
+    expect(opts.body.LogicalName).toBe("fundai_amount");
+    expect(opts.body.SchemaName).toBe("Fundai_amount");
     expect(opts.body.MinValue).toBe(0);
-    expect(opts.body.MaxValue).toBe(1000);
+    expect(opts.body.MaxValue).toBe(9999);
     expect(opts.body.Precision).toBe(4);
   });
 });

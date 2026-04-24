@@ -463,33 +463,56 @@ export function registerSchemaTools(
         };
       }
 
-      const body: Record<string, unknown> = {
-        "@odata.type": ATTRIBUTE_ODATA_TYPE_MAP[params.type],
-      };
-      const lang = params.language_code ?? 1033;
-      if (params.display_name !== undefined) {
-        body.DisplayName = buildLabel(params.display_name, lang);
-      }
-      if (params.description !== undefined) {
-        body.Description = buildLabel(params.description, lang);
-      }
-      if (params.required !== undefined) {
-        body.RequiredLevel = { Value: params.required };
-      }
-      if (params.max_length !== undefined) body.MaxLength = params.max_length;
-      if (params.min_value !== undefined) body.MinValue = params.min_value;
-      if (params.max_value !== undefined) body.MaxValue = params.max_value;
-      if (params.precision !== undefined) body.Precision = params.precision;
-
-      const headers: Record<string, string> = {};
-      if (params.merge_labels) headers["MSCRM.MergeLabels"] = "true";
-
       const entityEscaped = escapeODataString(params.entity_logical_name);
       const attrEscaped = escapeODataString(params.attribute_logical_name);
-      await client.request(
-        `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes(LogicalName='${attrEscaped}')`,
-        { method: "PATCH", body, headers },
-      );
+      const odataType = ATTRIBUTE_ODATA_TYPE_MAP[params.type];
+      const basePath = `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes(LogicalName='${attrEscaped}')`;
+      // GET must be cast to the concrete derived type — otherwise the response
+      // only contains base AttributeMetadata fields and type-specific ones
+      // (MaxLength, Precision, Format, OptionSet, …) are missing. A subsequent
+      // PUT with those fields absent would either 400 or reset them, because
+      // PUT replaces the full resource.
+      const getPath = `${basePath}/${odataType}`;
+
+      // Dataverse metadata endpoint rejects PATCH with HTTP 405; updates go
+      // through PUT, which REPLACES the full resource. To avoid resetting
+      // untouched fields to defaults, fetch current metadata (with the type
+      // cast) and merge the user-supplied changes on top.
+      const current = (await client.get(getPath)) as Record<string, unknown>;
+      const merged: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(current)) {
+        // Strip control metadata (@odata.etag, @odata.context, ...) — the
+        // discriminator @odata.type is re-set below.
+        if (key.startsWith("@odata.")) continue;
+        merged[key] = value;
+      }
+      merged["@odata.type"] = odataType;
+
+      const lang = params.language_code ?? 1033;
+      if (params.display_name !== undefined) {
+        merged.DisplayName = buildLabel(params.display_name, lang);
+      }
+      if (params.description !== undefined) {
+        merged.Description = buildLabel(params.description, lang);
+      }
+      if (params.required !== undefined) {
+        merged.RequiredLevel = { Value: params.required };
+      }
+      if (params.max_length !== undefined) merged.MaxLength = params.max_length;
+      if (params.min_value !== undefined) merged.MinValue = params.min_value;
+      if (params.max_value !== undefined) merged.MaxValue = params.max_value;
+      if (params.precision !== undefined) merged.Precision = params.precision;
+
+      // Dataverse metadata API does NOT expose ETags (verified empirically
+      // with odata.metadata=full — neither ETag response header nor
+      // @odata.etag body property is present), so optimistic concurrency via
+      // If-Match: <etag> is not available here. If-Match: * is what Microsoft's
+      // own update-column example uses — it signals "update existing" (vs
+      // upsert) without tying to a version.
+      const headers: Record<string, string> = { "If-Match": "*" };
+      if (params.merge_labels) headers["MSCRM.MergeLabels"] = "true";
+
+      await client.request(basePath, { method: "PUT", body: merged, headers });
       return {
         content: [
           {
