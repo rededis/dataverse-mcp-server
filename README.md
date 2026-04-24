@@ -39,6 +39,23 @@ MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-de
 
 Picklist tools accept either `entity_logical_name` + `attribute_logical_name` (Local OptionSet) or `option_set_name` (Global OptionSet) — the two modes are mutually exclusive. Write operations require Customizer or System Administrator role on the connected service principal. Deleting an option does **not** update existing records that hold its numeric value — they are left with an orphan integer.
 
+## Quick start (no clone)
+
+Add to `.mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "dataverse": {
+      "command": "npx",
+      "args": ["-y", "dataverse-mcp-server"]
+    }
+  }
+}
+```
+
+Create a `.env` file next to it with the four required variables (see [Environment variables](#environment-variables) below) and restart your MCP client. The `-y` flag tells `npx` to auto-confirm the package install.
+
 ## Setup
 
 ### Environment variables
@@ -67,9 +84,9 @@ npm install
 npm run build
 ```
 
-### Claude Code configuration
+### Claude Code configuration (local build)
 
-Add `.mcp.json` to your project root:
+If you cloned the repo instead of using `npx`:
 
 ```json
 {
