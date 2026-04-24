@@ -1,5 +1,12 @@
 # dataverse-mcp-server
 
+[![npm version](https://img.shields.io/npm/v/@rededis/dataverse-mcp-server.svg)](https://www.npmjs.com/package/@rededis/dataverse-mcp-server)
+[![npm downloads](https://img.shields.io/npm/dm/@rededis/dataverse-mcp-server.svg)](https://www.npmjs.com/package/@rededis/dataverse-mcp-server)
+[![CI](https://github.com/rededis/dataverse-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/rededis/dataverse-mcp-server/actions/workflows/ci.yml)
+[![Node.js](https://img.shields.io/node/v/@rededis/dataverse-mcp-server.svg)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg)](https://www.typescriptlang.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-default](#safety) configuration. Works with any Dataverse / Dynamics 365 environment.
 
 ## Tools
