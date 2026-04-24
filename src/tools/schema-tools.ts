@@ -66,13 +66,52 @@ const AttributeSchema = z.object({
     .describe(
       "Options for Boolean (2 items: false=0, true=1) or Picklist types",
     ),
+  date_format: z
+    .enum(["DateOnly", "DateAndTime"])
+    .optional()
+    .describe(
+      "DateTime only: UI presentation — 'DateOnly' hides the time picker (calendar columns), 'DateAndTime' shows both (default).",
+    ),
+  date_behavior: z
+    .enum(["UserLocal", "DateOnly", "TimeZoneIndependent"])
+    .optional()
+    .describe(
+      "DateTime only: storage/projection semantics. 'UserLocal' (default) shifts by viewer's TZ; 'DateOnly' stores a calendar date (requires date_format=DateOnly); 'TimeZoneIndependent' stores wall-clock time identical across TZs. Per Microsoft docs, changing DateTimeBehavior on an existing column is a one-way operation (UserLocal → other) and cannot be reverted.",
+    ),
 });
 
 type AttributeInput = z.infer<typeof AttributeSchema>;
 
+interface DateTimeFields {
+  type?: string;
+  date_format?: "DateOnly" | "DateAndTime";
+  date_behavior?: "UserLocal" | "DateOnly" | "TimeZoneIndependent";
+}
+
+function validateDateTimeFields(attr: DateTimeFields): void {
+  const usedDateFields =
+    attr.date_format !== undefined || attr.date_behavior !== undefined;
+  if (usedDateFields && attr.type !== "DateTime") {
+    throw new Error(
+      "date_format and date_behavior apply only to DateTime attributes",
+    );
+  }
+  if (
+    attr.date_format === "DateOnly" &&
+    attr.date_behavior !== undefined &&
+    attr.date_behavior !== "DateOnly"
+  ) {
+    throw new Error(
+      `DateOnly format requires DateOnly behavior, got: ${attr.date_behavior}`,
+    );
+  }
+}
+
 export function buildAttributeBody(
   attr: AttributeInput,
 ): Record<string, unknown> {
+  validateDateTimeFields(attr);
+
   const body: Record<string, unknown> = {
     "@odata.type": ATTRIBUTE_ODATA_TYPE_MAP[attr.type],
     LogicalName: attr.logical_name,
@@ -87,6 +126,14 @@ export function buildAttributeBody(
   if (attr.min_value !== undefined) body.MinValue = attr.min_value;
   if (attr.max_value !== undefined) body.MaxValue = attr.max_value;
   if (attr.precision !== undefined) body.Precision = attr.precision;
+
+  if (attr.type === "DateTime") {
+    if (attr.date_format) body.Format = attr.date_format;
+    // DateTimeBehavior is wrapped in { Value: ... } per Dataverse OData spec
+    // (common gotcha — Format is a bare string but Behavior is a typed object)
+    if (attr.date_behavior)
+      body.DateTimeBehavior = { Value: attr.date_behavior };
+  }
 
   if (attr.type === "Boolean") {
     const falseOption = attr.options?.find((o) => o.value === 0) ?? {
@@ -431,6 +478,18 @@ export function registerSchemaTools(
         .number()
         .optional()
         .describe("New precision (Decimal/Money only)"),
+      date_format: z
+        .enum(["DateOnly", "DateAndTime"])
+        .optional()
+        .describe(
+          "DateTime only: change UI presentation. See add_attribute for semantics.",
+        ),
+      date_behavior: z
+        .enum(["UserLocal", "DateOnly", "TimeZoneIndependent"])
+        .optional()
+        .describe(
+          "DateTime only: change storage semantics. ONE-WAY per Microsoft — you can switch from UserLocal to DateOnly or TimeZoneIndependent once, but cannot switch back or between the non-UserLocal values. Dataverse will return 400 if the behavior is already locked.",
+        ),
       language_code: z
         .number()
         .optional()
@@ -443,6 +502,8 @@ export function registerSchemaTools(
         ),
     },
     async (params) => {
+      validateDateTimeFields(params);
+
       const hasMutableField =
         params.display_name !== undefined ||
         params.description !== undefined ||
@@ -450,13 +511,15 @@ export function registerSchemaTools(
         params.max_length !== undefined ||
         params.min_value !== undefined ||
         params.max_value !== undefined ||
-        params.precision !== undefined;
+        params.precision !== undefined ||
+        params.date_format !== undefined ||
+        params.date_behavior !== undefined;
       if (!hasMutableField) {
         return {
           content: [
             {
               type: "text" as const,
-              text: "update_attribute requires at least one of: display_name, description, required, max_length, min_value, max_value, precision. Nothing to update.",
+              text: "update_attribute requires at least one of: display_name, description, required, max_length, min_value, max_value, precision, date_format, date_behavior. Nothing to update.",
             },
           ],
           isError: true,
@@ -502,6 +565,12 @@ export function registerSchemaTools(
       if (params.min_value !== undefined) merged.MinValue = params.min_value;
       if (params.max_value !== undefined) merged.MaxValue = params.max_value;
       if (params.precision !== undefined) merged.Precision = params.precision;
+      if (params.date_format !== undefined) merged.Format = params.date_format;
+      if (params.date_behavior !== undefined) {
+        // DateTimeBehavior wrapped in { Value: ... } on write, matches the
+        // shape GET returns for this property.
+        merged.DateTimeBehavior = { Value: params.date_behavior };
+      }
 
       // Dataverse metadata API does NOT expose ETags (verified empirically
       // with odata.metadata=full — neither ETag response header nor

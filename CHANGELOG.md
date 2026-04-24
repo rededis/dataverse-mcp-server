@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-24
+
+### Added
+
+- `add_attribute` and `update_attribute` accept two new optional fields for `DateTime` attributes (closes #24):
+  - `date_format`: `"DateOnly" | "DateAndTime"` — controls UI presentation (calendar-only vs date+time picker). Maps to `Format` in the OData body.
+  - `date_behavior`: `"UserLocal" | "DateOnly" | "TimeZoneIndependent"` — controls storage/projection semantics. Maps to `DateTimeBehavior: { Value: ... }` (wrapped form is a Dataverse gotcha).
+- Client-side validation before any HTTP call:
+  - `date_format: "DateOnly"` requires `date_behavior: "DateOnly"` — mismatched pairs rejected with a clear message.
+  - `date_format` / `date_behavior` on a non-DateTime type rejected.
+- Tool descriptions surface the one-way nature of Dataverse `DateTimeBehavior` mutations so the model warns users before calling `update_attribute` on a behavior-locked column.
+
+### Why minor bump (0.2.0, not 0.1.3)
+
+`AttributeSchema` gained two public fields — new schema surface exposed to MCP clients. Strict semver reads this as a minor addition, not a patch. Backward compatible: existing `add_attribute` / `update_attribute` calls without the new fields behave identically to 0.1.x.
+
 ## [0.1.2] - 2026-04-24
 
 ### Added
@@ -71,7 +87,8 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/rededis/dataverse-mcp-server/releases/tag/v0.1.0
