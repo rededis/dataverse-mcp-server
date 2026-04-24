@@ -23,7 +23,11 @@ MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-de
 |------|-------------|
 | `create_entity` | Create a new table with attributes |
 | `add_attribute` | Add a column to an existing table |
+| `update_attribute` | Update column metadata (display name, required level, bounds, …) |
+| `delete_attribute` | Delete a column (disabled by default, see [Safety](#safety)) |
 | `create_relationship` | Create relationships between tables (1:N, N:N) |
+
+> Dataverse does **not** allow changing a column's logical name or type. To "rename" or change type: create a new column, migrate data via `update_record`, then `delete_attribute` on the old one.
 
 ### Picklist option management
 | Tool | Description |
@@ -82,7 +86,7 @@ Create a `.env` file with your credentials (see `.env.example`).
 
 ## Safety
 
-Delete operations are **disabled by default** to prevent accidental data loss. The `delete_record` tool is registered but returns an error message explaining how to enable it.
+Destructive operations are **disabled by default** to prevent accidental data loss. Both `delete_record` (removes rows) and `delete_attribute` (removes columns and ALL data stored in them — no recovery) are gated behind the same flag: they register as stubs that return an error message explaining how to enable them.
 
 To enable, add `DATAVERSE_ALLOW_DELETE=true` to your `.env` file and restart the MCP server.
 

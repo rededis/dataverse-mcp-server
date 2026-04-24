@@ -1,5 +1,25 @@
-import { describe, expect, it } from "vitest";
-import { buildAttributeBody } from "../src/tools/schema-tools.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+  buildAttributeBody,
+  registerSchemaTools,
+} from "../src/tools/schema-tools.js";
+
+function createMockServer() {
+  const tools = new Map<string, { description: string; handler: Function }>();
+  return {
+    tool: vi.fn(
+      (
+        name: string,
+        description: string,
+        _schema: unknown,
+        handler: Function,
+      ) => {
+        tools.set(name, { description, handler });
+      },
+    ),
+    tools,
+  };
+}
 
 describe("buildAttributeBody", () => {
   it("builds String attribute body", () => {
@@ -166,5 +186,159 @@ describe("buildAttributeBody", () => {
         display_name: "Status",
       }),
     ).toThrow("Picklist attributes require a non-empty 'options' array.");
+  });
+});
+
+describe("update_attribute", () => {
+  it("PATCHes only the provided fields with the correct @odata.type", async () => {
+    const server = createMockServer();
+    const client = { request: vi.fn().mockResolvedValue({}) } as any;
+    registerSchemaTools(server as any, client);
+
+    const result = await server.tools.get("update_attribute")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_settledat",
+      type: "String",
+      display_name: "Settled At",
+      required: "None",
+    });
+
+    expect(client.request).toHaveBeenCalledTimes(1);
+    const [path, opts] = client.request.mock.calls[0];
+    expect(path).toBe(
+      "/EntityDefinitions(LogicalName='fundai_x')/Attributes(LogicalName='fundai_settledat')",
+    );
+    expect(opts.method).toBe("PATCH");
+    expect(opts.body["@odata.type"]).toBe(
+      "Microsoft.Dynamics.CRM.StringAttributeMetadata",
+    );
+    expect(opts.body.DisplayName.LocalizedLabels[0].Label).toBe("Settled At");
+    expect(opts.body.RequiredLevel).toEqual({ Value: "None" });
+    expect(opts.body.Description).toBeUndefined();
+    expect(opts.body.MaxLength).toBeUndefined();
+    expect(result.content[0].text).toContain("updated successfully");
+  });
+
+  it("sends MSCRM.MergeLabels header when merge_labels=true", async () => {
+    const server = createMockServer();
+    const client = { request: vi.fn().mockResolvedValue({}) } as any;
+    registerSchemaTools(server as any, client);
+
+    await server.tools.get("update_attribute")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_col",
+      type: "String",
+      display_name: "Localized",
+      merge_labels: true,
+    });
+
+    const [, opts] = client.request.mock.calls[0];
+    expect(opts.headers["MSCRM.MergeLabels"]).toBe("true");
+  });
+
+  it("does not send MSCRM.MergeLabels header by default", async () => {
+    const server = createMockServer();
+    const client = { request: vi.fn().mockResolvedValue({}) } as any;
+    registerSchemaTools(server as any, client);
+
+    await server.tools.get("update_attribute")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_col",
+      type: "String",
+      display_name: "Replaced",
+    });
+
+    const [, opts] = client.request.mock.calls[0];
+    expect(opts.headers["MSCRM.MergeLabels"]).toBeUndefined();
+  });
+
+  it("returns isError when no mutable fields are provided (no-op PATCH guard)", async () => {
+    const server = createMockServer();
+    const client = { request: vi.fn() } as any;
+    registerSchemaTools(server as any, client);
+
+    const result = await server.tools.get("update_attribute")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_col",
+      type: "String",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("at least one of");
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
+  it("forwards numeric bounds and precision", async () => {
+    const server = createMockServer();
+    const client = { request: vi.fn().mockResolvedValue({}) } as any;
+    registerSchemaTools(server as any, client);
+
+    await server.tools.get("update_attribute")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_amount",
+      type: "Decimal",
+      min_value: 0,
+      max_value: 1000,
+      precision: 4,
+    });
+
+    const [, opts] = client.request.mock.calls[0];
+    expect(opts.body["@odata.type"]).toBe(
+      "Microsoft.Dynamics.CRM.DecimalAttributeMetadata",
+    );
+    expect(opts.body.MinValue).toBe(0);
+    expect(opts.body.MaxValue).toBe(1000);
+    expect(opts.body.Precision).toBe(4);
+  });
+});
+
+describe("delete_attribute", () => {
+  it("returns an error when allowDelete is false", async () => {
+    const server = createMockServer();
+    const client = { delete: vi.fn() } as any;
+    registerSchemaTools(server as any, client, false);
+
+    const tool = server.tools.get("delete_attribute")!;
+    expect(tool.description).toContain("disabled");
+
+    const result = await tool.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_col",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("DATAVERSE_ALLOW_DELETE");
+    expect(client.delete).not.toHaveBeenCalled();
+  });
+
+  it("calls client.delete when allowDelete is true", async () => {
+    const server = createMockServer();
+    const client = { delete: vi.fn().mockResolvedValue({}) } as any;
+    registerSchemaTools(server as any, client, true);
+
+    const tool = server.tools.get("delete_attribute")!;
+    expect(tool.description).not.toContain("currently disabled");
+    expect(tool.description).toContain("PERMANENTLY DESTROYS");
+
+    const result = await tool.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_col",
+    });
+    expect(client.delete).toHaveBeenCalledWith(
+      "/EntityDefinitions(LogicalName='fundai_x')/Attributes(LogicalName='fundai_col')",
+    );
+    expect(result.content[0].text).toContain("permanently lost");
+  });
+
+  it("escapes single quotes in entity/attribute names to prevent OData injection", async () => {
+    const server = createMockServer();
+    const client = { delete: vi.fn().mockResolvedValue({}) } as any;
+    registerSchemaTools(server as any, client, true);
+
+    await server.tools.get("delete_attribute")!.handler({
+      entity_logical_name: "weird'name",
+      attribute_logical_name: "odd'col",
+    });
+    expect(client.delete).toHaveBeenCalledWith(
+      "/EntityDefinitions(LogicalName='weird''name')/Attributes(LogicalName='odd''col')",
+    );
   });
 });
