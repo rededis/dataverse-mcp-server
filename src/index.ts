@@ -80,7 +80,7 @@ if (missing.length > 0) {
 
   registerDataTools(server, client, entityPrefix, allowDelete, solutionName);
   registerSchemaTools(server, client, allowDelete);
-  registerPicklistTools(server, client);
+  registerPicklistTools(server, client, allowDelete);
 }
 
 const transport = new StdioServerTransport();
