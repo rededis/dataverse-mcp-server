@@ -196,21 +196,22 @@ export function registerPicklistTools(
     },
   );
 
+  // Shared between the enabled tool and the disabled stub so that the MCP
+  // tool schema the model sees is identical regardless of DATAVERSE_ALLOW_DELETE.
+  const deletePicklistOptionShape = {
+    ...LOCATION_SHAPE,
+    value: z.number().int().describe("Numeric value of the option to remove"),
+    solution_unique_name: z
+      .string()
+      .optional()
+      .describe("Solution unique name (defaults to the Default Solution)"),
+  } as const;
+
   if (allowDelete) {
     server.tool(
       "delete_picklist_option",
       "Remove an option from a Local or Global OptionSet (Dataverse DeleteOptionValue action). WARNING: existing records that hold this integer value are NOT updated and will retain the now-orphan number — warn the user before deleting.",
-      {
-        ...LOCATION_SHAPE,
-        value: z
-          .number()
-          .int()
-          .describe("Numeric value of the option to remove"),
-        solution_unique_name: z
-          .string()
-          .optional()
-          .describe("Solution unique name (defaults to the Default Solution)"),
-      },
+      deletePicklistOptionShape,
       async (params) => {
         validatePicklistLocation(params);
         const body: Record<string, unknown> = { Value: params.value };
@@ -233,11 +234,7 @@ export function registerPicklistTools(
     server.tool(
       "delete_picklist_option",
       "Remove an option from a Local or Global OptionSet (currently disabled for safety)",
-      {
-        ...LOCATION_SHAPE,
-        value: z.number().int().describe("Numeric value of the option"),
-        solution_unique_name: z.string().optional(),
-      },
+      deletePicklistOptionShape,
       async () => ({
         content: [
           {
