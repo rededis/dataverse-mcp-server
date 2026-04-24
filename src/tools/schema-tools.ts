@@ -503,6 +503,12 @@ export function registerSchemaTools(
       if (params.max_value !== undefined) merged.MaxValue = params.max_value;
       if (params.precision !== undefined) merged.Precision = params.precision;
 
+      // Dataverse metadata API does NOT expose ETags (verified empirically
+      // with odata.metadata=full — neither ETag response header nor
+      // @odata.etag body property is present), so optimistic concurrency via
+      // If-Match: <etag> is not available here. If-Match: * is what Microsoft's
+      // own update-column example uses — it signals "update existing" (vs
+      // upsert) without tying to a version.
       const headers: Record<string, string> = { "If-Match": "*" };
       if (params.merge_labels) headers["MSCRM.MergeLabels"] = "true";
 

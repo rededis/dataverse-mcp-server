@@ -238,6 +238,9 @@ describe("update_attribute", () => {
     const [putPath, opts] = client.request.mock.calls[0];
     expect(putPath).toBe(basePath);
     expect(opts.method).toBe("PUT");
+    // Dataverse metadata API does not expose ETags, so optimistic concurrency
+    // via If-Match: <etag> isn't possible. Use "*" (matches Microsoft's own
+    // docs example).
     expect(opts.headers["If-Match"]).toBe("*");
     expect(result.content[0].text).toContain("updated successfully");
   });
@@ -371,6 +374,8 @@ describe("update_attribute", () => {
     // base fields + String-specific MaxLength and Format.
     const stringAttr = {
       ...existingAttribute,
+      LogicalName: "fundai_email",
+      SchemaName: "Fundai_email",
       "@odata.type": "#Microsoft.Dynamics.CRM.StringAttributeMetadata",
       MaxLength: 500,
       Format: "Email",
@@ -399,6 +404,11 @@ describe("update_attribute", () => {
     const server = createMockServer();
     const client = mockClient({
       ...existingAttribute,
+      // Identity fields must match the URL the handler is called with,
+      // otherwise the test would pass even if the implementation PUT a body
+      // whose identity didn't match (which would be a real bug).
+      LogicalName: "fundai_amount",
+      SchemaName: "Fundai_amount",
       "@odata.type": "#Microsoft.Dynamics.CRM.DecimalAttributeMetadata",
       Precision: 2,
       MinValue: -1000,
@@ -419,6 +429,8 @@ describe("update_attribute", () => {
     expect(opts.body["@odata.type"]).toBe(
       "Microsoft.Dynamics.CRM.DecimalAttributeMetadata",
     );
+    expect(opts.body.LogicalName).toBe("fundai_amount");
+    expect(opts.body.SchemaName).toBe("Fundai_amount");
     expect(opts.body.MinValue).toBe(0);
     expect(opts.body.MaxValue).toBe(9999);
     expect(opts.body.Precision).toBe(4);
