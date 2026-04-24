@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -34,9 +34,15 @@ const REQUIRED_VARS = [
 
 const missing = REQUIRED_VARS.filter((name) => !process.env[name]);
 
+// Read version from package.json so it stays in sync with the npm release —
+// avoids reporting a stale MCP server version on every bump.
+const pkg = JSON.parse(
+  readFileSync(resolve(projectRoot, "package.json"), "utf-8"),
+) as { version: string };
+
 const server = new McpServer({
   name: "dataverse-mcp-server",
-  version: "0.1.0",
+  version: pkg.version,
 });
 
 if (missing.length > 0) {
