@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-04-24
+
+### Added
+
+- Shields.io badges in README (npm version, monthly downloads, CI status, Node.js engines, TypeScript version, license). They update automatically as the package evolves — no manual version tweaks.
+
 ## [0.1.1] - 2026-04-24
 
 ### Added
@@ -65,6 +71,7 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/rededis/dataverse-mcp-server/releases/tag/v0.1.0
