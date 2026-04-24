@@ -463,33 +463,43 @@ export function registerSchemaTools(
         };
       }
 
-      const body: Record<string, unknown> = {
-        "@odata.type": ATTRIBUTE_ODATA_TYPE_MAP[params.type],
-      };
-      const lang = params.language_code ?? 1033;
-      if (params.display_name !== undefined) {
-        body.DisplayName = buildLabel(params.display_name, lang);
-      }
-      if (params.description !== undefined) {
-        body.Description = buildLabel(params.description, lang);
-      }
-      if (params.required !== undefined) {
-        body.RequiredLevel = { Value: params.required };
-      }
-      if (params.max_length !== undefined) body.MaxLength = params.max_length;
-      if (params.min_value !== undefined) body.MinValue = params.min_value;
-      if (params.max_value !== undefined) body.MaxValue = params.max_value;
-      if (params.precision !== undefined) body.Precision = params.precision;
-
-      const headers: Record<string, string> = {};
-      if (params.merge_labels) headers["MSCRM.MergeLabels"] = "true";
-
       const entityEscaped = escapeODataString(params.entity_logical_name);
       const attrEscaped = escapeODataString(params.attribute_logical_name);
-      await client.request(
-        `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes(LogicalName='${attrEscaped}')`,
-        { method: "PATCH", body, headers },
-      );
+      const path = `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes(LogicalName='${attrEscaped}')`;
+
+      // Dataverse metadata endpoint rejects PATCH with HTTP 405; updates go
+      // through PUT, which REPLACES the full resource. To avoid resetting
+      // untouched fields (RequiredLevel, MaxLength, etc.) to defaults, fetch
+      // current metadata first and merge the user-supplied changes on top.
+      const current = (await client.get(path)) as Record<string, unknown>;
+      const merged: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(current)) {
+        // Strip control metadata (@odata.etag, @odata.context, ...) — the
+        // discriminator @odata.type is re-set below.
+        if (key.startsWith("@odata.")) continue;
+        merged[key] = value;
+      }
+      merged["@odata.type"] = ATTRIBUTE_ODATA_TYPE_MAP[params.type];
+
+      const lang = params.language_code ?? 1033;
+      if (params.display_name !== undefined) {
+        merged.DisplayName = buildLabel(params.display_name, lang);
+      }
+      if (params.description !== undefined) {
+        merged.Description = buildLabel(params.description, lang);
+      }
+      if (params.required !== undefined) {
+        merged.RequiredLevel = { Value: params.required };
+      }
+      if (params.max_length !== undefined) merged.MaxLength = params.max_length;
+      if (params.min_value !== undefined) merged.MinValue = params.min_value;
+      if (params.max_value !== undefined) merged.MaxValue = params.max_value;
+      if (params.precision !== undefined) merged.Precision = params.precision;
+
+      const headers: Record<string, string> = { "If-Match": "*" };
+      if (params.merge_labels) headers["MSCRM.MergeLabels"] = "true";
+
+      await client.request(path, { method: "PUT", body: merged, headers });
       return {
         content: [
           {
