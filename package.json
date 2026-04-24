@@ -1,11 +1,16 @@
 {
-  "name": "dataverse-mcp-server",
+  "name": "@rededis/dataverse-mcp-server",
   "version": "0.1.0",
   "description": "MCP server for Microsoft Dataverse API",
   "main": "dist/index.js",
   "bin": {
     "dataverse-mcp-server": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=18"
   },
@@ -17,15 +22,30 @@
     "lint:fix": "biome check --write src/",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prepublishOnly": "npm run lint && npm test && npm run build"
   },
   "keywords": [
     "mcp",
+    "model-context-protocol",
     "dataverse",
     "dynamics365",
-    "microsoft"
+    "power-platform",
+    "microsoft",
+    "claude"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rededis/dataverse-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rededis/dataverse-mcp-server/issues"
+  },
+  "homepage": "https://github.com/rededis/dataverse-mcp-server#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "dotenv": "^17.4.1",
