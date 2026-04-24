@@ -79,7 +79,7 @@ if (missing.length > 0) {
   const client = new DataverseClient(auth, resourceUrl);
 
   registerDataTools(server, client, entityPrefix, allowDelete, solutionName);
-  registerSchemaTools(server, client);
+  registerSchemaTools(server, client, allowDelete);
   registerPicklistTools(server, client);
 }
 

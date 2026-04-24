@@ -164,9 +164,37 @@ export function buildAttributeBody(
   return body;
 }
 
+const ATTRIBUTE_ODATA_TYPE_MAP: Record<string, string> = {
+  String: "Microsoft.Dynamics.CRM.StringAttributeMetadata",
+  Integer: "Microsoft.Dynamics.CRM.IntegerAttributeMetadata",
+  BigInt: "Microsoft.Dynamics.CRM.BigIntAttributeMetadata",
+  Decimal: "Microsoft.Dynamics.CRM.DecimalAttributeMetadata",
+  Double: "Microsoft.Dynamics.CRM.DoubleAttributeMetadata",
+  Money: "Microsoft.Dynamics.CRM.MoneyAttributeMetadata",
+  DateTime: "Microsoft.Dynamics.CRM.DateTimeAttributeMetadata",
+  Uniqueidentifier: "Microsoft.Dynamics.CRM.UniqueIdentifierAttributeMetadata",
+  Memo: "Microsoft.Dynamics.CRM.MemoAttributeMetadata",
+  Boolean: "Microsoft.Dynamics.CRM.BooleanAttributeMetadata",
+  Picklist: "Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
+};
+
+function buildLabel(label: string, languageCode = 1033) {
+  return {
+    "@odata.type": "Microsoft.Dynamics.CRM.Label",
+    LocalizedLabels: [
+      {
+        "@odata.type": "Microsoft.Dynamics.CRM.LocalizedLabel",
+        Label: label,
+        LanguageCode: languageCode,
+      },
+    ],
+  };
+}
+
 export function registerSchemaTools(
   server: McpServer,
   client: DataverseClient,
+  allowDelete = false,
 ): void {
   server.tool(
     "create_entity",
@@ -417,4 +445,157 @@ export function registerSchemaTools(
       }
     },
   );
+
+  server.tool(
+    "update_attribute",
+    "Update metadata of an existing column (display name, description, required level, max length, min/max value, precision). The column's type and logical name CANNOT be changed by Dataverse — for those, create a new column, migrate data, then delete the old one.",
+    {
+      entity_logical_name: z.string().describe("Logical name of the entity"),
+      attribute_logical_name: z
+        .string()
+        .describe("Logical name of the column to update"),
+      type: z
+        .enum([
+          "String",
+          "Integer",
+          "BigInt",
+          "Decimal",
+          "Double",
+          "Money",
+          "DateTime",
+          "Uniqueidentifier",
+          "Memo",
+          "Boolean",
+          "Picklist",
+        ])
+        .describe(
+          "Current type of the attribute (required to build the correct metadata discriminator; must match the existing type — type changes are not allowed)",
+        ),
+      display_name: z.string().optional().describe("New display name"),
+      description: z.string().optional().describe("New description"),
+      required: z
+        .enum(["None", "ApplicationRequired", "SystemRequired"])
+        .optional()
+        .describe("New required level"),
+      max_length: z
+        .number()
+        .optional()
+        .describe("New max length (String/Memo only)"),
+      min_value: z
+        .number()
+        .optional()
+        .describe("New min value (numeric types only)"),
+      max_value: z
+        .number()
+        .optional()
+        .describe("New max value (numeric types only)"),
+      precision: z
+        .number()
+        .optional()
+        .describe("New precision (Decimal/Money only)"),
+      language_code: z
+        .number()
+        .optional()
+        .describe("Language code for labels (default: 1033)"),
+      merge_labels: z
+        .boolean()
+        .optional()
+        .describe(
+          "If true, preserve existing localized labels in other languages; if false (default), replace all localized labels with just the new one.",
+        ),
+    },
+    async (params) => {
+      const body: Record<string, unknown> = {
+        "@odata.type": ATTRIBUTE_ODATA_TYPE_MAP[params.type],
+      };
+      const lang = params.language_code ?? 1033;
+      if (params.display_name !== undefined) {
+        body.DisplayName = buildLabel(params.display_name, lang);
+      }
+      if (params.description !== undefined) {
+        body.Description = buildLabel(params.description, lang);
+      }
+      if (params.required !== undefined) {
+        body.RequiredLevel = { Value: params.required };
+      }
+      if (params.max_length !== undefined) body.MaxLength = params.max_length;
+      if (params.min_value !== undefined) body.MinValue = params.min_value;
+      if (params.max_value !== undefined) body.MaxValue = params.max_value;
+      if (params.precision !== undefined) body.Precision = params.precision;
+
+      const headers: Record<string, string> = {};
+      if (params.merge_labels) headers["MSCRM.MergeLabels"] = "true";
+
+      const entityEscaped = params.entity_logical_name.replace(/'/g, "''");
+      const attrEscaped = params.attribute_logical_name.replace(/'/g, "''");
+      await client.request(
+        `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes(LogicalName='${attrEscaped}')`,
+        { method: "PATCH", body, headers },
+      );
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Attribute ${params.entity_logical_name}.${params.attribute_logical_name} updated successfully.`,
+          },
+        ],
+      };
+    },
+  );
+
+  if (allowDelete) {
+    server.tool(
+      "delete_attribute",
+      "Permanently delete a column (attribute) from a Dataverse table. ⚠️ WARNING: this PERMANENTLY DESTROYS all data stored in this column across ALL records — there is no soft-delete, no undo, no recovery except from a full environment backup. Before calling this, make the user confirm explicitly and consider: (1) is this a rename? then create the new column, migrate data, and only then delete the old one; (2) type change? same pattern.",
+      {
+        entity_logical_name: z.string().describe("Logical name of the entity"),
+        attribute_logical_name: z
+          .string()
+          .describe("Logical name of the column to delete"),
+      },
+      async ({ entity_logical_name, attribute_logical_name }) => {
+        const entityEscaped = entity_logical_name.replace(/'/g, "''");
+        const attrEscaped = attribute_logical_name.replace(/'/g, "''");
+        await client.delete(
+          `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes(LogicalName='${attrEscaped}')`,
+        );
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Attribute ${entity_logical_name}.${attribute_logical_name} deleted. All data stored in this column across all records is permanently lost.`,
+            },
+          ],
+        };
+      },
+    );
+  } else {
+    server.tool(
+      "delete_attribute",
+      "Delete a column from a Dataverse table (currently disabled for safety)",
+      {
+        entity_logical_name: z.string().describe("Logical name of the entity"),
+        attribute_logical_name: z
+          .string()
+          .describe("Logical name of the column"),
+      },
+      async () => ({
+        content: [
+          {
+            type: "text" as const,
+            text: [
+              "[IMPORTANT: Display this entire message to the user exactly as-is.]",
+              "",
+              "⚠️ delete_attribute is disabled by default for safety.",
+              "",
+              "Deleting a column PERMANENTLY destroys all data in it across every record — no recovery.",
+              "",
+              "To enable, add DATAVERSE_ALLOW_DELETE=true to your .env file and restart the MCP server.",
+            ].join("\n"),
+          },
+        ],
+        isError: true,
+      }),
+    );
+  }
 }
