@@ -118,6 +118,22 @@ Destructive operations are **disabled by default** to prevent accidental data lo
 
 When the flag is off, each tool registers as a stub that returns an instructional error instead of performing the delete. To enable, add `DATAVERSE_ALLOW_DELETE=true` to your `.env` file and restart the MCP server.
 
+## Releasing
+
+Releases are published to npm automatically by `.github/workflows/release.yml` when a GitHub Release is created.
+
+1. Bump `version` in `package.json` and run `npm install` so `package-lock.json` records the new version.
+2. Add a `## [X.Y.Z] - YYYY-MM-DD` section to `CHANGELOG.md` summarizing the PRs merged since the previous release.
+3. Open a PR with these changes and merge to `main`.
+4. Create a GitHub Release with tag `vX.Y.Z` (must match `package.json` version exactly). The workflow:
+   - Verifies the tag matches `package.json` and that `CHANGELOG.md` has a matching `## [X.Y.Z]` section.
+   - Runs lint / test / build as a final integration check across all merged PRs combined.
+   - Publishes to npm with provenance.
+
+### One-time setup
+
+The repo secret `NPM_TOKEN` must be an npm **Automation** token (Account → Access Tokens → Generate New Token (Classic) → Automation). Classic tokens with 2FA enabled trigger an OTP prompt that CI cannot satisfy and `npm publish` will fail with `EOTP`.
+
 ## License
 
 MIT
