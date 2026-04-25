@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-25
+
+### Added
+
+- New tool `get_attribute_dependencies_list_url` (closes #27): returns a Power Apps maker UI URL for an attribute. Use after `delete_attribute` fails with error 0x8004f01f, or proactively before any destructive change. The URL points to the field details page in Power Apps maker; from there a single "Show dependencies" click yields the rich dependency graph (forms, views, workflows, business rules, calculated columns, …) with in-place edit links per dependency.
+
+### Notes on the URL-only approach
+
+A full programmatic dependency-listing tool (parsing `RetrieveDependenciesForDelete`, mapping component-type integers, resolving names per type) would be ~150 lines and require a hand-maintained component-type enum. The link-only design solves the practical problem with ~30 lines: every workflow path that needed deps ended in "go to maker UI to edit them" anyway, so the JSON intermediate offered little real value. If a programmatic listing turns out useful for automation later, it can be a follow-up additive tool.
+
+### Implementation
+
+- The OrganizationId required for the maker URL is fetched from `/WhoAmI` once per process and cached at module scope.
+- Entity and attribute MetadataIds are fetched in parallel with the cached OrganizationId via `Promise.all`.
+
 ## [0.2.0] - 2026-04-24
 
 ### Added
@@ -87,7 +102,8 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.0...v0.1.1

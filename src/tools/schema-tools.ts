@@ -176,6 +176,28 @@ export function buildAttributeBody(
   return body;
 }
 
+// Cached at module scope: OrganizationId never changes for a given Dataverse
+// connection. First call to get_attribute_dependencies_list_url pays the
+// WhoAmI HTTP cost; subsequent calls reuse the value.
+let cachedOrganizationId: string | null = null;
+
+async function getOrganizationId(client: DataverseClient): Promise<string> {
+  if (cachedOrganizationId) return cachedOrganizationId;
+  const result = (await client.get("/WhoAmI")) as { OrganizationId?: string };
+  if (!result.OrganizationId) {
+    throw new Error(
+      "Failed to resolve OrganizationId from WhoAmI response — required to build the Power Apps maker URL.",
+    );
+  }
+  cachedOrganizationId = result.OrganizationId;
+  return cachedOrganizationId;
+}
+
+// Exposed for tests to reset between cases.
+export function _resetOrganizationIdCache(): void {
+  cachedOrganizationId = null;
+}
+
 export function registerSchemaTools(
   server: McpServer,
   client: DataverseClient,
@@ -648,4 +670,58 @@ export function registerSchemaTools(
       }),
     );
   }
+
+  server.tool(
+    "get_attribute_dependencies_list_url",
+    "Returns a Power Apps maker UI URL for an attribute. Open the URL in a browser to see the column's details and click 'Show dependencies' to inspect what references it (forms, views, workflows, business rules, calculated columns, etc.). Use this when delete_attribute fails with error 0x8004f01f, or proactively before any destructive change. The URL points to the field details page; from there the maker UI handles the full dependency graph and offers in-place edit links per dependency.",
+    {
+      entity_logical_name: z.string().describe("Logical name of the entity"),
+      attribute_logical_name: z.string().describe("Logical name of the column"),
+    },
+    async ({ entity_logical_name, attribute_logical_name }) => {
+      const entityEscaped = escapeODataString(entity_logical_name);
+      const attrEscaped = escapeODataString(attribute_logical_name);
+      const entityPath = `/EntityDefinitions(LogicalName='${entityEscaped}')`;
+      const attrPath = `${entityPath}/Attributes(LogicalName='${attrEscaped}')`;
+
+      // Fire OrganizationId, Entity MetadataId, and Attribute MetadataId in
+      // parallel — none depend on each other. WhoAmI is short-circuited via
+      // the module-scope cache after the first call.
+      const [orgId, entityResult, attrResult] = await Promise.all([
+        getOrganizationId(client),
+        client.get(`${entityPath}?$select=MetadataId`) as Promise<{
+          MetadataId?: string;
+        }>,
+        client.get(`${attrPath}?$select=MetadataId`) as Promise<{
+          MetadataId?: string;
+        }>,
+      ]);
+
+      const entityMetadataId = entityResult.MetadataId;
+      const attrMetadataId = attrResult.MetadataId;
+      if (!entityMetadataId) {
+        throw new Error(`Entity not found: ${entity_logical_name}`);
+      }
+      if (!attrMetadataId) {
+        throw new Error(
+          `Attribute not found: ${entity_logical_name}.${attribute_logical_name}`,
+        );
+      }
+
+      const url = `https://make.powerapps.com/environments/${orgId}/entities/${entityMetadataId}/fields/${attrMetadataId}`;
+
+      const payload = {
+        url,
+        hint: "Open the URL, then click 'Show dependencies' on the field details page to see what references this column.",
+        organization_id: orgId,
+        entity_metadata_id: entityMetadataId,
+        attribute_metadata_id: attrMetadataId,
+      };
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(payload, null, 2) },
+        ],
+      };
+    },
+  );
 }

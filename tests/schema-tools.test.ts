@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  _resetOrganizationIdCache,
   buildAttributeBody,
   registerSchemaTools,
 } from "../src/tools/schema-tools.js";
@@ -616,5 +617,128 @@ describe("delete_attribute", () => {
     expect(client.delete).toHaveBeenCalledWith(
       "/EntityDefinitions(LogicalName='weird''name')/Attributes(LogicalName='odd''col')",
     );
+  });
+});
+
+describe("get_attribute_dependencies_list_url", () => {
+  const ORG_ID = "5c8ce4d5-a81e-e726-82d5-26ece5066319";
+  const ENTITY_META = "08bb20a4-9d75-f011-b4cb-7ced8d703de4";
+  const ATTR_META = "be1ee949-dc3f-f111-88b4-6045bd070a95";
+
+  beforeEach(() => {
+    _resetOrganizationIdCache();
+  });
+
+  function makeClient({
+    whoami = { OrganizationId: ORG_ID },
+    entity = { MetadataId: ENTITY_META },
+    attr = { MetadataId: ATTR_META },
+  }: {
+    whoami?: unknown;
+    entity?: unknown;
+    attr?: unknown;
+  } = {}) {
+    return {
+      get: vi.fn().mockImplementation((path: string) => {
+        if (path === "/WhoAmI") return Promise.resolve(whoami);
+        if (path.includes("/Attributes(")) return Promise.resolve(attr);
+        if (path.includes("/EntityDefinitions(")) return Promise.resolve(entity);
+        throw new Error(`unexpected GET ${path}`);
+      }),
+    } as any;
+  }
+
+  it("returns the maker URL with the right GUIDs and metadata in the payload", async () => {
+    const server = createMockServer();
+    const client = makeClient();
+    registerSchemaTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_attribute_dependencies_list_url")!
+      .handler({
+        entity_logical_name: "fundai_achtransaction",
+        attribute_logical_name: "fundai_settledat",
+      });
+
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload.url).toBe(
+      `https://make.powerapps.com/environments/${ORG_ID}/entities/${ENTITY_META}/fields/${ATTR_META}`,
+    );
+    expect(payload.organization_id).toBe(ORG_ID);
+    expect(payload.entity_metadata_id).toBe(ENTITY_META);
+    expect(payload.attribute_metadata_id).toBe(ATTR_META);
+    expect(payload.hint).toMatch(/Show dependencies/);
+  });
+
+  it("caches OrganizationId across multiple invocations (only one /WhoAmI call total)", async () => {
+    const server = createMockServer();
+    const client = makeClient();
+    registerSchemaTools(server as any, client);
+
+    const tool = server.tools.get("get_attribute_dependencies_list_url")!;
+    await tool.handler({
+      entity_logical_name: "e",
+      attribute_logical_name: "a",
+    });
+    await tool.handler({
+      entity_logical_name: "e2",
+      attribute_logical_name: "a2",
+    });
+    await tool.handler({
+      entity_logical_name: "e3",
+      attribute_logical_name: "a3",
+    });
+
+    const whoamiCalls = client.get.mock.calls.filter(
+      ([p]: [string]) => p === "/WhoAmI",
+    );
+    expect(whoamiCalls).toHaveLength(1);
+  });
+
+  it("escapes single quotes in logical names (OData injection)", async () => {
+    const server = createMockServer();
+    const client = makeClient();
+    registerSchemaTools(server as any, client);
+
+    await server.tools
+      .get("get_attribute_dependencies_list_url")!
+      .handler({
+        entity_logical_name: "weird'entity",
+        attribute_logical_name: "odd'col",
+      });
+
+    const paths = client.get.mock.calls.map(([p]: [string]) => p);
+    expect(paths).toContain(
+      "/EntityDefinitions(LogicalName='weird''entity')?$select=MetadataId",
+    );
+    expect(paths).toContain(
+      "/EntityDefinitions(LogicalName='weird''entity')/Attributes(LogicalName='odd''col')?$select=MetadataId",
+    );
+  });
+
+  it("throws if the attribute lookup returns no MetadataId", async () => {
+    const server = createMockServer();
+    const client = makeClient({ attr: {} });
+    registerSchemaTools(server as any, client);
+
+    await expect(
+      server.tools.get("get_attribute_dependencies_list_url")!.handler({
+        entity_logical_name: "fundai_x",
+        attribute_logical_name: "missing_attr",
+      }),
+    ).rejects.toThrow(/Attribute not found: fundai_x\.missing_attr/);
+  });
+
+  it("throws if WhoAmI omits OrganizationId", async () => {
+    const server = createMockServer();
+    const client = makeClient({ whoami: {} });
+    registerSchemaTools(server as any, client);
+
+    await expect(
+      server.tools.get("get_attribute_dependencies_list_url")!.handler({
+        entity_logical_name: "e",
+        attribute_logical_name: "a",
+      }),
+    ).rejects.toThrow(/OrganizationId/);
   });
 });
