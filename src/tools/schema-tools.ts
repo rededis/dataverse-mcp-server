@@ -773,10 +773,25 @@ export function registerSchemaTools(
       const attrPath = `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes(LogicalName='${attrEscaped}')`;
 
       // Step 1: resolve attribute MetadataId (RetrieveDependenciesForDelete
-      // takes the raw GUID, not a logical-name lookup).
-      const attrResult = (await client.get(
-        `${attrPath}?$select=MetadataId`,
-      )) as { MetadataId?: string };
+      // takes the raw GUID, not a logical-name lookup). Dataverse returns 404
+      // when the entity or attribute logical name doesn't exist; map that to a
+      // friendly message instead of leaking the raw "Dataverse API error (404)".
+      let attrResult: { MetadataId?: string };
+      try {
+        attrResult = (await client.get(`${attrPath}?$select=MetadataId`)) as {
+          MetadataId?: string;
+        };
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          /Dataverse API error \(404\)/.test(err.message)
+        ) {
+          throw new Error(
+            `Attribute not found: ${entity_logical_name}.${attribute_logical_name}`,
+          );
+        }
+        throw err;
+      }
       if (!attrResult.MetadataId) {
         throw new Error(
           `Attribute not found: ${entity_logical_name}.${attribute_logical_name}`,
