@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-25
+
+### Added
+
+- New tool `get_attribute_dependencies` (closes #27): list CRM components (forms, views, workflows, business rules, plugins, …) that reference a given attribute. Use after `delete_attribute` fails with error 0x8004f01f, or proactively before any destructive change. Returns a flat array of `{ component_type, component_type_name, object_id, name }`.
+
+### Implementation
+
+- Backed by the Dataverse `RetrieveDependenciesForDelete` function with `ComponentType=2` (Attribute).
+- Hand-curated `componenttype` int → friendly name table covers the 30+ types most likely to surface for attributes; unknown ints fall back to `ComponentType_<N>` so callers still see the raw value.
+- Best-effort name resolution: dependencies are grouped by component type and resolved in parallel batches against their respective entity sets (`systemforms`, `savedqueries`, `workflows`, `reports`, `webresourceset`, `fieldsecurityprofiles`, `appmodules`, `sdkmessageprocessingsteps`). One HTTP call per dependent type, not per dependency. Component types without a resolver (e.g. AppModule sub-types, niche types) keep `name: null`.
+
+### Design note
+
+An earlier iteration of this PR returned a Power Apps maker UI deep-link instead of a structured listing. That approach turned out unworkable: the URL pattern requires the Power Platform **EnvironmentId**, which is distinct from the Dataverse **OrganizationId** returned by `/WhoAmI`, and getting EnvironmentId requires a separate Power Platform Admin API with different OAuth scopes. Pivoted to the structured listing approach which is fully self-contained within the existing Dataverse Web API auth.
+
 ## [0.2.0] - 2026-04-24
 
 ### Added
@@ -87,7 +103,8 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.1.0...v0.1.1

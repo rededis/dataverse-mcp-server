@@ -618,3 +618,224 @@ describe("delete_attribute", () => {
     );
   });
 });
+
+describe("get_attribute_dependencies", () => {
+  const ATTR_META = "be1ee949-dc3f-f111-88b4-6045bd070a95";
+  const FORM_A = "11111111-1111-1111-1111-111111111111";
+  const FORM_B = "22222222-2222-2222-2222-222222222222";
+  const VIEW_A = "33333333-3333-3333-3333-333333333333";
+  const UNKNOWN_OBJ = "44444444-4444-4444-4444-444444444444";
+
+  function makeClient(
+    overrides: {
+      attrResponse?: Record<string, unknown>;
+      deps?: Array<{
+        dependentcomponenttype: number;
+        dependentcomponentobjectid: string;
+      }>;
+      formNames?: Map<string, string>;
+      viewNames?: Map<string, string>;
+    } = {},
+  ) {
+    const {
+      attrResponse = { MetadataId: ATTR_META },
+      deps = [
+        { dependentcomponenttype: 60, dependentcomponentobjectid: FORM_A },
+        { dependentcomponenttype: 60, dependentcomponentobjectid: FORM_B },
+        { dependentcomponenttype: 26, dependentcomponentobjectid: VIEW_A },
+      ],
+      formNames = new Map([
+        [FORM_A, "Information"],
+        [FORM_B, "Quick Create"],
+      ]),
+      viewNames = new Map([[VIEW_A, "Active ACH Transactions"]]),
+    } = overrides;
+    return {
+      get: vi.fn().mockImplementation((path: string) => {
+        if (path.includes("/EntityDefinitions(") && path.includes("/Attributes(")) {
+          return Promise.resolve(attrResponse);
+        }
+        if (path.startsWith("/RetrieveDependenciesForDelete")) {
+          return Promise.resolve({ value: deps });
+        }
+        if (path.startsWith("/systemforms")) {
+          const value = Array.from(formNames.entries()).map(([id, name]) => ({
+            formid: id,
+            name,
+          }));
+          return Promise.resolve({ value });
+        }
+        if (path.startsWith("/savedqueries")) {
+          const value = Array.from(viewNames.entries()).map(([id, name]) => ({
+            savedqueryid: id,
+            name,
+          }));
+          return Promise.resolve({ value });
+        }
+        throw new Error(`unexpected GET ${path}`);
+      }),
+    } as any;
+  }
+
+  it("returns a flat array with resolved names, mapped component-type names, and the right RetrieveDependenciesForDelete call", async () => {
+    const server = createMockServer();
+    const client = makeClient();
+    registerSchemaTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_attribute_dependencies")!
+      .handler({
+        entity_logical_name: "fundai_achtransaction",
+        attribute_logical_name: "fundai_settledat",
+      });
+
+    const paths = client.get.mock.calls.map(([p]: [string]) => p);
+    expect(paths).toContain(
+      `/RetrieveDependenciesForDelete(ComponentType=2,ObjectId=${ATTR_META})`,
+    );
+
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload).toEqual([
+      {
+        component_type: 60,
+        component_type_name: "SystemForm",
+        object_id: FORM_A,
+        name: "Information",
+      },
+      {
+        component_type: 60,
+        component_type_name: "SystemForm",
+        object_id: FORM_B,
+        name: "Quick Create",
+      },
+      {
+        component_type: 26,
+        component_type_name: "SavedQuery",
+        object_id: VIEW_A,
+        name: "Active ACH Transactions",
+      },
+    ]);
+  });
+
+  it("batches name resolution per component type (one HTTP call per type, not per dep)", async () => {
+    const server = createMockServer();
+    const client = makeClient();
+    registerSchemaTools(server as any, client);
+
+    await server.tools.get("get_attribute_dependencies")!.handler({
+      entity_logical_name: "e",
+      attribute_logical_name: "a",
+    });
+
+    const paths = client.get.mock.calls.map(([p]: [string]) => p);
+    const formCalls = paths.filter((p: string) => p.startsWith("/systemforms"));
+    const viewCalls = paths.filter((p: string) => p.startsWith("/savedqueries"));
+    // 2 forms in one batch, 1 view in one batch — 2 HTTP calls total, not 3.
+    expect(formCalls).toHaveLength(1);
+    expect(viewCalls).toHaveLength(1);
+  });
+
+  it("falls back to ComponentType_<N> and null name for unknown component types", async () => {
+    const server = createMockServer();
+    const client = makeClient({
+      deps: [
+        {
+          dependentcomponenttype: 9999,
+          dependentcomponentobjectid: UNKNOWN_OBJ,
+        },
+      ],
+    });
+    registerSchemaTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_attribute_dependencies")!
+      .handler({
+        entity_logical_name: "e",
+        attribute_logical_name: "a",
+      });
+
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload).toEqual([
+      {
+        component_type: 9999,
+        component_type_name: "ComponentType_9999",
+        object_id: UNKNOWN_OBJ,
+        name: null,
+      },
+    ]);
+  });
+
+  it("returns empty array when the attribute has no dependencies", async () => {
+    const server = createMockServer();
+    const client = makeClient({ deps: [] });
+    registerSchemaTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_attribute_dependencies")!
+      .handler({
+        entity_logical_name: "e",
+        attribute_logical_name: "a",
+      });
+
+    expect(JSON.parse(result.content[0].text)).toEqual([]);
+  });
+
+  it("throws if the attribute lookup returns no MetadataId", async () => {
+    const server = createMockServer();
+    const client = makeClient({ attrResponse: {} });
+    registerSchemaTools(server as any, client);
+
+    await expect(
+      server.tools.get("get_attribute_dependencies")!.handler({
+        entity_logical_name: "fundai_x",
+        attribute_logical_name: "missing_attr",
+      }),
+    ).rejects.toThrow(/Attribute not found: fundai_x\.missing_attr/);
+  });
+
+  it("escapes single quotes in logical names (OData injection)", async () => {
+    const server = createMockServer();
+    const client = makeClient({ deps: [] });
+    registerSchemaTools(server as any, client);
+
+    await server.tools.get("get_attribute_dependencies")!.handler({
+      entity_logical_name: "weird'entity",
+      attribute_logical_name: "odd'col",
+    });
+
+    const paths = client.get.mock.calls.map(([p]: [string]) => p);
+    expect(paths).toContain(
+      "/EntityDefinitions(LogicalName='weird''entity')/Attributes(LogicalName='odd''col')?$select=MetadataId",
+    );
+  });
+
+  it("preserves dep order from RetrieveDependenciesForDelete and resolves names per ID, even with duplicates across types", async () => {
+    const server = createMockServer();
+    const client = makeClient({
+      deps: [
+        { dependentcomponenttype: 26, dependentcomponentobjectid: VIEW_A },
+        { dependentcomponenttype: 60, dependentcomponentobjectid: FORM_A },
+        { dependentcomponenttype: 60, dependentcomponentobjectid: FORM_B },
+      ],
+    });
+    registerSchemaTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_attribute_dependencies")!
+      .handler({
+        entity_logical_name: "e",
+        attribute_logical_name: "a",
+      });
+
+    const payload = JSON.parse(result.content[0].text);
+    // Output preserves the original dep order, even though resolution was batched per type.
+    expect(payload.map((d: { component_type: number }) => d.component_type)).toEqual([
+      26, 60, 60,
+    ]);
+    expect(payload.map((d: { name: string | null }) => d.name)).toEqual([
+      "Active ACH Transactions",
+      "Information",
+      "Quick Create",
+    ]);
+  });
+});

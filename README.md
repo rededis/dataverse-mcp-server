@@ -32,6 +32,7 @@ MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-de
 | `add_attribute` | Add a column to an existing table |
 | `update_attribute` | Update column metadata (display name, required level, bounds, …) |
 | `delete_attribute` | Delete a column (disabled by default, see [Safety](#safety)) |
+| `get_attribute_dependencies` | List CRM components (forms, views, workflows, …) that reference a column — use after `delete_attribute` fails with 0x8004f01f |
 | `create_relationship` | Create relationships between tables (1:N, N:N) |
 
 > Dataverse does **not** allow changing a column's logical name or type. To "rename" or change type: create a new column, migrate data via `update_record`, then `delete_attribute` on the old one.
