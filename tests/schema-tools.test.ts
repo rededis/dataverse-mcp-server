@@ -780,9 +780,18 @@ describe("get_attribute_dependencies", () => {
     expect(JSON.parse(result.content[0].text)).toEqual([]);
   });
 
-  it("throws if the attribute lookup returns no MetadataId", async () => {
+  it("maps a 404 from the metadata GET to a friendly 'Attribute not found' error", async () => {
     const server = createMockServer();
-    const client = makeClient({ attrResponse: {} });
+    // DataverseClient throws `Error("Dataverse API error (404): ...")` on a
+    // missing entity/attribute logical name — that's what reaches the tool in
+    // production, not a 200 with an empty body.
+    const client = {
+      get: vi.fn().mockRejectedValue(
+        new Error(
+          'Dataverse API error (404): {"error":{"code":"0x80060888","message":"Resource not found"}}',
+        ),
+      ),
+    } as any;
     registerSchemaTools(server as any, client);
 
     await expect(
@@ -791,6 +800,23 @@ describe("get_attribute_dependencies", () => {
         attribute_logical_name: "missing_attr",
       }),
     ).rejects.toThrow(/Attribute not found: fundai_x\.missing_attr/);
+  });
+
+  it("rethrows non-404 client errors verbatim (e.g. 500)", async () => {
+    const server = createMockServer();
+    const client = {
+      get: vi
+        .fn()
+        .mockRejectedValue(new Error("Dataverse API error (500): boom")),
+    } as any;
+    registerSchemaTools(server as any, client);
+
+    await expect(
+      server.tools.get("get_attribute_dependencies")!.handler({
+        entity_logical_name: "e",
+        attribute_logical_name: "a",
+      }),
+    ).rejects.toThrow(/Dataverse API error \(500\): boom/);
   });
 
   it("escapes single quotes in logical names (OData injection)", async () => {
