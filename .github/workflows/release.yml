@@ -35,7 +35,7 @@ jobs:
       - name: Verify CHANGELOG has entry for this version
         run: |
           PKG="$(node -p "require('./package.json').version")"
-          if ! grep -q "^## \[${PKG}\]" CHANGELOG.md; then
+          if ! grep -Fq "## [${PKG}]" CHANGELOG.md; then
             echo "::error::CHANGELOG.md is missing a '## [${PKG}]' section"
             exit 1
           fi
