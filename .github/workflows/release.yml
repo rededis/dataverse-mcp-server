@@ -21,7 +21,7 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      - run: npm ci
+      - run: npm install --no-audit --no-fund
 
       - name: Verify package.json version matches release tag
         run: |
