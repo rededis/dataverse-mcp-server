@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-04-25
+
+### Fixed
+
+- `get_attribute_dependencies`: a missing entity or attribute now surfaces as the friendly `Attribute not found: <entity>.<attribute>` error instead of the raw `Dataverse API error (404): ...` (#30).
+
+### Changed
+
+- CI: npm publish is now automated via a GitHub Actions release workflow that triggers on GitHub Release publication. Guards verify that the release tag matches `package.json` version and that `CHANGELOG.md` has a matching section before running lint/test/build and publishing with npm provenance (#31).
+
 ## [0.3.0] - 2026-04-25
 
 ### Added
