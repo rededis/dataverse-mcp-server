@@ -11,16 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- New tool `get_attribute_dependencies_list_url` (closes #27): returns a Power Apps maker UI URL for an attribute. Use after `delete_attribute` fails with error 0x8004f01f, or proactively before any destructive change. The URL points to the field details page in Power Apps maker; from there a single "Show dependencies" click yields the rich dependency graph (forms, views, workflows, business rules, calculated columns, …) with in-place edit links per dependency.
-
-### Notes on the URL-only approach
-
-A full programmatic dependency-listing tool (parsing `RetrieveDependenciesForDelete`, mapping component-type integers, resolving names per type) would be ~150 lines and require a hand-maintained component-type enum. The link-only design solves the practical problem with ~30 lines: every workflow path that needed deps ended in "go to maker UI to edit them" anyway, so the JSON intermediate offered little real value. If a programmatic listing turns out useful for automation later, it can be a follow-up additive tool.
+- New tool `get_attribute_dependencies` (closes #27): list CRM components (forms, views, workflows, business rules, plugins, …) that reference a given attribute. Use after `delete_attribute` fails with error 0x8004f01f, or proactively before any destructive change. Returns a flat array of `{ component_type, component_type_name, object_id, name }`.
 
 ### Implementation
 
-- The OrganizationId required for the maker URL is fetched from `/WhoAmI` once per process and cached at module scope.
-- Entity and attribute MetadataIds are fetched in parallel with the cached OrganizationId via `Promise.all`.
+- Backed by the Dataverse `RetrieveDependenciesForDelete` function with `ComponentType=2` (Attribute).
+- Hand-curated `componenttype` int → friendly name table covers the 30+ types most likely to surface for attributes; unknown ints fall back to `ComponentType_<N>` so callers still see the raw value.
+- Best-effort name resolution: dependencies are grouped by component type and resolved in parallel batches against their respective entity sets (`systemforms`, `savedqueries`, `workflows`, `reports`, `webresourceset`, `fieldsecurityprofiles`, `appmodules`, `sdkmessageprocessingsteps`). One HTTP call per dependent type, not per dependency. Component types without a resolver (e.g. AppModule sub-types, niche types) keep `name: null`.
+
+### Design note
+
+An earlier iteration of this PR returned a Power Apps maker UI deep-link instead of a structured listing. That approach turned out unworkable: the URL pattern requires the Power Platform **EnvironmentId**, which is distinct from the Dataverse **OrganizationId** returned by `/WhoAmI`, and getting EnvironmentId requires a separate Power Platform Admin API with different OAuth scopes. Pivoted to the structured listing approach which is fully self-contained within the existing Dataverse Web API auth.
 
 ## [0.2.0] - 2026-04-24
 

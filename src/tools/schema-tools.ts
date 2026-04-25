@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DataverseClient } from "../client.js";
-import { escapeODataString } from "./data-tools.js";
+import { buildODataQuery, escapeODataString } from "./data-tools.js";
 
 const ATTRIBUTE_ODATA_TYPE_MAP: Record<string, string> = {
   String: "Microsoft.Dynamics.CRM.StringAttributeMetadata",
@@ -176,26 +176,115 @@ export function buildAttributeBody(
   return body;
 }
 
-// Cached at module scope: OrganizationId never changes for a given Dataverse
-// connection. First call to get_attribute_dependencies_list_url pays the
-// WhoAmI HTTP cost; subsequent calls reuse the value.
-let cachedOrganizationId: string | null = null;
+// Common componenttype int → friendly name. Hand-curated from Microsoft docs:
+// https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/dependency
+// Covers the types most likely to appear as attribute dependencies; unknown
+// values fall back to "ComponentType_<N>" so the caller still sees the raw int.
+const COMPONENT_TYPE_NAMES: Record<number, string> = {
+  1: "Entity",
+  2: "Attribute",
+  3: "Relationship",
+  9: "OptionSet",
+  10: "EntityRelationship",
+  14: "EntityKey",
+  20: "Role",
+  22: "DisplayString",
+  24: "Form",
+  25: "Organization",
+  26: "SavedQuery",
+  27: "Workflow",
+  29: "Report",
+  31: "ReportCategory",
+  32: "ReportEntity",
+  46: "DuplicateRule",
+  59: "SavedQueryVisualization",
+  60: "SystemForm",
+  61: "WebResource",
+  62: "SiteMap",
+  65: "HierarchyRule",
+  66: "CustomControl",
+  70: "FieldSecurityProfile",
+  71: "FieldPermission",
+  80: "AppModule",
+  90: "PluginAssembly",
+  91: "PluginType",
+  92: "SDKMessageProcessingStep",
+  93: "SDKMessageProcessingStepImage",
+  102: "Workflow",
+  103: "ConvertRule",
+  150: "Theme",
+  152: "ConnectionRole",
+  166: "SLA",
+};
 
-async function getOrganizationId(client: DataverseClient): Promise<string> {
-  if (cachedOrganizationId) return cachedOrganizationId;
-  const result = (await client.get("/WhoAmI")) as { OrganizationId?: string };
-  if (!result.OrganizationId) {
-    throw new Error(
-      "Failed to resolve OrganizationId from WhoAmI response — required to build the Power Apps maker URL.",
-    );
-  }
-  cachedOrganizationId = result.OrganizationId;
-  return cachedOrganizationId;
+// Per-componenttype info to do best-effort name resolution from the dep's
+// objectid back to a human-readable name. Component types not listed here
+// keep `name: null` in the output (caller still gets the raw object_id).
+interface DependencyResolver {
+  entitySet: string;
+  idField: string;
+  nameField: string;
 }
 
-// Exposed for tests to reset between cases.
-export function _resetOrganizationIdCache(): void {
-  cachedOrganizationId = null;
+const DEPENDENCY_RESOLVERS: Record<number, DependencyResolver> = {
+  26: { entitySet: "savedqueries", idField: "savedqueryid", nameField: "name" },
+  27: { entitySet: "workflows", idField: "workflowid", nameField: "name" },
+  29: { entitySet: "reports", idField: "reportid", nameField: "name" },
+  60: { entitySet: "systemforms", idField: "formid", nameField: "name" },
+  61: {
+    entitySet: "webresourceset",
+    idField: "webresourceid",
+    nameField: "name",
+  },
+  70: {
+    entitySet: "fieldsecurityprofiles",
+    idField: "fieldsecurityprofileid",
+    nameField: "name",
+  },
+  80: { entitySet: "appmodules", idField: "appmoduleid", nameField: "name" },
+  92: {
+    entitySet: "sdkmessageprocessingsteps",
+    idField: "sdkmessageprocessingstepid",
+    nameField: "name",
+  },
+  102: { entitySet: "workflows", idField: "workflowid", nameField: "name" },
+};
+
+interface RawDependency {
+  dependentcomponenttype: number;
+  dependentcomponentobjectid: string;
+}
+
+interface FlatDependency {
+  component_type: number;
+  component_type_name: string;
+  object_id: string;
+  name: string | null;
+}
+
+async function resolveDependencyNames(
+  client: DataverseClient,
+  componentType: number,
+  ids: string[],
+): Promise<Map<string, string>> {
+  const resolver = DEPENDENCY_RESOLVERS[componentType];
+  if (!resolver) return new Map();
+
+  const filter = ids.map((id) => `${resolver.idField} eq ${id}`).join(" or ");
+  const query = buildODataQuery({
+    $filter: filter,
+    $select: `${resolver.idField},${resolver.nameField}`,
+  });
+  const result = (await client.get(`/${resolver.entitySet}${query}`)) as {
+    value: Array<Record<string, string>>;
+  };
+  const map = new Map<string, string>();
+  for (const row of result.value) {
+    const id = row[resolver.idField];
+    const name = row[resolver.nameField];
+    if (id && name) map.set(id, name);
+  }
+  return map;
 }
 
 export function registerSchemaTools(
@@ -672,8 +761,8 @@ export function registerSchemaTools(
   }
 
   server.tool(
-    "get_attribute_dependencies_list_url",
-    "Returns a Power Apps maker UI URL for an attribute. Open the URL in a browser to see the column's details and click 'Show dependencies' to inspect what references it (forms, views, workflows, business rules, calculated columns, etc.). Use this when delete_attribute fails with error 0x8004f01f, or proactively before any destructive change. The URL points to the field details page; from there the maker UI handles the full dependency graph and offers in-place edit links per dependency.",
+    "get_attribute_dependencies",
+    "List CRM components (forms, views, workflows, business rules, calculated columns, plugins, …) that reference a given attribute. Use this when delete_attribute fails with error 0x8004f01f, or proactively before any destructive change. Returns a flat array of { component_type, component_type_name, object_id, name }; name is best-effort (resolved for common types — SystemForm, SavedQuery, Workflow, Report, WebResource, FieldSecurityProfile, AppModule, SDKMessageProcessingStep — null otherwise). Backed by the Dataverse RetrieveDependenciesForDelete function.",
     {
       entity_logical_name: z.string().describe("Logical name of the entity"),
       attribute_logical_name: z.string().describe("Logical name of the column"),
@@ -681,45 +770,59 @@ export function registerSchemaTools(
     async ({ entity_logical_name, attribute_logical_name }) => {
       const entityEscaped = escapeODataString(entity_logical_name);
       const attrEscaped = escapeODataString(attribute_logical_name);
-      const entityPath = `/EntityDefinitions(LogicalName='${entityEscaped}')`;
-      const attrPath = `${entityPath}/Attributes(LogicalName='${attrEscaped}')`;
+      const attrPath = `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes(LogicalName='${attrEscaped}')`;
 
-      // Fire OrganizationId, Entity MetadataId, and Attribute MetadataId in
-      // parallel — none depend on each other. WhoAmI is short-circuited via
-      // the module-scope cache after the first call.
-      const [orgId, entityResult, attrResult] = await Promise.all([
-        getOrganizationId(client),
-        client.get(`${entityPath}?$select=MetadataId`) as Promise<{
-          MetadataId?: string;
-        }>,
-        client.get(`${attrPath}?$select=MetadataId`) as Promise<{
-          MetadataId?: string;
-        }>,
-      ]);
-
-      const entityMetadataId = entityResult.MetadataId;
-      const attrMetadataId = attrResult.MetadataId;
-      if (!entityMetadataId) {
-        throw new Error(`Entity not found: ${entity_logical_name}`);
-      }
-      if (!attrMetadataId) {
+      // Step 1: resolve attribute MetadataId (RetrieveDependenciesForDelete
+      // takes the raw GUID, not a logical-name lookup).
+      const attrResult = (await client.get(
+        `${attrPath}?$select=MetadataId`,
+      )) as { MetadataId?: string };
+      if (!attrResult.MetadataId) {
         throw new Error(
           `Attribute not found: ${entity_logical_name}.${attribute_logical_name}`,
         );
       }
 
-      const url = `https://make.powerapps.com/environments/${orgId}/entities/${entityMetadataId}/fields/${attrMetadataId}`;
+      // Step 2: ask Dataverse for the dependency list. ComponentType=2 means
+      // the target is an Attribute. Returns a {value:[Dependency]} collection;
+      // each Dependency has dependentcomponenttype + dependentcomponentobjectid.
+      const depsResult = (await client.get(
+        `/RetrieveDependenciesForDelete(ComponentType=2,ObjectId=${attrResult.MetadataId})`,
+      )) as { value: RawDependency[] };
 
-      const payload = {
-        url,
-        hint: "Open the URL, then click 'Show dependencies' on the field details page to see what references this column.",
-        organization_id: orgId,
-        entity_metadata_id: entityMetadataId,
-        attribute_metadata_id: attrMetadataId,
-      };
+      // Step 3: group dep ids by componenttype, then resolve names per group
+      // in parallel. Each group is one HTTP call instead of N.
+      const idsByType = new Map<number, string[]>();
+      for (const dep of depsResult.value) {
+        const list = idsByType.get(dep.dependentcomponenttype) ?? [];
+        list.push(dep.dependentcomponentobjectid);
+        idsByType.set(dep.dependentcomponenttype, list);
+      }
+      const namesByType = new Map<number, Map<string, string>>();
+      await Promise.all(
+        Array.from(idsByType.entries()).map(async ([type, ids]) => {
+          namesByType.set(
+            type,
+            await resolveDependencyNames(client, type, ids),
+          );
+        }),
+      );
+
+      const flat: FlatDependency[] = depsResult.value.map((dep) => ({
+        component_type: dep.dependentcomponenttype,
+        component_type_name:
+          COMPONENT_TYPE_NAMES[dep.dependentcomponenttype] ??
+          `ComponentType_${dep.dependentcomponenttype}`,
+        object_id: dep.dependentcomponentobjectid,
+        name:
+          namesByType
+            .get(dep.dependentcomponenttype)
+            ?.get(dep.dependentcomponentobjectid) ?? null,
+      }));
+
       return {
         content: [
-          { type: "text" as const, text: JSON.stringify(payload, null, 2) },
+          { type: "text" as const, text: JSON.stringify(flat, null, 2) },
         ],
       };
     },
