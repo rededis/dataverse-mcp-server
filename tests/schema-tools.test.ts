@@ -865,3 +865,237 @@ describe("get_attribute_dependencies", () => {
     ]);
   });
 });
+
+describe("list_entity_keys", () => {
+  it("flattens the /Keys collection and prefers UserLocalizedLabel for display_name", async () => {
+    const server = createMockServer();
+    const client = {
+      get: vi.fn().mockResolvedValue({
+        value: [
+          {
+            LogicalName: "contoso_contactproviderkey",
+            SchemaName: "Contoso_ContactProviderKey",
+            DisplayName: {
+              UserLocalizedLabel: { Label: "Contact+Provider", LanguageCode: 1033 },
+              LocalizedLabels: [
+                { Label: "Contact+Provider (en)", LanguageCode: 1033 },
+              ],
+            },
+            KeyAttributes: ["contoso_contactid", "contoso_provider"],
+            EntityKeyIndexStatus: "Active",
+            MetadataId: "11111111-1111-1111-1111-111111111111",
+          },
+        ],
+      }),
+    } as any;
+    registerSchemaTools(server as any, client);
+
+    const result = await server.tools.get("list_entity_keys")!.handler({
+      entity_logical_name: "contoso_record",
+    });
+
+    expect(client.get).toHaveBeenCalledWith(
+      "/EntityDefinitions(LogicalName='contoso_record')/Keys",
+    );
+    expect(JSON.parse(result.content[0].text)).toEqual([
+      {
+        logical_name: "contoso_contactproviderkey",
+        schema_name: "Contoso_ContactProviderKey",
+        // UserLocalizedLabel wins over LocalizedLabels[0] when both are present —
+        // Dataverse returns UserLocalizedLabel for the caller's UI language, so
+        // it's what users actually see.
+        display_name: "Contact+Provider",
+        key_attributes: ["contoso_contactid", "contoso_provider"],
+        entity_key_index_status: "Active",
+        metadata_id: "11111111-1111-1111-1111-111111111111",
+      },
+    ]);
+  });
+
+  it("falls back to LocalizedLabels[0] when UserLocalizedLabel is absent", async () => {
+    const server = createMockServer();
+    const client = {
+      get: vi.fn().mockResolvedValue({
+        value: [
+          {
+            LogicalName: "contoso_k",
+            DisplayName: {
+              LocalizedLabels: [{ Label: "Fallback", LanguageCode: 1033 }],
+            },
+            KeyAttributes: ["a"],
+          },
+        ],
+      }),
+    } as any;
+    registerSchemaTools(server as any, client);
+
+    const result = await server.tools.get("list_entity_keys")!.handler({
+      entity_logical_name: "e",
+    });
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload[0].display_name).toBe("Fallback");
+  });
+
+  it("returns an empty array when no keys are defined", async () => {
+    const server = createMockServer();
+    const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
+    registerSchemaTools(server as any, client);
+
+    const result = await server.tools.get("list_entity_keys")!.handler({
+      entity_logical_name: "e",
+    });
+    expect(JSON.parse(result.content[0].text)).toEqual([]);
+  });
+
+  it("maps 404 to a friendly 'Entity not found' error", async () => {
+    const server = createMockServer();
+    const client = {
+      get: vi
+        .fn()
+        .mockRejectedValue(new Error("Dataverse API error (404): not found")),
+    } as any;
+    registerSchemaTools(server as any, client);
+
+    await expect(
+      server.tools.get("list_entity_keys")!.handler({
+        entity_logical_name: "missing_table",
+      }),
+    ).rejects.toThrow(/Entity not found: missing_table/);
+  });
+
+  it("escapes single quotes in entity name (OData injection)", async () => {
+    const server = createMockServer();
+    const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
+    registerSchemaTools(server as any, client);
+
+    await server.tools.get("list_entity_keys")!.handler({
+      entity_logical_name: "weird'name",
+    });
+    expect(client.get).toHaveBeenCalledWith(
+      "/EntityDefinitions(LogicalName='weird''name')/Keys",
+    );
+  });
+});
+
+describe("add_entity_key", () => {
+  it("POSTs an EntityKeyMetadata body with capitalized SchemaName and KeyAttributes", async () => {
+    const server = createMockServer();
+    const client = {
+      request: vi.fn().mockResolvedValue({ MetadataId: "abc" }),
+    } as any;
+    registerSchemaTools(server as any, client);
+
+    const result = await server.tools.get("add_entity_key")!.handler({
+      entity_logical_name: "contoso_record",
+      logical_name: "contoso_contactproviderkey",
+      display_name: "Contact + Provider",
+      key_attributes: ["contoso_contactid", "contoso_provider"],
+    });
+
+    expect(client.request).toHaveBeenCalledTimes(1);
+    const [path, opts] = client.request.mock.calls[0];
+    expect(path).toBe(
+      "/EntityDefinitions(LogicalName='contoso_record')/Keys",
+    );
+    expect(opts.method).toBe("POST");
+    expect(opts.body["@odata.type"]).toBe(
+      "Microsoft.Dynamics.CRM.EntityKeyMetadata",
+    );
+    expect(opts.body.LogicalName).toBe("contoso_contactproviderkey");
+    // SchemaName uses Dataverse's standard capitalization rule used throughout the codebase
+    // (first letter upper, rest as-is) — matches what buildAttributeBody produces.
+    expect(opts.body.SchemaName).toBe("Contoso_contactproviderkey");
+    expect(opts.body.KeyAttributes).toEqual([
+      "contoso_contactid",
+      "contoso_provider",
+    ]);
+    expect(opts.body.DisplayName.LocalizedLabels[0].Label).toBe(
+      "Contact + Provider",
+    );
+    expect(opts.headers).toEqual({});
+    expect(result.content[0].text).toContain("abc");
+  });
+
+  it("sends MSCRM.SolutionUniqueName header when solution_unique_name is provided", async () => {
+    const server = createMockServer();
+    const client = { request: vi.fn().mockResolvedValue({}) } as any;
+    registerSchemaTools(server as any, client);
+
+    await server.tools.get("add_entity_key")!.handler({
+      entity_logical_name: "contoso_record",
+      logical_name: "contoso_k",
+      display_name: "K",
+      key_attributes: ["a"],
+      solution_unique_name: "MySolution",
+    });
+
+    const [, opts] = client.request.mock.calls[0];
+    expect(opts.headers["MSCRM.SolutionUniqueName"]).toBe("MySolution");
+  });
+
+  it("escapes single quotes in entity name (OData injection)", async () => {
+    const server = createMockServer();
+    const client = { request: vi.fn().mockResolvedValue({}) } as any;
+    registerSchemaTools(server as any, client);
+
+    await server.tools.get("add_entity_key")!.handler({
+      entity_logical_name: "weird'name",
+      logical_name: "contoso_k",
+      display_name: "K",
+      key_attributes: ["a"],
+    });
+    const [path] = client.request.mock.calls[0];
+    expect(path).toBe("/EntityDefinitions(LogicalName='weird''name')/Keys");
+  });
+});
+
+describe("delete_entity_key", () => {
+  it("returns an error when allowDelete is false", async () => {
+    const server = createMockServer();
+    const client = { delete: vi.fn() } as any;
+    registerSchemaTools(server as any, client, false);
+
+    const tool = server.tools.get("delete_entity_key")!;
+    expect(tool.description).toContain("disabled");
+
+    const result = await tool.handler({
+      entity_logical_name: "contoso_record",
+      key_logical_name: "contoso_k",
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("DATAVERSE_ALLOW_DELETE");
+    expect(client.delete).not.toHaveBeenCalled();
+  });
+
+  it("calls client.delete when allowDelete is true", async () => {
+    const server = createMockServer();
+    const client = { delete: vi.fn().mockResolvedValue({}) } as any;
+    registerSchemaTools(server as any, client, true);
+
+    const tool = server.tools.get("delete_entity_key")!;
+    expect(tool.description).not.toContain("currently disabled");
+
+    const result = await tool.handler({
+      entity_logical_name: "contoso_record",
+      key_logical_name: "contoso_k",
+    });
+    expect(client.delete).toHaveBeenCalledWith(
+      "/EntityDefinitions(LogicalName='contoso_record')/Keys(LogicalName='contoso_k')",
+    );
+    expect(result.content[0].text).toContain("deleted");
+  });
+
+  it("escapes single quotes in entity/key names (OData injection)", async () => {
+    const server = createMockServer();
+    const client = { delete: vi.fn().mockResolvedValue({}) } as any;
+    registerSchemaTools(server as any, client, true);
+
+    await server.tools.get("delete_entity_key")!.handler({
+      entity_logical_name: "weird'name",
+      key_logical_name: "odd'key",
+    });
+    expect(client.delete).toHaveBeenCalledWith(
+      "/EntityDefinitions(LogicalName='weird''name')/Keys(LogicalName='odd''key')",
+    );
+  });
+});

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-12
+
+### Added
+
+- Three new tools for managing entity alternate keys (closes #35):
+  - `list_entity_keys(entity_logical_name)` — reads `EntityDefinitions/Keys`, returns a flat array of `{ logical_name, schema_name, display_name, key_attributes, entity_key_index_status, metadata_id }`. Maps 404 to a friendly `Entity not found` error.
+  - `add_entity_key(entity_logical_name, logical_name, display_name, key_attributes[], solution_unique_name?)` — POSTs `EntityKeyMetadata` to the entity's `/Keys` collection. Supports composite keys (multiple `key_attributes`). Optional `solution_unique_name` is sent via the `MSCRM.SolutionUniqueName` header. Index build is async — caller polls `list_entity_keys` for `entity_key_index_status: Active` before relying on the key for keyed-PATCH upserts.
+  - `delete_entity_key(entity_logical_name, key_logical_name)` — `DELETE EntityDefinitions(...)/Keys(...)`. Gated behind `DATAVERSE_ALLOW_DELETE=true`, same pattern as `delete_attribute` and `delete_picklist_option` (disabled stub keeps the input schema identical so the tool surface stays stable across flag states).
+
+### Use case
+
+Enables race-safe upserts on custom Dataverse tables: define a natural/composite key (e.g. `contact + provider + period`), then use Dataverse's keyed-PATCH semantics for atomic insert-or-update without a preceding SELECT. Previously the only path was manual key creation in Power Apps Maker.
+
 ## [0.3.1] - 2026-04-25
 
 ### Fixed
