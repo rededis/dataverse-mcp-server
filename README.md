@@ -34,6 +34,9 @@ MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-de
 | `delete_attribute` | Delete a column (disabled by default, see [Safety](#safety)) |
 | `get_attribute_dependencies` | List CRM components (forms, views, workflows, …) that reference a column — use after `delete_attribute` fails with 0x8004f01f |
 | `create_relationship` | Create relationships between tables (1:N, N:N) |
+| `list_entity_keys` | List alternate keys on a table (returns `key_attributes`, `entity_key_index_status`, …) |
+| `add_entity_key` | Create an alternate key (single or composite) — enables race-safe keyed-PATCH upserts |
+| `delete_entity_key` | Delete an alternate key and its supporting unique index (disabled by default, see [Safety](#safety)) |
 
 > Dataverse does **not** allow changing a column's logical name or type. To "rename" or change type: create a new column, migrate data via `update_record`, then `delete_attribute` on the old one.
 
@@ -111,10 +114,11 @@ Create a `.env` file with your credentials (see `.env.example`).
 
 ## Safety
 
-Destructive operations are **disabled by default** to prevent accidental data loss. All three delete tools are gated behind the same `DATAVERSE_ALLOW_DELETE=true` flag:
+Destructive operations are **disabled by default** to prevent accidental data loss. All four delete tools are gated behind the same `DATAVERSE_ALLOW_DELETE=true` flag:
 - `delete_record` — removes a row and all its data
 - `delete_attribute` — removes a column along with ALL values across every record (no recovery short of a full environment restore)
 - `delete_picklist_option` — removes an option from an OptionSet; records that hold the option's integer value are left with an orphan number (no label in UI, broken reports)
+- `delete_entity_key` — drops an alternate key and its supporting unique index; any keyed-PATCH upsert flows relying on it stop working
 
 When the flag is off, each tool registers as a stub that returns an instructional error instead of performing the delete. To enable, add `DATAVERSE_ALLOW_DELETE=true` to your `.env` file and restart the MCP server.
 

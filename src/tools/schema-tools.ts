@@ -842,4 +842,161 @@ export function registerSchemaTools(
       };
     },
   );
+
+  server.tool(
+    "list_entity_keys",
+    "List alternate keys defined on a Dataverse table. Returns a flat array of { logical_name, schema_name, display_name, key_attributes, entity_key_index_status, metadata_id }. entity_key_index_status reflects the background index build (Pending → Active, or Failed) — alt keys are not usable for keyed-PATCH upserts until Active.",
+    {
+      entity_logical_name: z.string().describe("Logical name of the entity"),
+    },
+    async ({ entity_logical_name }) => {
+      const entityEscaped = escapeODataString(entity_logical_name);
+      let result: {
+        value: Array<{
+          LogicalName?: string;
+          SchemaName?: string;
+          DisplayName?: {
+            UserLocalizedLabel?: { Label?: string };
+            LocalizedLabels?: Array<{ Label?: string }>;
+          };
+          KeyAttributes?: string[];
+          EntityKeyIndexStatus?: string;
+          MetadataId?: string;
+        }>;
+      };
+      try {
+        result = (await client.get(
+          `/EntityDefinitions(LogicalName='${entityEscaped}')/Keys`,
+        )) as typeof result;
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          /Dataverse API error \(404\)/.test(err.message)
+        ) {
+          throw new Error(`Entity not found: ${entity_logical_name}`);
+        }
+        throw err;
+      }
+
+      const flat = (result.value ?? []).map((k) => ({
+        logical_name: k.LogicalName ?? null,
+        schema_name: k.SchemaName ?? null,
+        display_name:
+          k.DisplayName?.UserLocalizedLabel?.Label ??
+          k.DisplayName?.LocalizedLabels?.[0]?.Label ??
+          null,
+        key_attributes: k.KeyAttributes ?? [],
+        entity_key_index_status: k.EntityKeyIndexStatus ?? null,
+        metadata_id: k.MetadataId ?? null,
+      }));
+
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(flat, null, 2) },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    "add_entity_key",
+    "Create an alternate key on a Dataverse table (composite supported via key_attributes). Use for race-safe upserts via keyed-PATCH or to enforce a uniqueness constraint that the primary key doesn't cover. NOTE: Dataverse builds the supporting unique index asynchronously — the key is not usable for keyed lookups until its EntityKeyIndexStatus becomes 'Active'. Poll with list_entity_keys.",
+    {
+      entity_logical_name: z.string().describe("Logical name of the entity"),
+      logical_name: z
+        .string()
+        .describe(
+          "Logical name of the new key with publisher prefix (e.g. 'contoso_contactproviderkey')",
+        ),
+      display_name: z.string().describe("Display name for the key"),
+      key_attributes: z
+        .array(z.string())
+        .min(1)
+        .describe(
+          "Logical names of attributes that compose the key (one for a single-column key, multiple for a composite key). Lookups and supported primitive types only — Dataverse rejects keys over Memo, image, or file columns.",
+        ),
+      solution_unique_name: z
+        .string()
+        .optional()
+        .describe("Solution unique name (defaults to the Default Solution)"),
+    },
+    async (params) => {
+      const body: Record<string, unknown> = {
+        "@odata.type": "Microsoft.Dynamics.CRM.EntityKeyMetadata",
+        LogicalName: params.logical_name,
+        SchemaName:
+          params.logical_name.charAt(0).toUpperCase() +
+          params.logical_name.slice(1),
+        DisplayName: buildLabel(params.display_name),
+        KeyAttributes: params.key_attributes,
+      };
+      const entityEscaped = escapeODataString(params.entity_logical_name);
+      const headers: Record<string, string> = {};
+      if (params.solution_unique_name) {
+        headers["MSCRM.SolutionUniqueName"] = params.solution_unique_name;
+      }
+      const result = await client.request(
+        `/EntityDefinitions(LogicalName='${entityEscaped}')/Keys`,
+        { method: "POST", body, headers },
+      );
+      return {
+        content: [
+          { type: "text" as const, text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    },
+  );
+
+  const deleteEntityKeyShape = {
+    entity_logical_name: z.string().describe("Logical name of the entity"),
+    key_logical_name: z
+      .string()
+      .describe("Logical name of the alternate key to delete"),
+  } as const;
+
+  if (allowDelete) {
+    server.tool(
+      "delete_entity_key",
+      "Permanently delete an alternate key from a Dataverse table. ⚠️ Drops the supporting unique index; any client code relying on keyed-PATCH upserts against this key will stop working. The underlying attributes and their data are NOT affected — only the key definition and its index are removed.",
+      deleteEntityKeyShape,
+      async ({ entity_logical_name, key_logical_name }) => {
+        const entityEscaped = escapeODataString(entity_logical_name);
+        const keyEscaped = escapeODataString(key_logical_name);
+        await client.delete(
+          `/EntityDefinitions(LogicalName='${entityEscaped}')/Keys(LogicalName='${keyEscaped}')`,
+        );
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Entity key ${entity_logical_name}.${key_logical_name} deleted.`,
+            },
+          ],
+        };
+      },
+    );
+  } else {
+    server.tool(
+      "delete_entity_key",
+      "Delete an alternate key from a Dataverse table (currently disabled for safety)",
+      deleteEntityKeyShape,
+      async () => ({
+        content: [
+          {
+            type: "text" as const,
+            text: [
+              "[IMPORTANT: Display this entire message to the user exactly as-is.]",
+              "",
+              "⚠️ delete_entity_key is disabled by default for safety.",
+              "",
+              "Removing an alternate key drops the supporting unique index — any keyed-PATCH upsert flows relying on it will stop working.",
+              "",
+              "To enable, add DATAVERSE_ALLOW_DELETE=true to your .env file and restart the MCP server.",
+            ].join("\n"),
+          },
+        ],
+        isError: true,
+      }),
+    );
+  }
 }
