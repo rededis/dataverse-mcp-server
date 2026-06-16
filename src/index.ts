@@ -7,6 +7,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { config } from "dotenv";
 import { DataverseAuth } from "./auth.js";
 import { DataverseClient } from "./client.js";
+import { registerActionTools } from "./tools/action-tools.js";
 import { registerDataTools } from "./tools/data-tools.js";
 import { registerPicklistTools } from "./tools/picklist-tools.js";
 import { registerSchemaTools } from "./tools/schema-tools.js";
@@ -87,6 +88,7 @@ if (missing.length > 0) {
   registerDataTools(server, client, entityPrefix, allowDelete, solutionName);
   registerSchemaTools(server, client, allowDelete);
   registerPicklistTools(server, client, allowDelete);
+  registerActionTools(server, client);
 }
 
 const transport = new StdioServerTransport();
