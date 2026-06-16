@@ -80,6 +80,8 @@ describe("helpers", () => {
 });
 
 describe("invoke_action", () => {
+  // UnpublishDuplicateRule is genuinely unbound (takes DuplicateRuleId);
+  // PublishDuplicateRule, by contrast, is bound — see the bound test below.
   it("posts an unbound action to /<name> with parameters as body", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({ ok: true }) } as any;
@@ -87,9 +89,12 @@ describe("invoke_action", () => {
 
     const result = await server.tools
       .get("invoke_action")!
-      .handler({ name: "PublishDuplicateRule", parameters: { DuplicateRuleId: GUID } });
+      .handler({
+        name: "UnpublishDuplicateRule",
+        parameters: { DuplicateRuleId: GUID },
+      });
 
-    expect(client.post).toHaveBeenCalledWith("/PublishDuplicateRule", {
+    expect(client.post).toHaveBeenCalledWith("/UnpublishDuplicateRule", {
       DuplicateRuleId: GUID,
     });
     expect(result.content[0].text).toContain("true");
@@ -112,6 +117,27 @@ describe("invoke_action", () => {
     expect(client.post).toHaveBeenCalledWith(
       `/leads(${GUID})/Microsoft.Dynamics.CRM.QualifyLead`,
       { CreateAccount: true },
+    );
+  });
+
+  // PublishDuplicateRule is bound to duplicaterule (verified live), so it must
+  // be invoked on the entity, not at the service root.
+  it("posts bound PublishDuplicateRule to the duplicaterule entity", async () => {
+    const server = createMockServer();
+    const client = { post: vi.fn().mockResolvedValue({}) } as any;
+    registerActionTools(server as any, client);
+
+    await server.tools
+      .get("invoke_action")!
+      .handler({
+        name: "PublishDuplicateRule",
+        entity_set: "duplicaterules",
+        id: GUID,
+      });
+
+    expect(client.post).toHaveBeenCalledWith(
+      `/duplicaterules(${GUID})/Microsoft.Dynamics.CRM.PublishDuplicateRule`,
+      {},
     );
   });
 
@@ -163,6 +189,19 @@ describe("invoke_function", () => {
 
     expect(client.get).toHaveBeenCalledWith("/WhoAmI");
     expect(result.content[0].text).toContain(GUID);
+  });
+
+  it("rejects a parameter name that could inject into the URL", async () => {
+    const server = createMockServer();
+    const client = { get: vi.fn() } as any;
+    registerActionTools(server as any, client);
+
+    await expect(
+      server.tools
+        .get("invoke_function")!
+        .handler({ name: "GetX", parameters: { "Bad)&$top": 1 } }),
+    ).rejects.toThrow(/Invalid parameter name/);
+    expect(client.get).not.toHaveBeenCalled();
   });
 
   it("inlines parameters into a bound function URL", async () => {

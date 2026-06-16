@@ -5,6 +5,9 @@ import type { DataverseClient } from "../client.js";
 // Operation names are restricted to dotted identifiers so a caller can never
 // smuggle a path segment, query string, or quote into the request URL.
 const OPERATION_NAME = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*$/;
+// Function parameter names are interpolated into the URL (`Fn(P=@P)?@P=...`),
+// so they are held to the same identifier restriction to prevent URL injection.
+const PARAM_NAME = /^[A-Za-z][A-Za-z0-9_]*$/;
 const GUID = /^\{?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\}?$/;
 const CRM_NAMESPACE = "Microsoft.Dynamics.CRM.";
 
@@ -69,6 +72,13 @@ export function buildFunctionCall(
 ): string {
   const keys = parameters ? Object.keys(parameters) : [];
   if (keys.length === 0) return opName;
+  for (const k of keys) {
+    if (!PARAM_NAME.test(k)) {
+      throw new Error(
+        `Invalid parameter name: '${k}'. Parameter names must be identifiers (letters, digits, underscore; starting with a letter).`,
+      );
+    }
+  }
   const paramList = keys.map((k) => `${k}=@${k}`).join(",");
   const aliasList = keys
     .map(
@@ -85,7 +95,7 @@ export function registerActionTools(
 ): void {
   server.tool(
     "invoke_action",
-    "Invoke a Dataverse Web API action (POST) — bound or unbound. Use for operations that are not plain CRUD, e.g. PublishDuplicateRule/UnpublishDuplicateRule (unbound) or QualifyLead (bound to a lead). Pass entity_set+id for bound actions, neither for unbound. parameters becomes the JSON request body.",
+    "Invoke a Dataverse Web API action (POST) — bound or unbound. Use for operations that are not plain CRUD, e.g. PublishDuplicateRule (bound to a duplicaterule) or QualifyLead (bound to a lead), or UnpublishDuplicateRule (unbound, takes DuplicateRuleId). Whether an action is bound is defined in the Web API $metadata. Pass entity_set+id for bound actions, neither for unbound. parameters becomes the JSON request body.",
     {
       name: z
         .string()
