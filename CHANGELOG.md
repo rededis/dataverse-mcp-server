@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-16
+
+### Added
+
+- Two new tools for invoking Dataverse Web API actions and functions, covering operations that fall outside CRUD (closes #57):
+  - `invoke_action(name, entity_set?, id?, parameters?)` — POSTs a bound or unbound action. Unbound → `POST /<name>` (e.g. `UnpublishDuplicateRule` with `{ DuplicateRuleId }`); bound → `POST /<entity_set>(<id>)/Microsoft.Dynamics.CRM.<name>` (e.g. `PublishDuplicateRule` bound to `duplicaterule`, `QualifyLead` bound to `lead`). `parameters` is sent as the JSON request body. Bound-vs-unbound is per the Web API `$metadata`, not the SDK shape — verified live against a real org.
+  - `invoke_function(name, entity_set?, id?, parameters?)` — GETs a bound or unbound function (e.g. `WhoAmI`). `parameters` are inlined as OData function arguments using parameter aliases; strings are quoted, GUIDs/numbers/booleans passed as-is.
+  - Bare operation names are namespaced automatically for bound calls (`Microsoft.Dynamics.CRM.<name>`); a fully-qualified name is passed through. Operation names are validated against a dotted-identifier pattern and bound `id` must be a GUID, so a caller cannot inject extra path/query segments. Bound calls require both `entity_set` and `id`; unbound calls require neither (the half-specified case is rejected).
+
+### Use case
+
+Unblocks CRM operations that are only exposed as actions — notably publishing duplicate-detection rules (a rule created via `create_record` lands unpublished and has no effect until `PublishDuplicateRule`) and lead qualification (`QualifyLead`). Surfaced while building the fundaicapital Lead→Account qualification flow (DP-129 / DP-135).
+
+### Note
+
+`invoke_action` can perform arbitrary mutating operations and is intentionally ungated for now; capability-based access control (safe-by-default gating of writes/actions) is tracked separately in #45 / #46. `invoke_function` is read-only.
+
 ## [0.4.0] - 2026-05-12
 
 ### Added

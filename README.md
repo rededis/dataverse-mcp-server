@@ -50,6 +50,33 @@ MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-de
 
 Picklist tools accept either `entity_logical_name` + `attribute_logical_name` (Local OptionSet) or `option_set_name` (Global OptionSet) — the two modes are mutually exclusive. Write operations require Customizer or System Administrator role on the connected service principal. Deleting an option does **not** update existing records that hold its numeric value — they are left with an orphan integer.
 
+### Actions & functions
+| Tool | Description |
+|------|-------------|
+| `invoke_action` | Invoke a Web API **action** (POST), bound or unbound — for operations outside plain CRUD (e.g. `PublishDuplicateRule`, `QualifyLead`) |
+| `invoke_function` | Invoke a Web API **function** (GET), bound or unbound — read-only operations exposed as functions (e.g. `WhoAmI`) |
+
+Pass `entity_set` + `id` for a **bound** call (`POST /<entity_set>(<id>)/Microsoft.Dynamics.CRM.<name>`); omit both for an **unbound** call (`POST /<name>`). For `invoke_action`, `parameters` is the JSON request body; for `invoke_function`, `parameters` is inlined as OData function arguments. Bare operation names are namespaced automatically for bound calls — pass a fully-qualified name to override.
+
+Examples:
+
+```jsonc
+// Publish a draft duplicate-detection rule.
+// PublishDuplicateRule is a BOUND action on duplicaterule (returns an async job).
+invoke_action({ name: "PublishDuplicateRule", entity_set: "duplicaterules", id: "<guid>" })
+
+// Unpublish is an UNBOUND action taking DuplicateRuleId — note the asymmetry.
+invoke_action({ name: "UnpublishDuplicateRule", parameters: { DuplicateRuleId: "<guid>" } })
+
+// Qualify a lead into Account/Contact/Opportunity (bound action on lead).
+invoke_action({ name: "QualifyLead", entity_set: "leads", id: "<guid>",
+                parameters: { CreateAccount: true, CreateContact: true, CreateOpportunity: true, Status: 3 } })
+```
+
+> Whether an operation is bound or unbound is defined in the Web API `$metadata`, not by intuition — e.g. `PublishDuplicateRule` is bound but `UnpublishDuplicateRule` is unbound. Check `$metadata` (look for `IsBound="true"` and the binding `Parameter`) if a call returns `404 "Resource not found for the segment"`.
+
+> ⚠️ `invoke_action` can perform arbitrary mutating operations. It is currently **ungated** by design; capability-based access control (a safe-by-default policy gating writes/actions) is tracked separately in [#45 / #46](https://github.com/rededis/dataverse-mcp-server/issues/45). `invoke_function` is read-only.
+
 ## Quick start (no clone)
 
 Add to `.mcp.json` in your project root:
