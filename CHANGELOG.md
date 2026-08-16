@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-16
+
+### Changed
+
+- **BREAKING** — `get_picklist_options` no longer returns a bare `[{ value, label }]` array. It now returns `{ option_set: { name, is_global, metadata_id }, options: [{ value, label }] }` (closes #61). The flat array made a Local OptionSet and a Global one indistinguishable: the response shape was identical either way, and matching values do not prove a binding. Callers that consumed the array directly need to read `.options`.
+- `get_picklist_options` now resolves Choice, Status, State and MultiSelect columns, not just Choice. `statecode` / `statuscode` previously failed with "Picklist attribute not found"; the not-found message now names the whole choice family.
+
+### Added
+
+- `get_entity_schema` attaches an `option_set` summary — `{ name, is_global, metadata_id, option_count }` — to every choice-style column, so a schema dump answers "what can this column contain, and is the list shared?" without a call per column. The option values themselves are deliberately excluded; read them per column with `get_picklist_options`.
+
+### Notes
+
+Verified live against a real org: a column bound to a global set reports `is_global: true` with the global set's own `metadata_id`, while a locally-defined column reports `is_global: false` with an auto-generated name.
+
+Two Web API details found during that verification, both encoded in `src/tools/optionset-utils.ts`:
+
+- `OptionSet` is only reachable through a type cast, and the cast must name a **concrete** type. Casting to the abstract base — `/Attributes/Microsoft.Dynamics.CRM.EnumAttributeMetadata` — is rejected with HTTP 500 `0x8006088a: Unexpected attribute type`, despite the docs listing it as a GET-able entity type. Each concrete choice type is therefore requested separately.
+- The sibling `GlobalOptionSet` navigation property is **not** a usable binding signal: for a locally-defined column it resolves to that column's own local set rather than returning null, so it cannot tell the two cases apart. `IsGlobal` on the expanded `OptionSet` is the reliable indicator.
+
 ## [0.5.0] - 2026-06-16
 
 ### Added

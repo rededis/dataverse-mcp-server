@@ -1,6 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DataverseClient } from "../client.js";
+import {
+  fetchChoiceAttributes,
+  OPTION_SET_EXPAND,
+  type OptionSetSummary,
+  summarizeOptionSet,
+} from "./optionset-utils.js";
 
 export function escapeODataString(value: string): string {
   return value.replace(/'/g, "''");
@@ -195,7 +201,7 @@ export function registerDataTools(
 
   server.tool(
     "get_entity_schema",
-    "Get attributes (columns) of a specific Dataverse table",
+    "Get attributes (columns) of a specific Dataverse table. Choice-style columns (Choice, Status, State, MultiSelect) additionally carry an option_set summary { name, is_global, metadata_id, option_count } — is_global tells whether the column is bound to a shared Global OptionSet or holds a local copy. The option values themselves are not included; read them per column with get_picklist_options.",
     {
       entity_logical_name: z
         .string()
@@ -205,18 +211,44 @@ export function registerDataTools(
     },
     async ({ entity_logical_name }) => {
       const escaped = escapeODataString(entity_logical_name);
+      const attributesPath = `/EntityDefinitions(LogicalName='${escaped}')/Attributes`;
       const query = buildODataQuery({
         $select:
           "LogicalName,AttributeType,DisplayName,RequiredLevel,IsCustomAttribute,Description",
       });
-      const result = (await client.get(
-        `/EntityDefinitions(LogicalName='${escaped}')/Attributes${query}`,
-      )) as { value: unknown[] };
+      // OptionSet cannot be expanded on the plain /Attributes collection — it is
+      // declared on a derived type — so the choice columns are fetched separately
+      // through type casts and merged onto the base rows by LogicalName.
+      const optionSetQuery = buildODataQuery({
+        $select: "LogicalName",
+        $expand: OPTION_SET_EXPAND,
+      });
+      const [base, choiceRows] = await Promise.all([
+        client.get(`${attributesPath}${query}`) as Promise<{
+          value: Array<Record<string, unknown>>;
+        }>,
+        fetchChoiceAttributes(client, attributesPath, optionSetQuery),
+      ]);
+
+      const summaries = new Map<string, OptionSetSummary>();
+      for (const attr of choiceRows) {
+        if (attr.OptionSet) {
+          summaries.set(attr.LogicalName, summarizeOptionSet(attr.OptionSet));
+        }
+      }
+      // Options are fetched but deliberately not returned: a table like account has
+      // dozens of choice columns, and inlining every option list would blow past the
+      // tool-result size limit. Only the count travels back.
+      const attributes = base.value.map((attr) => {
+        const summary = summaries.get(attr.LogicalName as string);
+        return summary ? { ...attr, option_set: summary } : attr;
+      });
+
       return {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(result.value, null, 2),
+            text: JSON.stringify(attributes, null, 2),
           },
         ],
       };

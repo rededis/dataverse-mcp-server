@@ -2,6 +2,14 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DataverseClient } from "../client.js";
 import { buildODataQuery, escapeODataString } from "./data-tools.js";
+import {
+  fetchChoiceAttributes,
+  flattenOption,
+  flattenOptionSet,
+  OPTION_SET_EXPAND,
+  OPTION_SET_IDENTITY_SELECT,
+  type RawOptionSet,
+} from "./optionset-utils.js";
 
 interface PicklistLocation {
   entity_logical_name?: string;
@@ -71,27 +79,6 @@ const LOCATION_SHAPE = {
       "Global OptionSet name. Mutually exclusive with entity_logical_name/attribute_logical_name.",
     ),
 } as const;
-
-interface OptionLabel {
-  LocalizedLabels?: Array<{ Label?: string; LanguageCode?: number }>;
-  UserLocalizedLabel?: { Label?: string; LanguageCode?: number };
-}
-
-interface RawOption {
-  Value: number;
-  Label?: OptionLabel;
-}
-
-function flattenOption(opt: RawOption): {
-  value: number;
-  label: string | null;
-} {
-  const label =
-    opt.Label?.UserLocalizedLabel?.Label ??
-    opt.Label?.LocalizedLabels?.[0]?.Label ??
-    null;
-  return { value: opt.Value, label };
-}
 
 export function registerPicklistTools(
   server: McpServer,
@@ -257,21 +244,22 @@ export function registerPicklistTools(
 
   server.tool(
     "get_picklist_options",
-    "Read options of a Local or Global OptionSet as a flat [{ value, label }] list.",
+    "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns.",
     LOCATION_SHAPE,
     async (params) => {
       validatePicklistLocation(params);
-      let options: RawOption[] = [];
+      let optionSet: RawOptionSet;
       if (params.option_set_name) {
         const escaped = escapeODataString(params.option_set_name);
-        const query = buildODataQuery({ $select: "Options" });
+        const query = buildODataQuery({
+          $select: `${OPTION_SET_IDENTITY_SELECT},Options`,
+        });
         // Dataverse rejects $filter on /GlobalOptionSetDefinitions (405), so address by alternate key (Name).
         // Cast to OptionSetMetadata — Options lives on the derived type, not the base GlobalOptionSetDefinition.
-        let result: { Options?: RawOption[] };
         try {
-          result = (await client.get(
+          optionSet = (await client.get(
             `/GlobalOptionSetDefinitions(Name='${escaped}')/Microsoft.Dynamics.CRM.OptionSetMetadata${query}`,
-          )) as { Options?: RawOption[] };
+          )) as RawOptionSet;
         } catch (err) {
           if (err instanceof Error && /\b404\b/.test(err.message)) {
             throw new Error(
@@ -280,7 +268,6 @@ export function registerPicklistTools(
           }
           throw err;
         }
-        options = result.Options ?? [];
       } else {
         // validatePicklistLocation guarantees both are present when option_set_name is absent
         const entity = params.entity_logical_name ?? "";
@@ -290,22 +277,27 @@ export function registerPicklistTools(
         const query = buildODataQuery({
           $filter: `LogicalName eq '${attrEscaped}'`,
           $select: "LogicalName",
-          $expand: "OptionSet($select=Options)",
+          $expand: OPTION_SET_EXPAND,
         });
-        const result = (await client.get(
-          `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes/Microsoft.Dynamics.CRM.PicklistAttributeMetadata${query}`,
-        )) as {
-          value: Array<{ OptionSet: { Options: RawOption[] } }>;
-        };
-        if (result.value.length === 0) {
-          throw new Error(`Picklist attribute not found: ${entity}.${attr}`);
+        const rows = await fetchChoiceAttributes(
+          client,
+          `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes`,
+          query,
+        );
+        if (rows.length === 0) {
+          throw new Error(
+            `Choice attribute not found: ${entity}.${attr} — no Choice, Status, State or MultiSelect column with that logical name`,
+          );
         }
-        options = result.value[0].OptionSet.Options;
+        optionSet = rows[0].OptionSet ?? {};
       }
-      const flat = options.map(flattenOption);
+      const payload = {
+        option_set: flattenOptionSet(optionSet),
+        options: (optionSet.Options ?? []).map(flattenOption),
+      };
       return {
         content: [
-          { type: "text" as const, text: JSON.stringify(flat, null, 2) },
+          { type: "text" as const, text: JSON.stringify(payload, null, 2) },
         ],
       };
     },

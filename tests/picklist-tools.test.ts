@@ -242,29 +242,30 @@ describe("delete_picklist_option", () => {
 });
 
 describe("get_picklist_options", () => {
-  it("reads and flattens options for a Local picklist", async () => {
+  it("reads a column backed by a Local OptionSet and reports is_global=false", async () => {
     const server = createMockServer();
     const client = {
       get: vi.fn().mockResolvedValue({
         value: [
           {
+            LogicalName: "fundai_status",
             OptionSet: {
+              // A local set carries an auto-generated name derived from the column
+              Name: "fundai_x_fundai_status",
+              IsGlobal: false,
+              MetadataId: "11111111-1111-1111-1111-111111111111",
               Options: [
                 {
                   Value: 100000000,
                   Label: {
                     UserLocalizedLabel: { Label: "Active", LanguageCode: 1033 },
-                    LocalizedLabels: [
-                      { Label: "Active", LanguageCode: 1033 },
-                    ],
+                    LocalizedLabels: [{ Label: "Active", LanguageCode: 1033 }],
                   },
                 },
                 {
                   Value: 100000001,
                   Label: {
-                    LocalizedLabels: [
-                      { Label: "Inactive", LanguageCode: 1033 },
-                    ],
+                    LocalizedLabels: [{ Label: "Inactive", LanguageCode: 1033 }],
                   },
                 },
               ],
@@ -280,27 +281,141 @@ describe("get_picklist_options", () => {
       attribute_logical_name: "fundai_status",
     });
 
-    const url = client.get.mock.calls[0][0] as string;
-    expect(url).toContain(
-      "/EntityDefinitions(LogicalName='fundai_x')/Attributes/Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
-    );
+    const urls = client.get.mock.calls.map((c: unknown[]) => c[0] as string);
+    // Dataverse rejects a cast to the abstract EnumAttributeMetadata base (HTTP 500),
+    // so the lookup fans out over every concrete choice type instead — otherwise
+    // Status/State/MultiSelect columns would be unreachable.
+    expect(urls.map((u) => u.match(/CRM\.(\w+)/)![1]).sort()).toEqual([
+      "MultiSelectPicklistAttributeMetadata",
+      "PicklistAttributeMetadata",
+      "StateAttributeMetadata",
+      "StatusAttributeMetadata",
+    ]);
+    for (const u of urls) {
+      expect(u).toContain(
+        "/EntityDefinitions(LogicalName='fundai_x')/Attributes/",
+      );
+    }
+    const url = urls[0];
     const qs = new URLSearchParams(url.slice(url.indexOf("?") + 1));
     expect(qs.get("$filter")).toBe("LogicalName eq 'fundai_status'");
     expect(qs.get("$select")).toBe("LogicalName");
-    expect(qs.get("$expand")).toBe("OptionSet($select=Options)");
+    expect(qs.get("$expand")).toBe(
+      "OptionSet($select=Name,IsGlobal,MetadataId,Options)",
+    );
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed).toEqual([
-      { value: 100000000, label: "Active" },
-      { value: 100000001, label: "Inactive" },
-    ]);
+    expect(parsed).toEqual({
+      option_set: {
+        name: "fundai_x_fundai_status",
+        is_global: false,
+        metadata_id: "11111111-1111-1111-1111-111111111111",
+      },
+      options: [
+        { value: 100000000, label: "Active" },
+        { value: 100000001, label: "Inactive" },
+      ],
+    });
   });
 
-  it("reads and flattens options for a Global OptionSet via keyed access (single-object response)", async () => {
+  it("reports is_global=true and the global set's identity when a column is bound to one", async () => {
+    // The scenario issue #61 exists for: values alone are identical to a local copy,
+    // only the OptionSet identity distinguishes a real binding.
+    const server = createMockServer();
+    const client = {
+      get: vi.fn().mockResolvedValue({
+        value: [
+          {
+            LogicalName: "fundai_source",
+            OptionSet: {
+              Name: "fundai_source",
+              IsGlobal: true,
+              MetadataId: "8f2c0000-0000-0000-0000-00000000abcd",
+              Options: [
+                {
+                  Value: 909890000,
+                  Label: {
+                    UserLocalizedLabel: {
+                      Label: "Website",
+                      LanguageCode: 1033,
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    } as any;
+    registerPicklistTools(server as any, client);
+
+    const result = await server.tools.get("get_picklist_options")!.handler({
+      entity_logical_name: "opportunity",
+      attribute_logical_name: "fundai_source",
+    });
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.option_set).toEqual({
+      name: "fundai_source",
+      is_global: true,
+      metadata_id: "8f2c0000-0000-0000-0000-00000000abcd",
+    });
+    expect(parsed.options).toEqual([{ value: 909890000, label: "Website" }]);
+  });
+
+  it("drills into a Status column, which only the Status cast returns", async () => {
+    const server = createMockServer();
+    // Mirrors Dataverse: a cast that does not match the column's type answers with
+    // an empty collection rather than an error.
+    const client = {
+      get: vi.fn(async (url: string) =>
+        url.includes("StatusAttributeMetadata")
+          ? {
+              value: [
+                {
+                  LogicalName: "statuscode",
+                  OptionSet: {
+                    Name: "opportunity_statuscode",
+                    IsGlobal: false,
+                    MetadataId: "22222222-2222-2222-2222-222222222222",
+                    Options: [
+                      {
+                        Value: 1,
+                        Label: {
+                          UserLocalizedLabel: {
+                            Label: "In Progress",
+                            LanguageCode: 1033,
+                          },
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            }
+          : { value: [] },
+      ),
+    } as any;
+    registerPicklistTools(server as any, client);
+
+    const result = await server.tools.get("get_picklist_options")!.handler({
+      entity_logical_name: "opportunity",
+      attribute_logical_name: "statuscode",
+    });
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.options).toEqual([{ value: 1, label: "In Progress" }]);
+    expect(parsed.option_set.name).toBe("opportunity_statuscode");
+  });
+
+  it("reads a Global OptionSet via keyed access (single-object response)", async () => {
     const server = createMockServer();
     // Dataverse returns a single OptionSetMetadata object here, NOT wrapped in { value: [...] }
     const client = {
       get: vi.fn().mockResolvedValue({
+        Name: "MyGlobalSet",
+        IsGlobal: true,
+        MetadataId: "33333333-3333-3333-3333-333333333333",
         Options: [
           {
             Value: 1,
@@ -324,13 +439,20 @@ describe("get_picklist_options", () => {
     // $filter is NOT supported on this path — must use keyed access
     const qs = new URLSearchParams(url.slice(url.indexOf("?") + 1));
     expect(qs.get("$filter")).toBeNull();
-    expect(qs.get("$select")).toBe("Options");
+    expect(qs.get("$select")).toBe("Name,IsGlobal,MetadataId,Options");
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed).toEqual([{ value: 1, label: "One" }]);
+    expect(parsed).toEqual({
+      option_set: {
+        name: "MyGlobalSet",
+        is_global: true,
+        metadata_id: "33333333-3333-3333-3333-333333333333",
+      },
+      options: [{ value: 1, label: "One" }],
+    });
   });
 
-  it("throws when Local picklist attribute is not found", async () => {
+  it("throws when the choice attribute is not found", async () => {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
     registerPicklistTools(server as any, client);
@@ -340,7 +462,7 @@ describe("get_picklist_options", () => {
         entity_logical_name: "fundai_x",
         attribute_logical_name: "missing_attr",
       }),
-    ).rejects.toThrow(/Picklist attribute not found/);
+    ).rejects.toThrow(/Choice attribute not found: fundai_x\.missing_attr/);
   });
 
   it("throws a helpful error when Global OptionSet returns 404", async () => {
@@ -359,15 +481,21 @@ describe("get_picklist_options", () => {
     ).rejects.toThrow(/Global OptionSet not found: 'Missing'/);
   });
 
-  it("returns empty array when Global OptionSet has no Options", async () => {
+  it("returns an empty options list when the Global OptionSet has no Options", async () => {
     const server = createMockServer();
-    const client = { get: vi.fn().mockResolvedValue({ Options: [] }) } as any;
+    const client = {
+      get: vi
+        .fn()
+        .mockResolvedValue({ Name: "Empty", IsGlobal: true, Options: [] }),
+    } as any;
     registerPicklistTools(server as any, client);
 
     const result = await server.tools.get("get_picklist_options")!.handler({
       option_set_name: "Empty",
     });
-    expect(JSON.parse(result.content[0].text)).toEqual([]);
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.options).toEqual([]);
+    expect(parsed.option_set.is_global).toBe(true);
   });
 
   it("returns null label gracefully when no localized label exists", async () => {
@@ -376,7 +504,10 @@ describe("get_picklist_options", () => {
       get: vi.fn().mockResolvedValue({
         value: [
           {
+            LogicalName: "fundai_status",
             OptionSet: {
+              Name: "fundai_x_fundai_status",
+              IsGlobal: false,
               Options: [{ Value: 42, Label: { LocalizedLabels: [] } }],
             },
           },
@@ -391,6 +522,8 @@ describe("get_picklist_options", () => {
     });
 
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed).toEqual([{ value: 42, label: null }]);
+    expect(parsed.options).toEqual([{ value: 42, label: null }]);
+    // MetadataId absent in the payload must degrade to null, not undefined
+    expect(parsed.option_set.metadata_id).toBeNull();
   });
 });
