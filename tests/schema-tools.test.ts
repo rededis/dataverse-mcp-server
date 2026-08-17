@@ -439,6 +439,27 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
     expect(client.post).not.toHaveBeenCalled();
   });
 
+  it("create_entity rejects an invalid attribute before creating the table", async () => {
+    // Not global-set specific: any client-side validation must fire while there
+    // is still no table to orphan. A Picklist with neither options nor a global
+    // set is the cheapest way to reach that path.
+    const server = createMockServer();
+    const client = clientResolving(GUID);
+    registerSchemaTools(server as any, client);
+
+    await expect(
+      server.tools.get("create_entity")!.handler({
+        logical_name: "fundai_new",
+        display_name: "New",
+        display_collection_name: "News",
+        attributes: [
+          { logical_name: "fundai_p", type: "Picklist", display_name: "P" },
+        ],
+      }),
+    ).rejects.toThrow(/Picklist attributes require either/);
+    expect(client.post).not.toHaveBeenCalled();
+  });
+
   it("looks a repeated global set up once per batch", async () => {
     const server = createMockServer();
     const client = clientResolving(GUID);
@@ -459,6 +480,18 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
     });
 
     expect(client.get).toHaveBeenCalledTimes(1);
+
+    // Entity first, then one POST per attribute, each carrying the resolved
+    // binding — the bodies are built before the entity but posted after it.
+    const [entityCall, ...attrCalls] = client.post.mock.calls;
+    expect(entityCall[0]).toBe("/EntityDefinitions");
+    expect(attrCalls).toHaveLength(2);
+    for (const [path, body] of attrCalls) {
+      expect(path).toContain("/Attributes");
+      expect(body["GlobalOptionSet@odata.bind"]).toBe(
+        `/GlobalOptionSetDefinitions(${GUID})`,
+      );
+    }
   });
 });
 

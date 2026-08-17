@@ -56,7 +56,7 @@ A `Picklist` attribute takes exactly one of two fields. `options` defines the va
   "global_option_set": "contoso_sourceset" }
 ```
 
-Supplying both is rejected. That check is not cosmetic: Dataverse itself accepts the pair and then silently ignores the binding, leaving a local copy that looks bound. An unknown set name fails as `Global OptionSet not found: '<name>'` before anything is created — including in `create_entity`, which resolves names before the table exists so a bad name cannot leave a half-built table behind.
+Supplying both is rejected. That check is not cosmetic: Dataverse itself accepts the pair and then silently ignores the binding, leaving a local copy that looks bound. An unknown set name fails as `Global OptionSet not found: '<name>'` before anything is created — including in `create_entity`, which resolves names and validates every attribute before the table exists, so a rejected column cannot leave a half-built table behind.
 
 Verify the result with `get_picklist_options`: a bound column reports `is_global: true` and the global set's own `metadata_id`.
 

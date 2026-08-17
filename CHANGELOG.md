@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Global OptionSets exist so one choice list can be shared across columns and tables. Previously the only ways to get a shared list were to accept a local copy that silently drifts the first time anyone edits one of them, or to create the column by hand in the maker portal — which breaks an otherwise scripted schema workflow.
 
-  `create_entity` resolves every name **before** creating the table, so a bad name cannot leave a half-built table behind; Dataverse offers no transaction to roll one back. A name repeated across attributes costs one lookup, not one per column.
+  `create_entity` resolves names and builds every attribute body **before** creating the table, so nothing a client-side check can reject — an unknown set name, a Picklist with no values, an impossible DateTime pairing — can leave a half-built table behind; Dataverse offers no transaction to roll one back. A name repeated across attributes costs one lookup, not one per column.
 
 ### Notes
 

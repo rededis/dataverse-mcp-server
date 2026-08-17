@@ -404,13 +404,27 @@ export function registerSchemaTools(
       const prefix = params.logical_name.slice(0, separatorIndex);
       const primaryAttrName = params.primary_attribute_name || `${prefix}_name`;
 
-      // Resolved before the table is created, not with the columns afterwards: a
-      // name that turns out not to exist would otherwise leave a half-built table
-      // behind, and Dataverse has no transaction to roll that back.
+      // Everything that can reject an attribute runs before the table is created,
+      // because Dataverse has no transaction: a failure once the table exists
+      // leaves an orphaned table behind that nothing rolls back.
+      //
+      // Order matters twice over. The mutual-exclusion check comes first so an
+      // already-doomed request never spends a lookup. The bodies are then built
+      // up front rather than inside the loop below, so the remaining client-side
+      // validations — a Picklist with no options, an impossible DateTime pairing —
+      // also fail while there is still nothing to leave behind.
       for (const attr of params.attributes ?? []) validateOptionSetFields(attr);
       const globalIds = await resolveGlobalOptionSets(
         client,
         params.attributes ?? [],
+      );
+      const attributeBodies = (params.attributes ?? []).map((attr) =>
+        buildAttributeBody(
+          attr,
+          attr.global_option_set
+            ? globalIds.get(attr.global_option_set)
+            : undefined,
+        ),
       );
 
       const body: Record<string, unknown> = {
@@ -496,13 +510,7 @@ export function registerSchemaTools(
           );
         }
 
-        for (const attr of params.attributes) {
-          const attrBody = buildAttributeBody(
-            attr,
-            attr.global_option_set
-              ? globalIds.get(attr.global_option_set)
-              : undefined,
-          );
+        for (const attrBody of attributeBodies) {
           await client.post(
             `/EntityDefinitions(${entityId})/Attributes`,
             attrBody,
@@ -743,6 +751,14 @@ export function registerSchemaTools(
       // through PUT, which REPLACES the full resource. To avoid resetting
       // untouched fields to defaults, fetch current metadata (with the type
       // cast) and merge the user-supplied changes on top.
+      //
+      // A Picklist bound to a Global OptionSet survives this untouched, despite
+      // the obvious worry: OptionSet and GlobalOptionSet are navigation
+      // properties, so the cast GET returns neither and the merged PUT body
+      // carries no option set at all. Verified live — renaming a bound column
+      // leaves it reporting is_global true against the same MetadataId, so
+      // Dataverse keeps the association rather than replacing it with a local
+      // copy. Do not "fix" this by re-sending the binding.
       const current = (await client.get(getPath)) as Record<string, unknown>;
       const merged: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(current)) {
