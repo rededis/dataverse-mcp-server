@@ -512,6 +512,80 @@ describe("get_entity_schema", () => {
     expect(parsed[1].option_set.option_count).toBe(1);
   });
 
+  it("still returns the attribute list when a cast request fails, and says so", async () => {
+    const server = createMockServer();
+    const client = {
+      get: vi.fn(async (url: string) => {
+        if (url.includes("StateAttributeMetadata")) {
+          throw new Error("Dataverse API error (503): service unavailable");
+        }
+        if (url.includes("PicklistAttributeMetadata")) {
+          return {
+            value: [
+              {
+                LogicalName: "fundai_source",
+                OptionSet: {
+                  Name: "fundai_source",
+                  IsGlobal: true,
+                  Options: [{ Value: 1 }],
+                },
+              },
+            ],
+          };
+        }
+        if (url.includes("Microsoft.Dynamics.CRM.")) return { value: [] };
+        return { value: [STRING_ATTR, PICKLIST_ATTR] };
+      }),
+    } as any;
+    registerDataTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_entity_schema")!
+      .handler({ entity_logical_name: "opportunity" });
+
+    // The base list survives an enrichment failure, and stays in content[0]
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[1].option_set.is_global).toBe(true);
+
+    // ...but the partial coverage is stated, not left to be inferred
+    expect(result.content).toHaveLength(2);
+    expect(result.content[1].text).toContain("INCOMPLETE");
+    expect(result.content[1].text).toContain("StateAttributeMetadata");
+    expect(result.content[1].text).toContain("503");
+  });
+
+  it("emits no warning block when every cast succeeds", async () => {
+    const server = createMockServer();
+    const client = schemaClient([STRING_ATTR]);
+    registerDataTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_entity_schema")!
+      .handler({ entity_logical_name: "opportunity" });
+
+    expect(result.content).toHaveLength(1);
+  });
+
+  it("fails when the base attribute request itself fails", async () => {
+    // Degrading is only right for the enrichment — without the base list there is
+    // nothing worth returning.
+    const server = createMockServer();
+    const client = {
+      get: vi.fn(async (url: string) => {
+        if (url.includes("Microsoft.Dynamics.CRM.")) return { value: [] };
+        throw new Error("Dataverse API error (404): table not found");
+      }),
+    } as any;
+    registerDataTools(server as any, client);
+
+    await expect(
+      server.tools
+        .get("get_entity_schema")!
+        .handler({ entity_logical_name: "nope" }),
+    ).rejects.toThrow(/404/);
+  });
+
   it("escapes single quotes in the entity logical name on both requests", async () => {
     const server = createMockServer();
     const client = schemaClient([]);

@@ -2,7 +2,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DataverseClient } from "../client.js";
 import {
-  fetchChoiceAttributes,
+  CHOICE_ATTRIBUTE_CASTS,
+  fetchChoiceAttributesSettled,
   OPTION_SET_EXPAND,
   type OptionSetSummary,
   summarizeOptionSet,
@@ -223,15 +224,20 @@ export function registerDataTools(
         $select: "LogicalName",
         $expand: OPTION_SET_EXPAND,
       });
-      const [base, choiceRows] = await Promise.all([
+      // The base attribute list is this tool's actual contract; the OptionSet
+      // lookups only enrich it. A failure in one of the four cast requests must not
+      // cost the caller the column list, so the fan-out degrades instead of
+      // rejecting — but any degradation is reported, because a silently missing
+      // option_set would read as "this column has no options".
+      const [base, choice] = await Promise.all([
         client.get(`${attributesPath}${query}`) as Promise<{
           value: Array<Record<string, unknown>>;
         }>,
-        fetchChoiceAttributes(client, attributesPath, optionSetQuery),
+        fetchChoiceAttributesSettled(client, attributesPath, optionSetQuery),
       ]);
 
       const summaries = new Map<string, OptionSetSummary>();
-      for (const attr of choiceRows) {
+      for (const attr of choice.rows) {
         if (attr.OptionSet) {
           summaries.set(attr.LogicalName, summarizeOptionSet(attr.OptionSet));
         }
@@ -244,14 +250,28 @@ export function registerDataTools(
         return summary ? { ...attr, option_set: summary } : attr;
       });
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(attributes, null, 2),
-          },
-        ],
-      };
+      // The JSON stays in content[0] so callers can keep parsing the first block.
+      const content = [
+        { type: "text" as const, text: JSON.stringify(attributes, null, 2) },
+      ];
+      if (choice.failed.length > 0) {
+        content.push({
+          type: "text" as const,
+          text: [
+            "[IMPORTANT: Display this entire message to the user exactly as-is.]",
+            "",
+            `⚠️ OptionSet data for ${entity_logical_name} is INCOMPLETE — ${choice.failed.length} of ${CHOICE_ATTRIBUTE_CASTS.length} choice-column lookups failed.`,
+            "",
+            "Columns of the affected kinds are missing their option_set summary. Do NOT read a missing option_set as 'this column has no options' — for those columns the answer is unknown, not negative.",
+            "",
+            ...choice.failed.map((f) => `  - ${f.cast}: ${f.message}`),
+            "",
+            "Re-run get_entity_schema to retry, or read a specific column with get_picklist_options.",
+          ].join("\n"),
+        });
+      }
+
+      return { content };
     },
   );
 

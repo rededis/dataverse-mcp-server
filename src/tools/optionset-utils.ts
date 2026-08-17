@@ -95,21 +95,70 @@ export interface ChoiceAttributeRow {
   OptionSet?: RawOptionSet;
 }
 
+function castRequests(
+  client: { get(path: string): Promise<unknown> },
+  attributesPath: string,
+  query: string,
+) {
+  return CHOICE_ATTRIBUTE_CASTS.map(
+    (cast) =>
+      client.get(`${attributesPath}/${cast}${query}`) as Promise<{
+        value?: ChoiceAttributeRow[];
+      }>,
+  );
+}
+
 // Fans the same query out across every concrete choice cast and concatenates the
 // rows. A cast that does not match simply returns an empty collection rather than
 // an error, so the caller can treat "no rows at all" as "not a choice column".
+//
+// Rejects if any cast fails. That is required wherever an empty result is given
+// meaning: swallowing a failed Picklist cast would turn a transient error into a
+// confident "not a choice column", which is a wrong answer rather than a failure.
 export async function fetchChoiceAttributes(
   client: { get(path: string): Promise<unknown> },
   attributesPath: string,
   query: string,
 ): Promise<ChoiceAttributeRow[]> {
   const responses = await Promise.all(
-    CHOICE_ATTRIBUTE_CASTS.map(
-      (cast) =>
-        client.get(`${attributesPath}/${cast}${query}`) as Promise<{
-          value?: ChoiceAttributeRow[];
-        }>,
-    ),
+    castRequests(client, attributesPath, query),
   );
   return responses.flatMap((r) => r.value ?? []);
+}
+
+export interface ChoiceAttributeFanOut {
+  rows: ChoiceAttributeRow[];
+  failed: Array<{ cast: string; message: string }>;
+}
+
+// Same fan-out, but a failing cast is reported instead of rejecting — for callers
+// that still have something worth returning without the enrichment.
+//
+// Callers MUST surface `failed`. A column silently missing its OptionSet is
+// indistinguishable from a column that has none, and that is precisely the
+// wrong-answer failure this whole feature exists to prevent.
+export async function fetchChoiceAttributesSettled(
+  client: { get(path: string): Promise<unknown> },
+  attributesPath: string,
+  query: string,
+): Promise<ChoiceAttributeFanOut> {
+  const results = await Promise.allSettled(
+    castRequests(client, attributesPath, query),
+  );
+  const rows: ChoiceAttributeRow[] = [];
+  const failed: ChoiceAttributeFanOut["failed"] = [];
+  results.forEach((result, i) => {
+    if (result.status === "fulfilled") {
+      rows.push(...(result.value.value ?? []));
+    } else {
+      failed.push({
+        cast: CHOICE_ATTRIBUTE_CASTS[i].replace("Microsoft.Dynamics.CRM.", ""),
+        message:
+          result.reason instanceof Error
+            ? result.reason.message
+            : String(result.reason),
+      });
+    }
+  });
+  return { rows, failed };
 }

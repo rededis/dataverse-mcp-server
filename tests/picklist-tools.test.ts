@@ -465,6 +465,49 @@ describe("get_picklist_options", () => {
     ).rejects.toThrow(/Choice attribute not found: fundai_x\.missing_attr/);
   });
 
+  it("throws rather than reporting is_global=false when OptionSet is missing", async () => {
+    // A row matched a cast but carries no expanded OptionSet. Defaulting it would
+    // answer "local set" with full confidence on data that never arrived.
+    const server = createMockServer();
+    const client = {
+      get: vi.fn(async (url: string) =>
+        url.includes("PicklistAttributeMetadata")
+          ? { value: [{ LogicalName: "fundai_status" }] }
+          : { value: [] },
+      ),
+    } as any;
+    registerPicklistTools(server as any, client);
+
+    await expect(
+      server.tools.get("get_picklist_options")!.handler({
+        entity_logical_name: "fundai_x",
+        attribute_logical_name: "fundai_status",
+      }),
+    ).rejects.toThrow(/OptionSet metadata missing for fundai_x\.fundai_status/);
+  });
+
+  it("propagates a failing cast instead of reporting the column as not found", async () => {
+    // Swallowing the error here would turn a transient failure into a confident
+    // "not a choice column" — a wrong answer rather than a failure.
+    const server = createMockServer();
+    const client = {
+      get: vi.fn(async (url: string) => {
+        if (url.includes("StatusAttributeMetadata")) {
+          throw new Error("Dataverse API error (503): service unavailable");
+        }
+        return { value: [] };
+      }),
+    } as any;
+    registerPicklistTools(server as any, client);
+
+    await expect(
+      server.tools.get("get_picklist_options")!.handler({
+        entity_logical_name: "fundai_x",
+        attribute_logical_name: "fundai_status",
+      }),
+    ).rejects.toThrow(/503/);
+  });
+
   it("throws a helpful error when Global OptionSet returns 404", async () => {
     const server = createMockServer();
     const client = {

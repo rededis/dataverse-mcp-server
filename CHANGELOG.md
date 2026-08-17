@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `get_entity_schema` attaches an `option_set` summary — `{ name, is_global, metadata_id, option_count }` — to every choice-style column, so a schema dump answers "what can this column contain, and is the list shared?" without a call per column. The option values themselves are deliberately excluded; read them per column with `get_picklist_options`.
 
+### Failure behavior
+
+Reading OptionSet data turns `get_entity_schema` from one metadata request into five, so the two tools handle a failing request differently — in both cases so that an unknown answer is never presented as a definite one:
+
+- `get_entity_schema` degrades. The base attribute list is the tool's contract and does not depend on OptionSets, so a failing lookup no longer costs the caller the column list. The partial coverage is reported in a second content block (the JSON stays in the first), because a silently missing `option_set` would read as "this column has no options". A failure of the base request itself still fails the call.
+- `get_picklist_options` fails hard. There, an empty result means "not a choice column", so swallowing an error would turn a transient failure into a confident `Choice attribute not found` on a column that does exist. For the same reason a matched column whose `OptionSet` did not come back is an error rather than a default of `is_global: false`.
+
 ### Notes
 
 Verified live against a real org: a column bound to a global set reports `is_global: true` with the global set's own `metadata_id`, while a locally-defined column reports `is_global: false` with an auto-generated name.

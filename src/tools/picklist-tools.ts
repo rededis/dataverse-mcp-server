@@ -289,7 +289,16 @@ export function registerPicklistTools(
             `Choice attribute not found: ${entity}.${attr} — no Choice, Status, State or MultiSelect column with that logical name`,
           );
         }
-        optionSet = rows[0].OptionSet ?? {};
+        // Not defaulted to {}: an absent OptionSet would flatten to
+        // is_global: false, reporting a local set with full confidence on data that
+        // never arrived. is_global is the entire point of this tool, so an unknown
+        // answer has to fail rather than guess.
+        if (!rows[0].OptionSet) {
+          throw new Error(
+            `OptionSet metadata missing for ${entity}.${attr} — cannot tell whether it is Local or Global`,
+          );
+        }
+        optionSet = rows[0].OptionSet;
       }
       const payload = {
         option_set: flattenOptionSet(optionSet),
