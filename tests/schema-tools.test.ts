@@ -284,6 +284,22 @@ describe("buildAttributeBody", () => {
       ).toThrow(/applies only to Picklist attributes, got: String/);
     });
 
+    it("refuses a MetadataId for an attribute that names no global set", () => {
+      // The reverse of the guard below. buildAttributeBody is exported, so the
+      // mismatched pair can arrive from a caller that skipped the resolver.
+      expect(() =>
+        buildAttributeBody(
+          {
+            logical_name: "contoso_status",
+            type: "Picklist",
+            display_name: "Status",
+            options: [{ label: "Active", value: 1 }],
+          },
+          GUID,
+        ),
+      ).toThrow(/does not name a global_option_set/);
+    });
+
     it("refuses to build a body when the name was not resolved to a MetadataId", () => {
       expect(() =>
         buildAttributeBody({

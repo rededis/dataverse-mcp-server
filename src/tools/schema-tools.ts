@@ -69,9 +69,10 @@ const AttributeSchema = z.object({
     ),
   global_option_set: z
     .string()
+    .min(1)
     .optional()
     .describe(
-      "Picklist only: bind the column to an existing Global OptionSet by name (e.g. 'contoso_source') so it shares one org-wide list instead of a private copy. Mutually exclusive with options.",
+      "Picklist only: bind the column to an existing Global OptionSet by its set name (e.g. 'contoso_sourceset') so the column shares one org-wide list instead of a private copy. Mutually exclusive with options.",
     ),
   date_format: z
     .enum(["DateOnly", "DateAndTime"])
@@ -192,9 +193,15 @@ function buildAttributeBodyBound(
   attr: AttributeInput,
   globalIds: Map<string, string>,
 ): Record<string, unknown> {
+  // Tested for presence, matching validateOptionSetFields and the resolver's own
+  // filter. A truthy test would disagree with both about the empty string, and
+  // three checks that classify the same value differently is how a value ends up
+  // taking a path nobody meant it to.
   return buildAttributeBody(
     attr,
-    attr.global_option_set ? globalIds.get(attr.global_option_set) : undefined,
+    attr.global_option_set !== undefined
+      ? globalIds.get(attr.global_option_set)
+      : undefined,
   );
 }
 
@@ -204,9 +211,17 @@ export function buildAttributeBody(
 ): Record<string, unknown> {
   validateDateTimeFields(attr);
   validateOptionSetFields(attr);
+  // Both directions, because the pair is the contract: an id without a name is
+  // as wrong as a name without an id, and this function is exported, so the
+  // mismatch can arrive from a caller that never went through the resolver.
   if (attr.global_option_set !== undefined && !globalOptionSetId) {
     throw new Error(
       `global_option_set '${attr.global_option_set}' was not resolved to a MetadataId before building the request body`,
+    );
+  }
+  if (globalOptionSetId && attr.global_option_set === undefined) {
+    throw new Error(
+      "a global OptionSet MetadataId was supplied for an attribute that does not name a global_option_set",
     );
   }
 
