@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   `create_entity` resolves names and builds every attribute body **before** creating the table, so nothing a client-side check can reject — an unknown set name, a Picklist with no values, an impossible DateTime pairing — can leave a half-built table behind; Dataverse offers no transaction to roll one back. A name repeated across attributes costs one lookup, not one per column.
 
+### Changed
+
+- Reworded the tool descriptions for `get_attribute_dependencies`, `delete_attribute`, `update_attribute` and `get_entity_schema`. These are the always-loaded prompt text a model reads to decide whether to call a tool, so they are pruned rather than expanded: return shapes and component-type enumerations that a caller gets for free by calling are gone, each meaning now lives in one tool rather than being restated across several, and the rename/type-change recipe sits in `update_attribute` alone. No behavior change.
+
 ### Notes
 
 Three Web API details established live against a real org, all of which contradict the obvious reading:
