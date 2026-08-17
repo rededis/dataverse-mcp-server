@@ -6,6 +6,7 @@ import {
   fetchChoiceAttributes,
   flattenOption,
   flattenOptionSet,
+  globalOptionSetNotFound,
   OPTION_SET_EXPAND,
   OPTION_SET_IDENTITY_SELECT,
   type RawOptionSet,
@@ -262,9 +263,7 @@ export function registerPicklistTools(
           )) as RawOptionSet;
         } catch (err) {
           if (err instanceof Error && /\b404\b/.test(err.message)) {
-            throw new Error(
-              `Global OptionSet not found: '${params.option_set_name}'`,
-            );
+            throw globalOptionSetNotFound(params.option_set_name);
           }
           throw err;
         }
