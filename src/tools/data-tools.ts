@@ -155,10 +155,12 @@ export function registerDataTools(
         return asJson(entities);
       }
 
-      // Paged like every other full-collection read in this file. A live org
-      // returns all 2078 definitions in one response with no @odata.nextLink, but
-      // the prefix is now applied to whatever comes back, so completeness is
+      // Paged, like the /solutions and /solutioncomponents reads above. A live
+      // org returns all 2078 definitions in one response with no @odata.nextLink,
+      // but the prefix is now applied to whatever comes back, so completeness is
       // load-bearing — worth not resting on an unwritten platform guarantee.
+      // (The attribute reads further down are still unpaged; they are scoped to
+      // one table and predate this.)
       const query = buildODataQuery({ $select: ENTITY_DEFINITION_SELECT });
       return asJson(
         await fetchAllPages<EntityDefinitionRow>(
@@ -273,6 +275,9 @@ export function registerDataTools(
           );
         }
         if (unresolved.length > 0) {
+          // Blank line between the two blocks when both are present, so the
+          // lists do not read as one.
+          if (reasons.length > 0) reasons.push("");
           reasons.push(
             `${unresolved.length} choice column(s) returned no OptionSet:`,
             ...unresolved.map((name) => `  - ${name}`),
