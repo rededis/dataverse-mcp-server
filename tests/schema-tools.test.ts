@@ -252,6 +252,24 @@ describe("buildAttributeBody", () => {
       ).toThrow(/mutually exclusive/);
     });
 
+    it("rejects an empty options array alongside global_option_set", () => {
+      // `options: []` is still the caller asking for a Local OptionSet. Letting it
+      // through would bind silently — "preferring one without saying so", which is
+      // what the mutual-exclusion rule exists to prevent.
+      expect(() =>
+        buildAttributeBody(
+          {
+            logical_name: "contoso_source",
+            type: "Picklist",
+            display_name: "Source",
+            options: [],
+            global_option_set: "contoso_sourceset",
+          },
+          GUID,
+        ),
+      ).toThrow(/mutually exclusive/);
+    });
+
     it("rejects global_option_set on a non-Picklist attribute", () => {
       expect(() =>
         buildAttributeBody(
@@ -384,6 +402,12 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
     expect(lookupUrl).toContain(
       "/GlobalOptionSetDefinitions(Name='fundai_sourceset')",
     );
+    // Query built the same way as everywhere else in the codebase, so the
+    // encoding stays in one place rather than being hand-rolled here
+    const lookupQs = new URLSearchParams(
+      lookupUrl.slice(lookupUrl.indexOf("?") + 1),
+    );
+    expect(lookupQs.get("$select")).toBe("MetadataId");
 
     const [postPath, postBody] = client.post.mock.calls[0];
     expect(postPath).toContain(

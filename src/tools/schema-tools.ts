@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DataverseClient } from "../client.js";
 import { buildODataQuery, escapeODataString } from "./data-tools.js";
-import { resolveGlobalOptionSetId } from "./optionset-utils.js";
+import { globalOptionSetNotFound } from "./optionset-utils.js";
 
 const ATTRIBUTE_ODATA_TYPE_MAP: Record<string, string> = {
   String: "Microsoft.Dynamics.CRM.StringAttributeMetadata",
@@ -124,23 +124,54 @@ interface OptionSetFields {
 // OptionSet alongside a global binding makes Dataverse silently drop the binding
 // and create a local copy instead — verified live. Failing here turns a silently
 // wrong column into an error the caller can act on.
-export function validateOptionSetFields(attr: OptionSetFields): void {
+function validateOptionSetFields(attr: OptionSetFields): void {
   if (attr.global_option_set === undefined) return;
   if (attr.type !== "Picklist") {
     throw new Error(
       `global_option_set applies only to Picklist attributes, got: ${attr.type}`,
     );
   }
-  if (attr.options?.length) {
+  // Presence, not emptiness: `options: []` is still the caller asking for a Local
+  // OptionSet, so pairing it with a binding is the same contradiction as a
+  // populated array. Testing `.length` here would let the empty case through and
+  // silently bind — the exact "prefer one without saying so" behaviour this
+  // rejects.
+  if (attr.options !== undefined) {
     throw new Error(
       "options and global_option_set are mutually exclusive: 'options' creates a Local OptionSet owned by this column, 'global_option_set' binds the column to an existing shared one. Pick one.",
     );
   }
 }
 
+// Resolves a Global OptionSet's name to its MetadataId.
+//
+// Binding a column to a global set requires the GUID specifically. The docs say
+// the alternate key by name — GlobalOptionSetDefinitions(Name='x') — works as a
+// binding target too, but a real org rejects it with HTTP 500 "Guid should
+// contain 32 digits with 4 dashes", so the name has to be resolved first.
+async function resolveGlobalOptionSetId(
+  client: DataverseClient,
+  name: string,
+): Promise<string> {
+  const query = buildODataQuery({ $select: "MetadataId" });
+  let result: { MetadataId?: string };
+  try {
+    result = (await client.get(
+      `/GlobalOptionSetDefinitions(Name='${escapeODataString(name)}')/Microsoft.Dynamics.CRM.OptionSetMetadata${query}`,
+    )) as { MetadataId?: string };
+  } catch (err) {
+    if (err instanceof Error && /\b404\b/.test(err.message)) {
+      throw globalOptionSetNotFound(name);
+    }
+    throw err;
+  }
+  if (!result.MetadataId) throw globalOptionSetNotFound(name);
+  return result.MetadataId;
+}
+
 // Resolves every distinct global set named across a batch of attributes, once
 // each, so create_entity with several columns on the same set costs one lookup.
-async function resolveGlobalOptionSets(
+async function globalOptionSetIdsByName(
   client: DataverseClient,
   attributes: AttributeInput[],
 ): Promise<Map<string, string>> {
@@ -152,11 +183,19 @@ async function resolveGlobalOptionSets(
     ),
   ];
   const ids = await Promise.all(
-    names.map((name) =>
-      resolveGlobalOptionSetId(client, name, escapeODataString),
-    ),
+    names.map((name) => resolveGlobalOptionSetId(client, name)),
   );
   return new Map(names.map((name, i) => [name, ids[i]]));
+}
+
+function buildAttributeBodyBound(
+  attr: AttributeInput,
+  globalIds: Map<string, string>,
+): Record<string, unknown> {
+  return buildAttributeBody(
+    attr,
+    attr.global_option_set ? globalIds.get(attr.global_option_set) : undefined,
+  );
 }
 
 export function buildAttributeBody(
@@ -414,17 +453,10 @@ export function registerSchemaTools(
       // validations — a Picklist with no options, an impossible DateTime pairing —
       // also fail while there is still nothing to leave behind.
       for (const attr of params.attributes ?? []) validateOptionSetFields(attr);
-      const globalIds = await resolveGlobalOptionSets(
-        client,
-        params.attributes ?? [],
-      );
-      const attributeBodies = (params.attributes ?? []).map((attr) =>
-        buildAttributeBody(
-          attr,
-          attr.global_option_set
-            ? globalIds.get(attr.global_option_set)
-            : undefined,
-        ),
+      const attributes = params.attributes ?? [];
+      const globalIds = await globalOptionSetIdsByName(client, attributes);
+      const attributeBodies = attributes.map((attr) =>
+        buildAttributeBodyBound(attr, globalIds),
       );
 
       const body: Record<string, unknown> = {
@@ -537,13 +569,8 @@ export function registerSchemaTools(
       // Validate before the lookup so a mutually-exclusive pair fails without
       // spending a round trip on a name we are going to reject anyway.
       validateOptionSetFields(attribute);
-      const globalIds = await resolveGlobalOptionSets(client, [attribute]);
-      const body = buildAttributeBody(
-        attribute,
-        attribute.global_option_set
-          ? globalIds.get(attribute.global_option_set)
-          : undefined,
-      );
+      const globalIds = await globalOptionSetIdsByName(client, [attribute]);
+      const body = buildAttributeBodyBound(attribute, globalIds);
       const escaped = escapeODataString(entity_logical_name);
       const result = await client.post(
         `/EntityDefinitions(LogicalName='${escaped}')/Attributes`,
