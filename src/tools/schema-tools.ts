@@ -544,7 +544,7 @@ export function registerSchemaTools(
 
   server.tool(
     "update_attribute",
-    "Update metadata of an existing column (display name, description, required level, max length, min/max value, precision). The column's type and logical name CANNOT be changed by Dataverse — for those, create a new column, migrate data, then delete the old one.",
+    "Update metadata of an existing column: display name, description, required level, max length, min/max value, precision. Dataverse fixes a column's type and logical name at creation — to change either, add_attribute a new column, migrate the values with update_record, then delete_attribute the old one.",
     {
       entity_logical_name: z.string().describe("Logical name of the entity"),
       attribute_logical_name: z
@@ -707,7 +707,7 @@ export function registerSchemaTools(
   if (allowDelete) {
     server.tool(
       "delete_attribute",
-      "Permanently delete a column (attribute) from a Dataverse table. ⚠️ WARNING: this PERMANENTLY DESTROYS all data stored in this column across ALL records — there is no soft-delete, no undo, no recovery except from a full environment backup. Before calling this, make the user confirm explicitly and consider: (1) is this a rename? then create the new column, migrate data, and only then delete the old one; (2) type change? same pattern.",
+      "Permanently delete a column (attribute) from a Dataverse table. ⚠️ DESTROYS the data stored in that column across ALL records, recoverable only from a full environment backup. Confirm with the user before calling. To rename a column or change its type, follow the migration recipe in update_attribute instead.",
       {
         entity_logical_name: z.string().describe("Logical name of the entity"),
         attribute_logical_name: z
@@ -762,7 +762,7 @@ export function registerSchemaTools(
 
   server.tool(
     "get_attribute_dependencies",
-    "List CRM components (forms, views, workflows, business rules, calculated columns, plugins, …) that reference a given attribute. Use this when delete_attribute fails with error 0x8004f01f, or proactively before any destructive change. Returns a flat array of { component_type, component_type_name, object_id, name }; name is best-effort (resolved for common types — SystemForm, SavedQuery, Workflow, Report, WebResource, FieldSecurityProfile, AppModule, SDKMessageProcessingStep — null otherwise). Backed by the Dataverse RetrieveDependenciesForDelete function.",
+    "List CRM components that reference a column — forms, views, workflows, business rules, plugins. Call this when delete_attribute fails with 0x8004f01f, or before any destructive change to a column. Component names are best-effort: resolved for common types, null otherwise. Backed by the Dataverse RetrieveDependenciesForDelete function.",
     {
       entity_logical_name: z.string().describe("Logical name of the entity"),
       attribute_logical_name: z.string().describe("Logical name of the column"),
