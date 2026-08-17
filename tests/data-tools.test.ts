@@ -70,7 +70,7 @@ describe("list_solutions", () => {
   });
 });
 
-describe("list_entities solution filter", () => {
+describe("list_entities filters", () => {
   it("applies the prefix client-side when no solution is set", async () => {
     // Metadata entities answer HTTP 501 to `startswith`, so the filter must not
     // reach the server. Asserting on the generated filter string is what let this
@@ -104,7 +104,7 @@ describe("list_entities solution filter", () => {
     ]);
   });
 
-  it("returns every table when no prefix and no solution are set", async () => {
+  it("returns every table when neither filter is set", async () => {
     const server = createMockServer();
     const client = {
       get: vi.fn().mockResolvedValue({
@@ -114,7 +114,39 @@ describe("list_entities solution filter", () => {
     registerDataTools(server as any, client);
 
     const result = await server.tools.get("list_entities")!.handler({});
+    expect(client.get).toHaveBeenCalledTimes(1);
     expect(JSON.parse(result.content[0].text)).toHaveLength(2);
+  });
+
+  it("follows @odata.nextLink when the unfiltered read is paginated", async () => {
+    // The prefix is applied to whatever comes back, so a dropped page would
+    // silently shrink the result rather than fail.
+    const server = createMockServer();
+    const nextLink =
+      "https://org.crm.dynamics.com/api/data/v9.2/EntityDefinitions?$skiptoken=page2";
+    const client = {
+      get: vi
+        .fn()
+        .mockResolvedValueOnce({
+          value: [{ LogicalName: "contoso_a" }],
+          "@odata.nextLink": nextLink,
+        })
+        .mockResolvedValueOnce({
+          value: [{ LogicalName: "contoso_b" }, { LogicalName: "account" }],
+        }),
+    } as any;
+    registerDataTools(server as any, client, "contoso_");
+
+    const result = await server.tools.get("list_entities")!.handler({});
+    expect(client.get).toHaveBeenCalledTimes(2);
+    expect(client.get.mock.calls[1][0]).toBe(nextLink);
+
+    // A table on page 2 must survive the prefix filter
+    expect(
+      JSON.parse(result.content[0].text).map(
+        (e: { LogicalName: string }) => e.LogicalName,
+      ),
+    ).toEqual(["contoso_a", "contoso_b"]);
   });
 
   it("resolves solution to entity MetadataIds and filters", async () => {

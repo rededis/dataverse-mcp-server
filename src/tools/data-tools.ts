@@ -26,6 +26,13 @@ export function buildODataQuery(
 
 const METADATA_ID_CHUNK_SIZE = 50;
 
+const ENTITY_DEFINITION_SELECT =
+  "LogicalName,DisplayName,EntitySetName,Description,IsCustomEntity";
+
+interface EntityDefinitionRow {
+  LogicalName?: string;
+}
+
 async function fetchAllPages<T>(
   client: DataverseClient,
   path: string,
@@ -104,13 +111,22 @@ export function registerDataTools(
 
       // Prefix filtering happens client-side on every path. Metadata entities do
       // not support `startswith` at all — sending it returns HTTP 501
-      // "The startswith function isn't supported for Metadata Entities", not only
-      // when combined with `or` as previously believed. One rule for both
-      // branches, so they cannot disagree about where the prefix is applied.
-      const byPrefix = (entities: Array<{ LogicalName?: string }>) =>
+      // `0x8006088a: The "startswith" function isn't supported for Metadata
+      // Entities`, not only when combined with `or` as previously believed. One
+      // rule for both branches, so they cannot disagree about where it applies.
+      const filterByPrefix = (entities: EntityDefinitionRow[]) =>
         effectivePrefix
           ? entities.filter((e) => e.LogicalName?.startsWith(effectivePrefix))
           : entities;
+
+      const asJson = (entities: EntityDefinitionRow[]) => ({
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify(filterByPrefix(entities), null, 2),
+          },
+        ],
+      });
 
       if (effectiveSolution) {
         const entityIds = await getEntityIdsInSolution(
@@ -122,44 +138,34 @@ export function registerDataTools(
             content: [{ type: "text" as const, text: "[]" }],
           };
         }
-        const entities: Array<{ LogicalName?: string }> = [];
+        const entities: EntityDefinitionRow[] = [];
         for (let i = 0; i < entityIds.length; i += METADATA_ID_CHUNK_SIZE) {
           const chunk = entityIds.slice(i, i + METADATA_ID_CHUNK_SIZE);
           const query = buildODataQuery({
-            $select:
-              "LogicalName,DisplayName,EntitySetName,Description,IsCustomEntity",
+            $select: ENTITY_DEFINITION_SELECT,
             $filter: `(${chunk.map((id) => `MetadataId eq ${id}`).join(" or ")})`,
           });
-          const result = (await client.get(`/EntityDefinitions${query}`)) as {
-            value: Array<{ LogicalName?: string }>;
-          };
-          entities.push(...result.value);
+          entities.push(
+            ...(await fetchAllPages<EntityDefinitionRow>(
+              client,
+              `/EntityDefinitions${query}`,
+            )),
+          );
         }
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(byPrefix(entities), null, 2),
-            },
-          ],
-        };
+        return asJson(entities);
       }
 
-      const query = buildODataQuery({
-        $select:
-          "LogicalName,DisplayName,EntitySetName,Description,IsCustomEntity",
-      });
-      const result = (await client.get(`/EntityDefinitions${query}`)) as {
-        value: Array<{ LogicalName?: string }>;
-      };
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(byPrefix(result.value), null, 2),
-          },
-        ],
-      };
+      // Paged like every other full-collection read in this file. A live org
+      // returns all 2078 definitions in one response with no @odata.nextLink, but
+      // the prefix is now applied to whatever comes back, so completeness is
+      // load-bearing — worth not resting on an unwritten platform guarantee.
+      const query = buildODataQuery({ $select: ENTITY_DEFINITION_SELECT });
+      return asJson(
+        await fetchAllPages<EntityDefinitionRow>(
+          client,
+          `/EntityDefinitions${query}`,
+        ),
+      );
     },
   );
 
