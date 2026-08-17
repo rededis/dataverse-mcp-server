@@ -71,18 +71,50 @@ describe("list_solutions", () => {
 });
 
 describe("list_entities solution filter", () => {
-  it("uses prefix only when no solution is set", async () => {
+  it("applies the prefix client-side when no solution is set", async () => {
+    // Metadata entities answer HTTP 501 to `startswith`, so the filter must not
+    // reach the server. Asserting on the generated filter string is what let this
+    // ship broken: the assertion agreed with the code and neither agreed with
+    // Dataverse.
     const server = createMockServer();
     const client = {
-      get: vi.fn().mockResolvedValue({ value: [{ LogicalName: "contoso_x" }] }),
+      get: vi.fn().mockResolvedValue({
+        value: [
+          { LogicalName: "contoso_x" },
+          { LogicalName: "account" },
+          { LogicalName: "contoso_y" },
+        ],
+      }),
     } as any;
     registerDataTools(server as any, client, "contoso_");
 
-    await server.tools.get("list_entities")!.handler({});
+    const result = await server.tools.get("list_entities")!.handler({});
     expect(client.get).toHaveBeenCalledTimes(1);
+
     const url = client.get.mock.calls[0][0] as string;
+    expect(url).not.toContain("startswith");
     const qs = new URLSearchParams(url.slice(url.indexOf("?") + 1));
-    expect(qs.get("$filter")).toBe("startswith(LogicalName,'contoso_')");
+    expect(qs.get("$filter")).toBeNull();
+
+    // The prefix is honoured — just on the rows that came back
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.map((e: { LogicalName: string }) => e.LogicalName)).toEqual([
+      "contoso_x",
+      "contoso_y",
+    ]);
+  });
+
+  it("returns every table when no prefix and no solution are set", async () => {
+    const server = createMockServer();
+    const client = {
+      get: vi.fn().mockResolvedValue({
+        value: [{ LogicalName: "account" }, { LogicalName: "contoso_x" }],
+      }),
+    } as any;
+    registerDataTools(server as any, client);
+
+    const result = await server.tools.get("list_entities")!.handler({});
+    expect(JSON.parse(result.content[0].text)).toHaveLength(2);
   });
 
   it("resolves solution to entity MetadataIds and filters", async () => {
@@ -553,6 +585,28 @@ describe("get_entity_schema", () => {
     expect(result.content[1].text).toContain("INCOMPLETE");
     expect(result.content[1].text).toContain("StateAttributeMetadata");
     expect(result.content[1].text).toContain("503");
+  });
+
+  it("reports a choice column that came back without an OptionSet", async () => {
+    // Dropping it would leave the column with no option_set at all, which reads
+    // as "not a choice column" — an answer, and the wrong one.
+    const server = createMockServer();
+    const client = schemaClient([PICKLIST_ATTR], {
+      PicklistAttributeMetadata: [{ LogicalName: "fundai_source" }],
+    });
+    registerDataTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_entity_schema")!
+      .handler({ entity_logical_name: "opportunity" });
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed[0]).not.toHaveProperty("option_set");
+
+    expect(result.content).toHaveLength(2);
+    expect(result.content[1].text).toContain("INCOMPLETE");
+    expect(result.content[1].text).toContain("returned no OptionSet");
+    expect(result.content[1].text).toContain("fundai_source");
   });
 
   it("emits no warning block when every cast succeeds", async () => {

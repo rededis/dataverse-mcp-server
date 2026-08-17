@@ -102,7 +102,15 @@ export function registerDataTools(
       const effectiveSolution =
         solution === undefined ? defaultSolution : solution || undefined;
 
-      const filterParts: string[] = [];
+      // Prefix filtering happens client-side on every path. Metadata entities do
+      // not support `startswith` at all — sending it returns HTTP 501
+      // "The startswith function isn't supported for Metadata Entities", not only
+      // when combined with `or` as previously believed. One rule for both
+      // branches, so they cannot disagree about where the prefix is applied.
+      const byPrefix = (entities: Array<{ LogicalName?: string }>) =>
+        effectivePrefix
+          ? entities.filter((e) => e.LogicalName?.startsWith(effectivePrefix))
+          : entities;
 
       if (effectiveSolution) {
         const entityIds = await getEntityIdsInSolution(
@@ -114,8 +122,6 @@ export function registerDataTools(
             content: [{ type: "text" as const, text: "[]" }],
           };
         }
-        // Dataverse Metadata entities reject `startswith` combined with `or`,
-        // so prefix is applied client-side when a solution filter is active.
         const entities: Array<{ LogicalName?: string }> = [];
         for (let i = 0; i < entityIds.length; i += METADATA_ID_CHUNK_SIZE) {
           const chunk = entityIds.slice(i, i + METADATA_ID_CHUNK_SIZE);
@@ -129,37 +135,28 @@ export function registerDataTools(
           };
           entities.push(...result.value);
         }
-        const filtered = effectivePrefix
-          ? entities.filter((e) => e.LogicalName?.startsWith(effectivePrefix))
-          : entities;
         return {
           content: [
-            { type: "text" as const, text: JSON.stringify(filtered, null, 2) },
+            {
+              type: "text" as const,
+              text: JSON.stringify(byPrefix(entities), null, 2),
+            },
           ],
         };
       }
 
-      if (effectivePrefix) {
-        filterParts.push(
-          `startswith(LogicalName,'${escapeODataString(effectivePrefix)}')`,
-        );
-      }
-      const params: Record<string, string | undefined> = {
+      const query = buildODataQuery({
         $select:
           "LogicalName,DisplayName,EntitySetName,Description,IsCustomEntity",
-      };
-      if (filterParts.length > 0) {
-        params.$filter = filterParts.join(" and ");
-      }
-      const query = buildODataQuery(params);
+      });
       const result = (await client.get(`/EntityDefinitions${query}`)) as {
-        value: unknown[];
+        value: Array<{ LogicalName?: string }>;
       };
       return {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(result.value, null, 2),
+            text: JSON.stringify(byPrefix(result.value), null, 2),
           },
         ],
       };
@@ -237,9 +234,16 @@ export function registerDataTools(
       ]);
 
       const summaries = new Map<string, OptionSetSummary>();
+      // A row that matched a choice cast but came back without its OptionSet is
+      // reported, not skipped. Skipping would leave the column with no
+      // option_set at all — indistinguishable from a non-choice column, which is
+      // an answer, and the wrong one.
+      const unresolved: string[] = [];
       for (const attr of choice.rows) {
         if (attr.OptionSet) {
           summaries.set(attr.LogicalName, summarizeOptionSet(attr.OptionSet));
+        } else {
+          unresolved.push(attr.LogicalName);
         }
       }
       // Options are fetched but deliberately not returned: a table like account has
@@ -254,17 +258,30 @@ export function registerDataTools(
       const content = [
         { type: "text" as const, text: JSON.stringify(attributes, null, 2) },
       ];
-      if (choice.failed.length > 0) {
+      if (choice.failed.length > 0 || unresolved.length > 0) {
+        const reasons: string[] = [];
+        if (choice.failed.length > 0) {
+          reasons.push(
+            `${choice.failed.length} of ${CHOICE_ATTRIBUTE_CASTS.length} choice-column lookups failed:`,
+            ...choice.failed.map((f) => `  - ${f.cast}: ${f.message}`),
+          );
+        }
+        if (unresolved.length > 0) {
+          reasons.push(
+            `${unresolved.length} choice column(s) returned no OptionSet:`,
+            ...unresolved.map((name) => `  - ${name}`),
+          );
+        }
         content.push({
           type: "text" as const,
           text: [
             "[IMPORTANT: Display this entire message to the user exactly as-is.]",
             "",
-            `⚠️ OptionSet data for ${entity_logical_name} is INCOMPLETE — ${choice.failed.length} of ${CHOICE_ATTRIBUTE_CASTS.length} choice-column lookups failed.`,
+            `⚠️ OptionSet data for ${entity_logical_name} is INCOMPLETE.`,
             "",
-            "Columns of the affected kinds are missing their option_set summary. Do NOT read a missing option_set as 'this column has no options' — for those columns the answer is unknown, not negative.",
+            ...reasons,
             "",
-            ...choice.failed.map((f) => `  - ${f.cast}: ${f.message}`),
+            "The affected columns carry no option_set summary. Do NOT read a missing option_set as 'this column has no options' — for those columns the answer is unknown, not negative.",
             "",
             "Re-run get_entity_schema to retry, or read a specific column with get_picklist_options.",
           ].join("\n"),

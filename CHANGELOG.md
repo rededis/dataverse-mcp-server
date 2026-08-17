@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-17
+
+### Fixed
+
+- `list_entities` no longer fails with HTTP 501 when a prefix filter is used without a solution filter (closes #66) — the `DATAVERSE_ENTITY_PREFIX`-only setup that `.env.example` documents. Metadata entities reject `startswith` outright (`0x8006088a: The "startswith" function isn't supported for Metadata Entities`), not merely in combination with `or` as the code assumed, so the prefix is now applied client-side on every path rather than on one of the two.
+
+  Cost of the fix, stated plainly: a prefixed call now fetches all table definitions and filters them here. Against a real org that is ~2.1 MB transferred to return 23 rows. Dataverse offers no server-side prefix match on metadata, and the solution-filtered path already worked this way; what is returned to the caller is unchanged.
+
+  The test that should have caught this asserted the generated `$filter` string against a mocked client, so it agreed with the code while neither agreed with Dataverse. It now asserts that no `startswith` reaches the server and that the prefix is honoured on the returned rows.
+
+- `get_entity_schema` reports a choice column whose `OptionSet` did not come back, instead of silently omitting its `option_set`. An omitted summary is indistinguishable from a non-choice column — an answer, and the wrong one. Such columns now appear in the same warning block as a failed cast lookup.
+
 ## [0.7.0] - 2026-08-17
 
 ### Added
@@ -192,7 +204,8 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.4.0...v0.5.0
