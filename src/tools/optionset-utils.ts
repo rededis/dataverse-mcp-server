@@ -90,6 +90,10 @@ export function summarizeOptionSet(os: RawOptionSet): OptionSetSummary {
   return { ...flattenOptionSet(os), option_count: os.Options?.length ?? 0 };
 }
 
+export function globalOptionSetNotFound(name: string): Error {
+  return new Error(`Global OptionSet not found: '${name}'`);
+}
+
 export interface ChoiceAttributeRow {
   LogicalName: string;
   OptionSet?: RawOptionSet;

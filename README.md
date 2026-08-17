@@ -29,7 +29,7 @@ MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-de
 | Tool | Description |
 |------|-------------|
 | `create_entity` | Create a new table with attributes |
-| `add_attribute` | Add a column to an existing table |
+| `add_attribute` | Add a column to an existing table (Choice columns can bind to a Global OptionSet) |
 | `update_attribute` | Update column metadata (display name, required level, bounds, …) |
 | `delete_attribute` | Delete a column (disabled by default, see [Safety](#safety)) |
 | `get_attribute_dependencies` | List CRM components (forms, views, workflows, …) that reference a column — use after `delete_attribute` fails with 0x8004f01f |
@@ -39,6 +39,26 @@ MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-de
 | `delete_entity_key` | Delete an alternate key and its supporting unique index (disabled by default, see [Safety](#safety)) |
 
 > Dataverse does **not** allow changing a column's logical name or type. To "rename" or change type: create a new column, migrate data via `update_record`, then `delete_attribute` on the old one.
+
+#### Choice columns: local values or a shared Global OptionSet
+
+A `Picklist` attribute takes exactly one of two fields. `options` defines the values inline and produces a **Local** OptionSet owned by that single column:
+
+```jsonc
+{ "logical_name": "contoso_source", "type": "Picklist", "display_name": "Source",
+  "options": [ { "label": "Website", "value": 909890000 } ] }
+```
+
+`global_option_set` instead binds the column to an existing **Global** OptionSet by name, so several columns across several tables share one list and cannot drift apart:
+
+```jsonc
+{ "logical_name": "contoso_source", "type": "Picklist", "display_name": "Source",
+  "global_option_set": "contoso_sourceset" }
+```
+
+Supplying both is rejected. That check is not cosmetic: Dataverse itself accepts the pair and then silently ignores the binding, leaving a local copy that looks bound. An unknown set name fails as `Global OptionSet not found: '<name>'` before anything is created — including in `create_entity`, which resolves names and validates every attribute before the table exists, so a rejected column cannot leave a half-built table behind.
+
+Verify the result with `get_picklist_options`: a bound column reports `is_global: true` and the global set's own `metadata_id`.
 
 ### Picklist option management
 | Tool | Description |

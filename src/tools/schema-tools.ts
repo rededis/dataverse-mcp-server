@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DataverseClient } from "../client.js";
 import { buildODataQuery, escapeODataString } from "./data-tools.js";
+import { globalOptionSetNotFound } from "./optionset-utils.js";
 
 const ATTRIBUTE_ODATA_TYPE_MAP: Record<string, string> = {
   String: "Microsoft.Dynamics.CRM.StringAttributeMetadata",
@@ -64,7 +65,14 @@ const AttributeSchema = z.object({
     .array(z.object({ label: z.string(), value: z.number() }))
     .optional()
     .describe(
-      "Options for Boolean (2 items: false=0, true=1) or Picklist types",
+      "Options for Boolean (2 items: false=0, true=1) or Picklist types. Creates a Local OptionSet owned by this one column; mutually exclusive with global_option_set.",
+    ),
+  global_option_set: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Picklist only: bind the column to an existing Global OptionSet by its set name (e.g. 'contoso_sourceset') so the column shares one org-wide list instead of a private copy. Mutually exclusive with options.",
     ),
   date_format: z
     .enum(["DateOnly", "DateAndTime"])
@@ -107,10 +115,115 @@ function validateDateTimeFields(attr: DateTimeFields): void {
   }
 }
 
+interface OptionSetFields {
+  type?: string;
+  options?: unknown[];
+  global_option_set?: string;
+}
+
+// Rejecting the both-supplied case is not defensive tidiness: sending an inline
+// OptionSet alongside a global binding makes Dataverse silently drop the binding
+// and create a local copy instead — verified live. Failing here turns a silently
+// wrong column into an error the caller can act on.
+function validateOptionSetFields(attr: OptionSetFields): void {
+  if (attr.global_option_set === undefined) return;
+  if (attr.type !== "Picklist") {
+    throw new Error(
+      `global_option_set applies only to Picklist attributes, got: ${attr.type}`,
+    );
+  }
+  // Presence, not emptiness: `options: []` is still the caller asking for a Local
+  // OptionSet, so pairing it with a binding is the same contradiction as a
+  // populated array. Testing `.length` here would let the empty case through and
+  // silently bind — the exact "prefer one without saying so" behaviour this
+  // rejects.
+  if (attr.options !== undefined) {
+    throw new Error(
+      "options and global_option_set are mutually exclusive: 'options' creates a Local OptionSet owned by this column, 'global_option_set' binds the column to an existing shared one. Pick one.",
+    );
+  }
+}
+
+// Resolves a Global OptionSet's name to its MetadataId.
+//
+// Binding a column to a global set requires the GUID specifically. The docs say
+// the alternate key by name — GlobalOptionSetDefinitions(Name='x') — works as a
+// binding target too, but a real org rejects it with HTTP 500 "Guid should
+// contain 32 digits with 4 dashes", so the name has to be resolved first.
+async function resolveGlobalOptionSetId(
+  client: DataverseClient,
+  name: string,
+): Promise<string> {
+  const query = buildODataQuery({ $select: "MetadataId" });
+  let result: { MetadataId?: string };
+  try {
+    result = (await client.get(
+      `/GlobalOptionSetDefinitions(Name='${escapeODataString(name)}')/Microsoft.Dynamics.CRM.OptionSetMetadata${query}`,
+    )) as { MetadataId?: string };
+  } catch (err) {
+    if (err instanceof Error && /\b404\b/.test(err.message)) {
+      throw globalOptionSetNotFound(name);
+    }
+    throw err;
+  }
+  if (!result.MetadataId) throw globalOptionSetNotFound(name);
+  return result.MetadataId;
+}
+
+// Resolves every distinct global set named across a batch of attributes, once
+// each, so create_entity with several columns on the same set costs one lookup.
+async function globalOptionSetIdsByName(
+  client: DataverseClient,
+  attributes: AttributeInput[],
+): Promise<Map<string, string>> {
+  const names = [
+    ...new Set(
+      attributes
+        .map((a) => a.global_option_set)
+        .filter((n): n is string => n !== undefined),
+    ),
+  ];
+  const ids = await Promise.all(
+    names.map((name) => resolveGlobalOptionSetId(client, name)),
+  );
+  return new Map(names.map((name, i) => [name, ids[i]]));
+}
+
+function buildAttributeBodyBound(
+  attr: AttributeInput,
+  globalIds: Map<string, string>,
+): Record<string, unknown> {
+  // Tested for presence, matching validateOptionSetFields and the resolver's own
+  // filter. A truthy test would disagree with both about the empty string, and
+  // three checks that classify the same value differently is how a value ends up
+  // taking a path nobody meant it to.
+  return buildAttributeBody(
+    attr,
+    attr.global_option_set !== undefined
+      ? globalIds.get(attr.global_option_set)
+      : undefined,
+  );
+}
+
 export function buildAttributeBody(
   attr: AttributeInput,
+  globalOptionSetId?: string,
 ): Record<string, unknown> {
   validateDateTimeFields(attr);
+  validateOptionSetFields(attr);
+  // Both directions, because the pair is the contract: an id without a name is
+  // as wrong as a name without an id, and this function is exported, so the
+  // mismatch can arrive from a caller that never went through the resolver.
+  if (attr.global_option_set !== undefined && !globalOptionSetId) {
+    throw new Error(
+      `global_option_set '${attr.global_option_set}' was not resolved to a MetadataId before building the request body`,
+    );
+  }
+  if (globalOptionSetId && attr.global_option_set === undefined) {
+    throw new Error(
+      "a global OptionSet MetadataId was supplied for an attribute that does not name a global_option_set",
+    );
+  }
 
   const body: Record<string, unknown> = {
     "@odata.type": ATTRIBUTE_ODATA_TYPE_MAP[attr.type],
@@ -158,19 +271,28 @@ export function buildAttributeBody(
   }
 
   if (attr.type === "Picklist") {
-    if (!attr.options?.length) {
-      throw new Error(
-        "Picklist attributes require a non-empty 'options' array.",
-      );
+    if (globalOptionSetId) {
+      // A global set is attached through the GlobalOptionSet navigation property,
+      // never as an inline OptionSet: Dataverse rejects an inline one carrying
+      // IsGlobal true with "Only Local option set can be created through the
+      // attribute create". The binding takes the MetadataId, not the name.
+      body["GlobalOptionSet@odata.bind"] =
+        `/GlobalOptionSetDefinitions(${globalOptionSetId})`;
+    } else {
+      if (!attr.options?.length) {
+        throw new Error(
+          "Picklist attributes require either a non-empty 'options' array (Local OptionSet) or 'global_option_set' (bind to an existing Global OptionSet).",
+        );
+      }
+      body.OptionSet = {
+        "@odata.type": "Microsoft.Dynamics.CRM.OptionSetMetadata",
+        IsGlobal: false,
+        Options: attr.options.map((opt) => ({
+          Value: opt.value,
+          Label: buildLabel(opt.label),
+        })),
+      };
     }
-    body.OptionSet = {
-      "@odata.type": "Microsoft.Dynamics.CRM.OptionSetMetadata",
-      IsGlobal: false,
-      Options: attr.options.map((opt) => ({
-        Value: opt.value,
-        Label: buildLabel(opt.label),
-      })),
-    };
   }
 
   return body;
@@ -336,6 +458,22 @@ export function registerSchemaTools(
       const prefix = params.logical_name.slice(0, separatorIndex);
       const primaryAttrName = params.primary_attribute_name || `${prefix}_name`;
 
+      // Everything that can reject an attribute runs before the table is created,
+      // because Dataverse has no transaction: a failure once the table exists
+      // leaves an orphaned table behind that nothing rolls back.
+      //
+      // Order matters twice over. The mutual-exclusion check comes first so an
+      // already-doomed request never spends a lookup. The bodies are then built
+      // up front rather than inside the loop below, so the remaining client-side
+      // validations — a Picklist with no options, an impossible DateTime pairing —
+      // also fail while there is still nothing to leave behind.
+      for (const attr of params.attributes ?? []) validateOptionSetFields(attr);
+      const attributes = params.attributes ?? [];
+      const globalIds = await globalOptionSetIdsByName(client, attributes);
+      const attributeBodies = attributes.map((attr) =>
+        buildAttributeBodyBound(attr, globalIds),
+      );
+
       const body: Record<string, unknown> = {
         "@odata.type": "Microsoft.Dynamics.CRM.EntityMetadata",
         LogicalName: params.logical_name,
@@ -419,8 +557,7 @@ export function registerSchemaTools(
           );
         }
 
-        for (const attr of params.attributes) {
-          const attrBody = buildAttributeBody(attr);
+        for (const attrBody of attributeBodies) {
           await client.post(
             `/EntityDefinitions(${entityId})/Attributes`,
             attrBody,
@@ -444,7 +581,11 @@ export function registerSchemaTools(
       attribute: AttributeSchema,
     },
     async ({ entity_logical_name, attribute }) => {
-      const body = buildAttributeBody(attribute);
+      // Validate before the lookup so a mutually-exclusive pair fails without
+      // spending a round trip on a name we are going to reject anyway.
+      validateOptionSetFields(attribute);
+      const globalIds = await globalOptionSetIdsByName(client, [attribute]);
+      const body = buildAttributeBodyBound(attribute, globalIds);
       const escaped = escapeODataString(entity_logical_name);
       const result = await client.post(
         `/EntityDefinitions(LogicalName='${escaped}')/Attributes`,
@@ -652,6 +793,14 @@ export function registerSchemaTools(
       // through PUT, which REPLACES the full resource. To avoid resetting
       // untouched fields to defaults, fetch current metadata (with the type
       // cast) and merge the user-supplied changes on top.
+      //
+      // A Picklist bound to a Global OptionSet survives this untouched, despite
+      // the obvious worry: OptionSet and GlobalOptionSet are navigation
+      // properties, so the cast GET returns neither and the merged PUT body
+      // carries no option set at all. Verified live — renaming a bound column
+      // leaves it reporting is_global true against the same MetadataId, so
+      // Dataverse keeps the association rather than replacing it with a local
+      // copy. Do not "fix" this by re-sending the binding.
       const current = (await client.get(getPath)) as Record<string, unknown>;
       const merged: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(current)) {

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-17
+
+### Added
+
+- `add_attribute` and `create_entity` accept `global_option_set` on a `Picklist` attribute, binding the column to an existing Global OptionSet by name instead of creating a private copy of the values (closes #60). Mutually exclusive with `options`; an unknown name fails as `Global OptionSet not found: '<name>'`.
+
+  Global OptionSets exist so one choice list can be shared across columns and tables. Previously the only ways to get a shared list were to accept a local copy that silently drifts the first time anyone edits one of them, or to create the column by hand in the maker portal — which breaks an otherwise scripted schema workflow.
+
+  `create_entity` resolves names and builds every attribute body **before** creating the table, so nothing a client-side check can reject — an unknown set name, a Picklist with no values, an impossible DateTime pairing — can leave a half-built table behind; Dataverse offers no transaction to roll one back. A name repeated across attributes costs one lookup, not one per column.
+
+### Notes
+
+Three Web API details established live against a real org, all of which contradict the obvious reading:
+
+- The binding goes through the `GlobalOptionSet` **navigation property**, not an inline `OptionSet`. Sending an inline one with `IsGlobal: true` is rejected: `0x80048403 — Only Local option set can be created through the attribute create. IsGlobal flag must be set to 'false'.`
+- The binding target must be the **MetadataId**. Microsoft's documentation states the alternate key by name — `GlobalOptionSetDefinitions(Name='...')` — works there too, but a real org answers `HTTP 500: Guid should contain 32 digits with 4 dashes`. Hence the name is resolved to a GUID first.
+- Sending an inline `OptionSet` **and** a binding together is not an error. Dataverse silently drops the binding and creates a local copy, which is why the pair is rejected client-side rather than left to the platform.
+
 ## [0.6.0] - 2026-08-17
 
 ### Changed
@@ -170,7 +188,8 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.3.1...v0.4.0
