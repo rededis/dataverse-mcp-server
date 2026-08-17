@@ -2,7 +2,12 @@
   "mcpServers": {
     "dataverse": {
       "command": "node",
-      "args": ["./dist/index.js"]
+      "args": [
+        "./dist/index.js"
+      ]
     }
+  },
+  "enabledPlugins": {
+    "mcp-server-dev@claude-plugins-official": true
   }
 }

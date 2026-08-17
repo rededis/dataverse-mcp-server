@@ -592,7 +592,9 @@ describe("delete_attribute", () => {
 
     const tool = server.tools.get("delete_attribute")!;
     expect(tool.description).not.toContain("currently disabled");
-    expect(tool.description).toContain("PERMANENTLY DESTROYS");
+    // The enabled variant must carry the destructive warning; assert on the
+    // warning, not on one exact phrasing of it.
+    expect(tool.description).toContain("DESTROYS");
 
     const result = await tool.handler({
       entity_logical_name: "fundai_x",

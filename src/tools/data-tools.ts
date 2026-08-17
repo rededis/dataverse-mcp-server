@@ -202,7 +202,7 @@ export function registerDataTools(
 
   server.tool(
     "get_entity_schema",
-    "Get attributes (columns) of a specific Dataverse table. Choice-style columns (Choice, Status, State, MultiSelect) additionally carry an option_set summary { name, is_global, metadata_id, option_count } — is_global tells whether the column is bound to a shared Global OptionSet or holds a local copy. The option values themselves are not included; read them per column with get_picklist_options.",
+    "Get attributes (columns) of a specific Dataverse table. Choice-style columns (Choice, Status, State, MultiSelect) carry an option_set summary with is_global and option_count, so one dump shows which choice lists are shared org-wide. Read the option values per column with get_picklist_options.",
     {
       entity_logical_name: z
         .string()
@@ -418,7 +418,7 @@ export function registerDataTools(
   } else {
     server.tool(
       "delete_record",
-      "Delete a record from a Dataverse table (currently disabled)",
+      "Delete a record from a Dataverse table (currently disabled for safety)",
       {
         entity_set: z.string().describe("Entity set name"),
         id: z.string().describe("Record GUID"),
