@@ -16,7 +16,7 @@ MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-de
 |------|-------------|
 | `list_entities` | List Dataverse tables with optional prefix and solution filters |
 | `list_solutions` | List Dataverse solutions (use `uniquename` to filter `list_entities`) |
-| `get_entity_schema` | Get attributes of a specific table |
+| `get_entity_schema` | Get attributes of a specific table — choice columns carry an `option_set` summary |
 | `query_records` | Query records with OData $filter, $select, $top, $orderby, $expand |
 | `get_record` | Get a single record by ID |
 | `create_record` | Create a record |
@@ -43,12 +43,41 @@ MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-de
 ### Picklist option management
 | Tool | Description |
 |------|-------------|
-| `get_picklist_options` | Read options of a Local or Global OptionSet as `[{ value, label }]` |
+| `get_picklist_options` | Read a Local or Global OptionSet — its identity plus `[{ value, label }]` |
 | `add_picklist_option` | Add an option to an existing OptionSet (`InsertOptionValue`) |
 | `update_picklist_option` | Rename an option on an OptionSet (`UpdateOptionValue`) |
 | `delete_picklist_option` | Remove an option from an OptionSet (`DeleteOptionValue`) |
 
-Picklist tools accept either `entity_logical_name` + `attribute_logical_name` (Local OptionSet) or `option_set_name` (Global OptionSet) — the two modes are mutually exclusive. Write operations require Customizer or System Administrator role on the connected service principal. Deleting an option does **not** update existing records that hold its numeric value — they are left with an orphan integer.
+Picklist tools accept either `entity_logical_name` + `attribute_logical_name` (a column) or `option_set_name` (a Global OptionSet) — the two modes are mutually exclusive. Write operations require Customizer or System Administrator role on the connected service principal. Deleting an option does **not** update existing records that hold its numeric value — they are left with an orphan integer.
+
+#### Telling a Global OptionSet from a local copy
+
+`get_picklist_options` returns the set's identity alongside its options:
+
+```jsonc
+{
+  "option_set": {
+    "name": "fundai_source",
+    "is_global": true,                                   // bound to a shared Global OptionSet
+    "metadata_id": "ea6ab542-9c2e-f111-88b3-00224805d253"
+  },
+  "options": [ { "value": 909890000, "label": "Website" }, /* … */ ]
+}
+```
+
+`is_global` is the answer to "does this column reuse an org-wide list, or does it own a private copy?" — matching values prove nothing on their own, and a column with a local set reports an auto-generated name like `opportunity_prioritycode` with `is_global: false`. To confirm *which* global set a column is bound to, compare its `metadata_id` against the one returned by `get_picklist_options { option_set_name: … }`.
+
+The lookup covers Choice, Status, State and MultiSelect columns, so `statecode` / `statuscode` can be read the same way as a custom choice column.
+
+`get_entity_schema` reports the same identity per column as a compact `option_set` summary with an `option_count` instead of the values themselves — read the values for a single column with `get_picklist_options`:
+
+```jsonc
+{
+  "LogicalName": "fundai_source",
+  "AttributeType": "Picklist",
+  "option_set": { "name": "fundai_source", "is_global": true, "metadata_id": "ea6ab542-…", "option_count": 6 }
+}
+```
 
 ### Actions & functions
 | Tool | Description |

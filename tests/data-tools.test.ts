@@ -300,6 +300,307 @@ describe("list_entities solution filter", () => {
   });
 });
 
+describe("get_entity_schema", () => {
+  // Choice rows are keyed by the cast that should return them, mirroring how
+  // Dataverse answers: a cast that does not match yields an empty collection.
+  function schemaClient(
+    base: Array<Record<string, unknown>>,
+    byCast: Record<string, Array<Record<string, unknown>>> = {},
+  ) {
+    return {
+      get: vi.fn(async (url: string) => {
+        const cast = url.match(/Microsoft\.Dynamics\.CRM\.(\w+)/)?.[1];
+        if (!cast) return { value: base };
+        return { value: byCast[cast] ?? [] };
+      }),
+    } as any;
+  }
+
+  const STRING_ATTR = {
+    LogicalName: "name",
+    AttributeType: "String",
+    IsCustomAttribute: false,
+  };
+  const PICKLIST_ATTR = {
+    LogicalName: "fundai_source",
+    AttributeType: "Picklist",
+    IsCustomAttribute: true,
+  };
+
+  it("issues the base request plus one cast request per concrete choice type", async () => {
+    const server = createMockServer();
+    const client = schemaClient([STRING_ATTR]);
+    registerDataTools(server as any, client);
+
+    await server.tools
+      .get("get_entity_schema")!
+      .handler({ entity_logical_name: "opportunity" });
+
+    const urls = client.get.mock.calls.map((c: unknown[]) => c[0] as string);
+    const baseUrl = urls.find(
+      (u) => !u.includes("Microsoft.Dynamics.CRM."),
+    ) as string;
+    const castUrls = urls.filter((u) => u.includes("Microsoft.Dynamics.CRM."));
+
+    expect(baseUrl).toContain(
+      "/EntityDefinitions(LogicalName='opportunity')/Attributes?",
+    );
+    // The abstract EnumAttributeMetadata cast is rejected by Dataverse with a 500,
+    // so each concrete choice type must be requested on its own.
+    expect(castUrls.map((u) => u.match(/CRM\.(\w+)/)![1]).sort()).toEqual([
+      "MultiSelectPicklistAttributeMetadata",
+      "PicklistAttributeMetadata",
+      "StateAttributeMetadata",
+      "StatusAttributeMetadata",
+    ]);
+    expect(urls.some((u) => u.includes("EnumAttributeMetadata"))).toBe(false);
+
+    const qs = new URLSearchParams(
+      castUrls[0].slice(castUrls[0].indexOf("?") + 1),
+    );
+    expect(qs.get("$select")).toBe("LogicalName");
+    expect(qs.get("$expand")).toBe(
+      "OptionSet($select=Name,IsGlobal,MetadataId,Options)",
+    );
+  });
+
+  it("attaches an option_set summary to a globally-bound choice column", async () => {
+    const server = createMockServer();
+    const client = schemaClient([PICKLIST_ATTR], {
+      PicklistAttributeMetadata: [
+        {
+          LogicalName: "fundai_source",
+          OptionSet: {
+            Name: "fundai_source",
+            IsGlobal: true,
+            MetadataId: "8f2c0000-0000-0000-0000-00000000abcd",
+            Options: [{ Value: 1 }, { Value: 2 }, { Value: 3 }],
+          },
+        },
+      ],
+    });
+    registerDataTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_entity_schema")!
+      .handler({ entity_logical_name: "opportunity" });
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].option_set).toEqual({
+      name: "fundai_source",
+      is_global: true,
+      metadata_id: "8f2c0000-0000-0000-0000-00000000abcd",
+      option_count: 3,
+    });
+    // The base fields are preserved alongside the new summary
+    expect(parsed[0].AttributeType).toBe("Picklist");
+  });
+
+  it("reports is_global=false for a column holding a local copy", async () => {
+    const server = createMockServer();
+    const client = schemaClient([PICKLIST_ATTR], {
+      PicklistAttributeMetadata: [
+        {
+          LogicalName: "fundai_source",
+          OptionSet: {
+            Name: "opportunity_fundai_source",
+            IsGlobal: false,
+            MetadataId: "44444444-4444-4444-4444-444444444444",
+            Options: [{ Value: 1 }],
+          },
+        },
+      ],
+    });
+    registerDataTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_entity_schema")!
+      .handler({ entity_logical_name: "opportunity" });
+
+    expect(JSON.parse(result.content[0].text)[0].option_set.is_global).toBe(
+      false,
+    );
+  });
+
+  it("does not return the option values themselves, only their count", async () => {
+    const server = createMockServer();
+    const client = schemaClient([PICKLIST_ATTR], {
+      PicklistAttributeMetadata: [
+        {
+          LogicalName: "fundai_source",
+          OptionSet: {
+            Name: "fundai_source",
+            IsGlobal: true,
+            Options: [
+              { Value: 1, Label: { UserLocalizedLabel: { Label: "Website" } } },
+            ],
+          },
+        },
+      ],
+    });
+    registerDataTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_entity_schema")!
+      .handler({ entity_logical_name: "opportunity" });
+
+    const text = result.content[0].text;
+    expect(text).not.toContain("Website");
+    expect(JSON.parse(text)[0].option_set.option_count).toBe(1);
+  });
+
+  it("leaves non-choice attributes without an option_set field", async () => {
+    const server = createMockServer();
+    const client = schemaClient([STRING_ATTR, PICKLIST_ATTR], {
+      PicklistAttributeMetadata: [
+        {
+          LogicalName: "fundai_source",
+          OptionSet: { Name: "fundai_source", IsGlobal: true, Options: [] },
+        },
+      ],
+    });
+    registerDataTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_entity_schema")!
+      .handler({ entity_logical_name: "opportunity" });
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed[0]).not.toHaveProperty("option_set");
+    expect(parsed[1]).toHaveProperty("option_set");
+  });
+
+  it("covers Status and State columns via the same Enum cast", async () => {
+    const server = createMockServer();
+    const client = schemaClient(
+      [
+        { LogicalName: "statecode", AttributeType: "State" },
+        { LogicalName: "statuscode", AttributeType: "Status" },
+      ],
+      {
+        StateAttributeMetadata: [
+          {
+            LogicalName: "statecode",
+            OptionSet: {
+              Name: "opportunity_statecode",
+              IsGlobal: false,
+              Options: [{ Value: 0 }, { Value: 1 }],
+            },
+          },
+        ],
+        StatusAttributeMetadata: [
+          {
+            LogicalName: "statuscode",
+            OptionSet: {
+              Name: "opportunity_statuscode",
+              IsGlobal: false,
+              Options: [{ Value: 1 }],
+            },
+          },
+        ],
+      },
+    );
+    registerDataTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_entity_schema")!
+      .handler({ entity_logical_name: "opportunity" });
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed[0].option_set.option_count).toBe(2);
+    expect(parsed[1].option_set.option_count).toBe(1);
+  });
+
+  it("still returns the attribute list when a cast request fails, and says so", async () => {
+    const server = createMockServer();
+    const client = {
+      get: vi.fn(async (url: string) => {
+        if (url.includes("StateAttributeMetadata")) {
+          throw new Error("Dataverse API error (503): service unavailable");
+        }
+        if (url.includes("PicklistAttributeMetadata")) {
+          return {
+            value: [
+              {
+                LogicalName: "fundai_source",
+                OptionSet: {
+                  Name: "fundai_source",
+                  IsGlobal: true,
+                  Options: [{ Value: 1 }],
+                },
+              },
+            ],
+          };
+        }
+        if (url.includes("Microsoft.Dynamics.CRM.")) return { value: [] };
+        return { value: [STRING_ATTR, PICKLIST_ATTR] };
+      }),
+    } as any;
+    registerDataTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_entity_schema")!
+      .handler({ entity_logical_name: "opportunity" });
+
+    // The base list survives an enrichment failure, and stays in content[0]
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[1].option_set.is_global).toBe(true);
+
+    // ...but the partial coverage is stated, not left to be inferred
+    expect(result.content).toHaveLength(2);
+    expect(result.content[1].text).toContain("INCOMPLETE");
+    expect(result.content[1].text).toContain("StateAttributeMetadata");
+    expect(result.content[1].text).toContain("503");
+  });
+
+  it("emits no warning block when every cast succeeds", async () => {
+    const server = createMockServer();
+    const client = schemaClient([STRING_ATTR]);
+    registerDataTools(server as any, client);
+
+    const result = await server.tools
+      .get("get_entity_schema")!
+      .handler({ entity_logical_name: "opportunity" });
+
+    expect(result.content).toHaveLength(1);
+  });
+
+  it("fails when the base attribute request itself fails", async () => {
+    // Degrading is only right for the enrichment — without the base list there is
+    // nothing worth returning.
+    const server = createMockServer();
+    const client = {
+      get: vi.fn(async (url: string) => {
+        if (url.includes("Microsoft.Dynamics.CRM.")) return { value: [] };
+        throw new Error("Dataverse API error (404): table not found");
+      }),
+    } as any;
+    registerDataTools(server as any, client);
+
+    await expect(
+      server.tools
+        .get("get_entity_schema")!
+        .handler({ entity_logical_name: "nope" }),
+    ).rejects.toThrow(/404/);
+  });
+
+  it("escapes single quotes in the entity logical name on both requests", async () => {
+    const server = createMockServer();
+    const client = schemaClient([]);
+    registerDataTools(server as any, client);
+
+    await server.tools
+      .get("get_entity_schema")!
+      .handler({ entity_logical_name: "o'brien" });
+
+    for (const call of client.get.mock.calls) {
+      expect(call[0] as string).toContain("LogicalName='o''brien'");
+    }
+  });
+});
+
 describe("registerDataTools allowDelete", () => {
   it("delete_record returns error when allowDelete is false", async () => {
     const server = createMockServer();
