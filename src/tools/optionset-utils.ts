@@ -90,6 +90,36 @@ export function summarizeOptionSet(os: RawOptionSet): OptionSetSummary {
   return { ...flattenOptionSet(os), option_count: os.Options?.length ?? 0 };
 }
 
+export function globalOptionSetNotFound(name: string): Error {
+  return new Error(`Global OptionSet not found: '${name}'`);
+}
+
+// Resolves a Global OptionSet's name to its MetadataId.
+//
+// Binding a column to a global set requires the GUID specifically. The docs say
+// the alternate key by name — GlobalOptionSetDefinitions(Name='x') — works as a
+// binding target too, but a real org rejects it with HTTP 500 "Guid should
+// contain 32 digits with 4 dashes", so the name has to be resolved first.
+export async function resolveGlobalOptionSetId(
+  client: { get(path: string): Promise<unknown> },
+  name: string,
+  escapeValue: (value: string) => string,
+): Promise<string> {
+  let result: { MetadataId?: string };
+  try {
+    result = (await client.get(
+      `/GlobalOptionSetDefinitions(Name='${escapeValue(name)}')/Microsoft.Dynamics.CRM.OptionSetMetadata?%24select=MetadataId`,
+    )) as { MetadataId?: string };
+  } catch (err) {
+    if (err instanceof Error && /\b404\b/.test(err.message)) {
+      throw globalOptionSetNotFound(name);
+    }
+    throw err;
+  }
+  if (!result.MetadataId) throw globalOptionSetNotFound(name);
+  return result.MetadataId;
+}
+
 export interface ChoiceAttributeRow {
   LogicalName: string;
   OptionSet?: RawOptionSet;

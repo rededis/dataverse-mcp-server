@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DataverseClient } from "../client.js";
 import { buildODataQuery, escapeODataString } from "./data-tools.js";
+import { resolveGlobalOptionSetId } from "./optionset-utils.js";
 
 const ATTRIBUTE_ODATA_TYPE_MAP: Record<string, string> = {
   String: "Microsoft.Dynamics.CRM.StringAttributeMetadata",
@@ -64,7 +65,13 @@ const AttributeSchema = z.object({
     .array(z.object({ label: z.string(), value: z.number() }))
     .optional()
     .describe(
-      "Options for Boolean (2 items: false=0, true=1) or Picklist types",
+      "Options for Boolean (2 items: false=0, true=1) or Picklist types. Creates a Local OptionSet owned by this one column; mutually exclusive with global_option_set.",
+    ),
+  global_option_set: z
+    .string()
+    .optional()
+    .describe(
+      "Picklist only: bind the column to an existing Global OptionSet by name (e.g. 'contoso_source') so it shares one org-wide list instead of a private copy. Mutually exclusive with options.",
     ),
   date_format: z
     .enum(["DateOnly", "DateAndTime"])
@@ -107,10 +114,62 @@ function validateDateTimeFields(attr: DateTimeFields): void {
   }
 }
 
+interface OptionSetFields {
+  type?: string;
+  options?: unknown[];
+  global_option_set?: string;
+}
+
+// Rejecting the both-supplied case is not defensive tidiness: sending an inline
+// OptionSet alongside a global binding makes Dataverse silently drop the binding
+// and create a local copy instead — verified live. Failing here turns a silently
+// wrong column into an error the caller can act on.
+export function validateOptionSetFields(attr: OptionSetFields): void {
+  if (attr.global_option_set === undefined) return;
+  if (attr.type !== "Picklist") {
+    throw new Error(
+      `global_option_set applies only to Picklist attributes, got: ${attr.type}`,
+    );
+  }
+  if (attr.options?.length) {
+    throw new Error(
+      "options and global_option_set are mutually exclusive: 'options' creates a Local OptionSet owned by this column, 'global_option_set' binds the column to an existing shared one. Pick one.",
+    );
+  }
+}
+
+// Resolves every distinct global set named across a batch of attributes, once
+// each, so create_entity with several columns on the same set costs one lookup.
+async function resolveGlobalOptionSets(
+  client: DataverseClient,
+  attributes: AttributeInput[],
+): Promise<Map<string, string>> {
+  const names = [
+    ...new Set(
+      attributes
+        .map((a) => a.global_option_set)
+        .filter((n): n is string => n !== undefined),
+    ),
+  ];
+  const ids = await Promise.all(
+    names.map((name) =>
+      resolveGlobalOptionSetId(client, name, escapeODataString),
+    ),
+  );
+  return new Map(names.map((name, i) => [name, ids[i]]));
+}
+
 export function buildAttributeBody(
   attr: AttributeInput,
+  globalOptionSetId?: string,
 ): Record<string, unknown> {
   validateDateTimeFields(attr);
+  validateOptionSetFields(attr);
+  if (attr.global_option_set !== undefined && !globalOptionSetId) {
+    throw new Error(
+      `global_option_set '${attr.global_option_set}' was not resolved to a MetadataId before building the request body`,
+    );
+  }
 
   const body: Record<string, unknown> = {
     "@odata.type": ATTRIBUTE_ODATA_TYPE_MAP[attr.type],
@@ -158,19 +217,28 @@ export function buildAttributeBody(
   }
 
   if (attr.type === "Picklist") {
-    if (!attr.options?.length) {
-      throw new Error(
-        "Picklist attributes require a non-empty 'options' array.",
-      );
+    if (globalOptionSetId) {
+      // A global set is attached through the GlobalOptionSet navigation property,
+      // never as an inline OptionSet: Dataverse rejects an inline one carrying
+      // IsGlobal true with "Only Local option set can be created through the
+      // attribute create". The binding takes the MetadataId, not the name.
+      body["GlobalOptionSet@odata.bind"] =
+        `/GlobalOptionSetDefinitions(${globalOptionSetId})`;
+    } else {
+      if (!attr.options?.length) {
+        throw new Error(
+          "Picklist attributes require either a non-empty 'options' array (Local OptionSet) or 'global_option_set' (bind to an existing Global OptionSet).",
+        );
+      }
+      body.OptionSet = {
+        "@odata.type": "Microsoft.Dynamics.CRM.OptionSetMetadata",
+        IsGlobal: false,
+        Options: attr.options.map((opt) => ({
+          Value: opt.value,
+          Label: buildLabel(opt.label),
+        })),
+      };
     }
-    body.OptionSet = {
-      "@odata.type": "Microsoft.Dynamics.CRM.OptionSetMetadata",
-      IsGlobal: false,
-      Options: attr.options.map((opt) => ({
-        Value: opt.value,
-        Label: buildLabel(opt.label),
-      })),
-    };
   }
 
   return body;
@@ -336,6 +404,15 @@ export function registerSchemaTools(
       const prefix = params.logical_name.slice(0, separatorIndex);
       const primaryAttrName = params.primary_attribute_name || `${prefix}_name`;
 
+      // Resolved before the table is created, not with the columns afterwards: a
+      // name that turns out not to exist would otherwise leave a half-built table
+      // behind, and Dataverse has no transaction to roll that back.
+      for (const attr of params.attributes ?? []) validateOptionSetFields(attr);
+      const globalIds = await resolveGlobalOptionSets(
+        client,
+        params.attributes ?? [],
+      );
+
       const body: Record<string, unknown> = {
         "@odata.type": "Microsoft.Dynamics.CRM.EntityMetadata",
         LogicalName: params.logical_name,
@@ -420,7 +497,12 @@ export function registerSchemaTools(
         }
 
         for (const attr of params.attributes) {
-          const attrBody = buildAttributeBody(attr);
+          const attrBody = buildAttributeBody(
+            attr,
+            attr.global_option_set
+              ? globalIds.get(attr.global_option_set)
+              : undefined,
+          );
           await client.post(
             `/EntityDefinitions(${entityId})/Attributes`,
             attrBody,
@@ -444,7 +526,16 @@ export function registerSchemaTools(
       attribute: AttributeSchema,
     },
     async ({ entity_logical_name, attribute }) => {
-      const body = buildAttributeBody(attribute);
+      // Validate before the lookup so a mutually-exclusive pair fails without
+      // spending a round trip on a name we are going to reject anyway.
+      validateOptionSetFields(attribute);
+      const globalIds = await resolveGlobalOptionSets(client, [attribute]);
+      const body = buildAttributeBody(
+        attribute,
+        attribute.global_option_set
+          ? globalIds.get(attribute.global_option_set)
+          : undefined,
+      );
       const escaped = escapeODataString(entity_logical_name);
       const result = await client.post(
         `/EntityDefinitions(LogicalName='${escaped}')/Attributes`,

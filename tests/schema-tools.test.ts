@@ -185,7 +185,97 @@ describe("buildAttributeBody", () => {
         type: "Picklist",
         display_name: "Status",
       }),
-    ).toThrow("Picklist attributes require a non-empty 'options' array.");
+    ).toThrow(/Picklist attributes require either a non-empty 'options' array/);
+  });
+
+  describe("global OptionSet binding", () => {
+    const GUID = "ea6ab542-9c2e-f111-88b3-00224805d253";
+
+    it("binds via the GlobalOptionSet navigation property, not an inline OptionSet", () => {
+      const body = buildAttributeBody(
+        {
+          logical_name: "contoso_source",
+          type: "Picklist",
+          display_name: "Source",
+          global_option_set: "contoso_sourceset",
+        },
+        GUID,
+      );
+      expect(body["GlobalOptionSet@odata.bind"]).toBe(
+        `/GlobalOptionSetDefinitions(${GUID})`,
+      );
+      // Dataverse rejects an inline OptionSet carrying IsGlobal true with
+      // "Only Local option set can be created through the attribute create"
+      expect(body.OptionSet).toBeUndefined();
+    });
+
+    it("binds by MetadataId, never by the set's name", () => {
+      const body = buildAttributeBody(
+        {
+          logical_name: "contoso_source",
+          type: "Picklist",
+          display_name: "Source",
+          global_option_set: "contoso_sourceset",
+        },
+        GUID,
+      );
+      // The name form GlobalOptionSetDefinitions(Name='...') is rejected with
+      // HTTP 500 "Guid should contain 32 digits with 4 dashes"
+      expect(body["GlobalOptionSet@odata.bind"]).not.toContain("Name=");
+    });
+
+    it("still builds a Local OptionSet when only options are given", () => {
+      const body = buildAttributeBody({
+        logical_name: "contoso_status",
+        type: "Picklist",
+        display_name: "Status",
+        options: [{ label: "Active", value: 1 }],
+      });
+      expect(body["GlobalOptionSet@odata.bind"]).toBeUndefined();
+      expect((body.OptionSet as Record<string, unknown>).IsGlobal).toBe(false);
+    });
+
+    it("rejects options and global_option_set together", () => {
+      // Sending both makes Dataverse silently drop the binding and create a
+      // local copy, so this has to fail here rather than there.
+      expect(() =>
+        buildAttributeBody(
+          {
+            logical_name: "contoso_source",
+            type: "Picklist",
+            display_name: "Source",
+            options: [{ label: "Active", value: 1 }],
+            global_option_set: "contoso_sourceset",
+          },
+          GUID,
+        ),
+      ).toThrow(/mutually exclusive/);
+    });
+
+    it("rejects global_option_set on a non-Picklist attribute", () => {
+      expect(() =>
+        buildAttributeBody(
+          {
+            logical_name: "contoso_name",
+            type: "String",
+            display_name: "Name",
+            global_option_set: "contoso_sourceset",
+          },
+          GUID,
+        ),
+      ).toThrow(/applies only to Picklist attributes, got: String/);
+    });
+
+    it("refuses to build a body when the name was not resolved to a MetadataId", () => {
+      expect(() =>
+        buildAttributeBody({
+          logical_name: "contoso_source",
+          type: "Picklist",
+          display_name: "Source",
+          global_option_set: "contoso_sourceset",
+        }),
+      ).toThrow(/was not resolved to a MetadataId/);
+    });
   });
 
   describe("DateTime Format/Behavior", () => {
@@ -255,6 +345,120 @@ describe("buildAttributeBody", () => {
         }),
       ).toThrow(/apply only to DateTime/);
     });
+  });
+});
+
+describe("add_attribute / create_entity global OptionSet resolution", () => {
+  const GUID = "ea6ab542-9c2e-f111-88b3-00224805d253";
+
+  const boundAttribute = {
+    logical_name: "fundai_source",
+    type: "Picklist" as const,
+    display_name: "Source",
+    global_option_set: "fundai_sourceset",
+  };
+
+  function clientResolving(metadataId: string | null) {
+    return {
+      get: vi.fn(async () => {
+        if (metadataId === null) {
+          throw new Error("Dataverse API error (404): not found");
+        }
+        return { MetadataId: metadataId };
+      }),
+      post: vi.fn().mockResolvedValue({}),
+    } as any;
+  }
+
+  it("resolves the set by name, then binds the created column by MetadataId", async () => {
+    const server = createMockServer();
+    const client = clientResolving(GUID);
+    registerSchemaTools(server as any, client);
+
+    await server.tools.get("add_attribute")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute: boundAttribute,
+    });
+
+    const lookupUrl = client.get.mock.calls[0][0] as string;
+    expect(lookupUrl).toContain(
+      "/GlobalOptionSetDefinitions(Name='fundai_sourceset')",
+    );
+
+    const [postPath, postBody] = client.post.mock.calls[0];
+    expect(postPath).toContain(
+      "/EntityDefinitions(LogicalName='fundai_x')/Attributes",
+    );
+    expect(postBody["GlobalOptionSet@odata.bind"]).toBe(
+      `/GlobalOptionSetDefinitions(${GUID})`,
+    );
+  });
+
+  it("reports a missing global set by name rather than surfacing the raw 404", async () => {
+    const server = createMockServer();
+    const client = clientResolving(null);
+    registerSchemaTools(server as any, client);
+
+    await expect(
+      server.tools.get("add_attribute")!.handler({
+        entity_logical_name: "fundai_x",
+        attribute: boundAttribute,
+      }),
+    ).rejects.toThrow(/Global OptionSet not found: 'fundai_sourceset'/);
+    expect(client.post).not.toHaveBeenCalled();
+  });
+
+  it("rejects a mutually-exclusive pair without spending a lookup", async () => {
+    const server = createMockServer();
+    const client = clientResolving(GUID);
+    registerSchemaTools(server as any, client);
+
+    await expect(
+      server.tools.get("add_attribute")!.handler({
+        entity_logical_name: "fundai_x",
+        attribute: { ...boundAttribute, options: [{ label: "A", value: 1 }] },
+      }),
+    ).rejects.toThrow(/mutually exclusive/);
+    expect(client.get).not.toHaveBeenCalled();
+  });
+
+  it("create_entity resolves before creating the table, leaving nothing behind", async () => {
+    const server = createMockServer();
+    const client = clientResolving(null);
+    registerSchemaTools(server as any, client);
+
+    await expect(
+      server.tools.get("create_entity")!.handler({
+        logical_name: "fundai_new",
+        display_name: "New",
+        display_collection_name: "News",
+        attributes: [boundAttribute],
+      }),
+    ).rejects.toThrow(/Global OptionSet not found/);
+    // No half-built table: Dataverse has no transaction to roll one back
+    expect(client.post).not.toHaveBeenCalled();
+  });
+
+  it("looks a repeated global set up once per batch", async () => {
+    const server = createMockServer();
+    const client = clientResolving(GUID);
+    client.post = vi
+      .fn()
+      .mockResolvedValueOnce({ MetadataId: "entity-id" })
+      .mockResolvedValue({});
+    registerSchemaTools(server as any, client);
+
+    await server.tools.get("create_entity")!.handler({
+      logical_name: "fundai_new",
+      display_name: "New",
+      display_collection_name: "News",
+      attributes: [
+        boundAttribute,
+        { ...boundAttribute, logical_name: "fundai_source2" },
+      ],
+    });
+
+    expect(client.get).toHaveBeenCalledTimes(1);
   });
 });
 
