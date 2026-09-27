@@ -1,5 +1,5 @@
 import type { DataverseAuth } from "./auth.js";
-import { DataverseApiError } from "./errors.js";
+import { DataverseApiError, DataverseError } from "./errors.js";
 import { FetchExecutor, type RequestExecutor } from "./executor.js";
 
 export interface DataverseRequestOptions {
@@ -67,7 +67,14 @@ export class DataverseClient {
       throw new DataverseApiError(response.status, method, url, response.body);
     }
 
-    return JSON.parse(response.body);
+    try {
+      return JSON.parse(response.body);
+    } catch (err) {
+      throw new DataverseError(
+        `Dataverse returned ${response.status} with a body that is not JSON: ${method} ${url}`,
+        { cause: err },
+      );
+    }
   }
 
   async get(path: string): Promise<unknown> {

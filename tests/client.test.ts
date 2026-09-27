@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DataverseAuth } from "../src/auth.js";
 import { DataverseClient } from "../src/client.js";
-import { DataverseApiError } from "../src/errors.js";
+import { DataverseApiError, DataverseError } from "../src/errors.js";
 import type { HttpRequest, RequestExecutor } from "../src/executor.js";
 
 describe("DataverseClient", () => {
@@ -174,6 +174,18 @@ describe("DataverseClient with an injected executor", () => {
 
     expect(requests[0].url).toBe(next);
     expect(requests[0].body).toBeUndefined();
+  });
+
+  it("reports a 2xx body that is not JSON as a DataverseError", async () => {
+    const { executor } = recordingExecutor(200, "<html>proxy login</html>");
+    const client = makeClient(executor);
+
+    const error = await client.get("/accounts").catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(DataverseError);
+    expect((error as Error).message).toBe(
+      "Dataverse returned 200 with a body that is not JSON: GET https://org.crm.dynamics.com/api/data/v9.2/accounts",
+    );
   });
 
   it("does not catch what the executor rejects with", async () => {
