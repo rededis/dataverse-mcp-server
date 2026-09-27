@@ -26,9 +26,11 @@ export interface HttpResponse {
  * acting on behalf of a user in #77, auditing in #78) without touching the
  * tools.
  *
- * Implementations resolve with any status, 4xx and 5xx included, and reject
- * only when no complete response arrived: DataverseTimeoutError or
- * DataverseNetworkError.
+ * Implementations resolve with any status, 4xx and 5xx included: a status
+ * is a response, never an exception, so a wrapper can act on it (a 429 and
+ * its Retry-After, for instance). They reject with a DataverseError when no
+ * usable response can be returned: FetchExecutor with DataverseTimeoutError
+ * or DataverseNetworkError; wrappers may add their own subclasses (#74).
  */
 export interface RequestExecutor {
   execute(request: HttpRequest): Promise<HttpResponse>;

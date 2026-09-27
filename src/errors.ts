@@ -2,6 +2,10 @@
 // HTTP exchange is visible. Tools check the class and its fields rather than
 // matching message text, and translate what happened into what it means for
 // their caller ("Entity not found: …").
+//
+// Logging (ADR-0001 §12): `status`, `code`, `method` and the class name are
+// safe to log. `message` and `url` are not: messages carry raw Dataverse and
+// Entra response text, and URLs carry `$filter` literals unmasked.
 
 export class DataverseError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -48,7 +52,7 @@ export class DataverseNetworkError extends DataverseError {
     cause: unknown,
   ) {
     super(
-      `Dataverse request failed before a response arrived: ${method} ${url} (${describe(cause)})`,
+      `Dataverse request failed before a response arrived: ${method} ${url} (${describeCause(cause)})`,
       { cause },
     );
   }
@@ -75,7 +79,8 @@ function errorCode(body: string): string | undefined {
   }
 }
 
-function describe(cause: unknown): string {
+/** A readable reason for a failed fetch, including undici's inner cause. */
+export function describeCause(cause: unknown): string {
   if (!(cause instanceof Error)) return String(cause);
   // undici reports "fetch failed" and keeps the useful part in its own cause.
   const inner = cause.cause instanceof Error ? `: ${cause.cause.message}` : "";

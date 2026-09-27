@@ -176,6 +176,23 @@ describe("DataverseAuth", () => {
     });
   }
 
+  it("says why the token request failed when no response arrived", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new TypeError("fetch failed", {
+        cause: new Error("getaddrinfo ENOTFOUND login.microsoftonline.com"),
+      }),
+    );
+
+    const error = await makeAuth()
+      .getToken()
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(DataverseAuthError);
+    expect((error as Error).message).toBe(
+      "OAuth token request failed before a response arrived (fetch failed: getaddrinfo ENOTFOUND login.microsoftonline.com)",
+    );
+  });
+
   it("times out the token request with DataverseAuthError", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(
       (_url, init) =>

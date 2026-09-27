@@ -1,5 +1,5 @@
 import { DEFAULT_REQUEST_TIMEOUT_MS } from "./config.js";
-import { DataverseAuthError, isTimeout } from "./errors.js";
+import { DataverseAuthError, describeCause, isTimeout } from "./errors.js";
 
 interface TokenCache {
   accessToken: string;
@@ -69,7 +69,7 @@ export class DataverseAuth {
         );
       }
       throw new DataverseAuthError(
-        `OAuth token request failed before a response arrived (${err instanceof Error ? err.message : String(err)})`,
+        `OAuth token request failed before a response arrived (${describeCause(err)})`,
         undefined,
         { cause: err },
       );
