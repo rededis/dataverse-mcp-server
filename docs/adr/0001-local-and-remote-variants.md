@@ -174,10 +174,12 @@ Consequences:
 
 ### 10. Dataverse limits
 
-Service protection limits apply **per user per web server**, over a 5-minute
-sliding window: 6,000 requests, 20 minutes of combined execution time, 52
-concurrent requests. Application users get the same limits as everyone else
-(Q3). A server that sends every caller's traffic through one application user
+Service protection limits apply **per user per web server**. The documented
+defaults are 6,000 requests and 20 minutes of combined execution time within a
+5-minute sliding window, plus 52 or more concurrent requests; Microsoft notes
+they "can change and might vary between different environments" (Dataverse
+service protection API limits page). Application users get the same limits as
+everyone else (Q3). A server that sends every caller's traffic through one application user
 concentrates all of it on one user's limits.
 
 The server protects Dataverse, not itself: a concurrency limit, a bounded queue
