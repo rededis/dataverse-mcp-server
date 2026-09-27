@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerDevelopmentTools } from "./development/index.js";
-import { SERVER_TOOL_GROUPS } from "./index.js";
+import { SERVER_TOOL_GROUPS } from "./server-groups.js";
 import type { ToolDeps } from "./types.js";
 
 /** Every tool group, development included: what the stdio package exposes. */

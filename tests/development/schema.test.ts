@@ -1,23 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { registerAllTools } from "../src/tools/all.js";
-import { buildAttributeBody } from "../src/tools/development/schema.js";
+import type { DataverseClient } from "../../src/client.js";
+import { registerAllTools } from "../../src/tools/all.js";
+import { buildAttributeBody } from "../../src/tools/development/schema.js";
+import { createMockServer, GUID } from "../helpers.js";
 
-function createMockServer() {
-  const tools = new Map<string, { description: string; handler: Function }>();
-  return {
-    tool: vi.fn(
-      (
-        name: string,
-        description: string,
-        _schema: unknown,
-        handler: Function,
-      ) => {
-        tools.set(name, { description, handler });
-      },
-    ),
-    tools,
-  };
-}
+const mockClient = {} as DataverseClient;
 
 describe("buildAttributeBody", () => {
   it("builds String attribute body", () => {
@@ -1140,117 +1127,6 @@ describe("get_attribute_dependencies", () => {
       "Information",
       "Quick Create",
     ]);
-  });
-});
-
-describe("list_entity_keys", () => {
-  it("flattens the /Keys collection and prefers UserLocalizedLabel for display_name", async () => {
-    const server = createMockServer();
-    const client = {
-      get: vi.fn().mockResolvedValue({
-        value: [
-          {
-            LogicalName: "contoso_contactproviderkey",
-            SchemaName: "Contoso_ContactProviderKey",
-            DisplayName: {
-              UserLocalizedLabel: { Label: "Contact+Provider", LanguageCode: 1033 },
-              LocalizedLabels: [
-                { Label: "Contact+Provider (en)", LanguageCode: 1033 },
-              ],
-            },
-            KeyAttributes: ["contoso_contactid", "contoso_provider"],
-            EntityKeyIndexStatus: "Active",
-            MetadataId: "11111111-1111-1111-1111-111111111111",
-          },
-        ],
-      }),
-    } as any;
-    registerAllTools(server as any, { client });
-
-    const result = await server.tools.get("list_entity_keys")!.handler({
-      entity_logical_name: "contoso_record",
-    });
-
-    expect(client.get).toHaveBeenCalledWith(
-      "/EntityDefinitions(LogicalName='contoso_record')/Keys",
-    );
-    expect(JSON.parse(result.content[0].text)).toEqual([
-      {
-        logical_name: "contoso_contactproviderkey",
-        schema_name: "Contoso_ContactProviderKey",
-        // UserLocalizedLabel wins over LocalizedLabels[0] when both are present —
-        // Dataverse returns UserLocalizedLabel for the caller's UI language, so
-        // it's what users actually see.
-        display_name: "Contact+Provider",
-        key_attributes: ["contoso_contactid", "contoso_provider"],
-        entity_key_index_status: "Active",
-        metadata_id: "11111111-1111-1111-1111-111111111111",
-      },
-    ]);
-  });
-
-  it("falls back to LocalizedLabels[0] when UserLocalizedLabel is absent", async () => {
-    const server = createMockServer();
-    const client = {
-      get: vi.fn().mockResolvedValue({
-        value: [
-          {
-            LogicalName: "contoso_k",
-            DisplayName: {
-              LocalizedLabels: [{ Label: "Fallback", LanguageCode: 1033 }],
-            },
-            KeyAttributes: ["a"],
-          },
-        ],
-      }),
-    } as any;
-    registerAllTools(server as any, { client });
-
-    const result = await server.tools.get("list_entity_keys")!.handler({
-      entity_logical_name: "e",
-    });
-    const payload = JSON.parse(result.content[0].text);
-    expect(payload[0].display_name).toBe("Fallback");
-  });
-
-  it("returns an empty array when no keys are defined", async () => {
-    const server = createMockServer();
-    const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerAllTools(server as any, { client });
-
-    const result = await server.tools.get("list_entity_keys")!.handler({
-      entity_logical_name: "e",
-    });
-    expect(JSON.parse(result.content[0].text)).toEqual([]);
-  });
-
-  it("maps 404 to a friendly 'Entity not found' error", async () => {
-    const server = createMockServer();
-    const client = {
-      get: vi
-        .fn()
-        .mockRejectedValue(new Error("Dataverse API error (404): not found")),
-    } as any;
-    registerAllTools(server as any, { client });
-
-    await expect(
-      server.tools.get("list_entity_keys")!.handler({
-        entity_logical_name: "missing_table",
-      }),
-    ).rejects.toThrow(/Entity not found: missing_table/);
-  });
-
-  it("escapes single quotes in entity name (OData injection)", async () => {
-    const server = createMockServer();
-    const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerAllTools(server as any, { client });
-
-    await server.tools.get("list_entity_keys")!.handler({
-      entity_logical_name: "weird'name",
-    });
-    expect(client.get).toHaveBeenCalledWith(
-      "/EntityDefinitions(LogicalName='weird''name')/Keys",
-    );
   });
 });
 

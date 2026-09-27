@@ -1,75 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DataverseClient } from "../src/client.js";
 import { registerAllTools } from "../src/tools/all.js";
-
-function createMockServer() {
-  const tools = new Map<string, { description: string; handler: Function }>();
-  return {
-    tool: vi.fn(
-      (name: string, description: string, _schema: unknown, handler: Function) => {
-        tools.set(name, { description, handler });
-      },
-    ),
-    tools,
-  };
-}
-
-const mockClient = {} as DataverseClient;
-
-describe("list_solutions", () => {
-  it("queries /solutions excluding managed by default", async () => {
-    const server = createMockServer();
-    const client = {
-      get: vi.fn().mockResolvedValue({ value: [{ uniquename: "Default" }] }),
-    } as any;
-    registerAllTools(server as any, { client });
-
-    const tool = server.tools.get("list_solutions");
-    expect(tool).toBeDefined();
-
-    const result = await tool!.handler({});
-    expect(client.get).toHaveBeenCalledTimes(1);
-    const url = client.get.mock.calls[0][0] as string;
-    expect(url).toMatch(/^\/solutions\?/);
-    const qs = new URLSearchParams(url.slice(url.indexOf("?") + 1));
-    expect(qs.get("$filter")).toBe("isvisible eq true and ismanaged eq false");
-    expect(qs.get("$select")).toContain("uniquename");
-    expect(result.content[0].text).toContain("Default");
-  });
-
-  it("includes managed solutions when include_managed=true", async () => {
-    const server = createMockServer();
-    const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerAllTools(server as any, { client });
-
-    await server.tools.get("list_solutions")!.handler({ include_managed: true });
-    const url = client.get.mock.calls[0][0] as string;
-    const qs = new URLSearchParams(url.slice(url.indexOf("?") + 1));
-    expect(qs.get("$filter")).toBe("isvisible eq true");
-  });
-
-  it("follows @odata.nextLink when solutions response is paginated", async () => {
-    const server = createMockServer();
-    const nextLink =
-      "https://org.crm.dynamics.com/api/data/v9.2/solutions?$skiptoken=page2";
-    const client = {
-      get: vi
-        .fn()
-        .mockResolvedValueOnce({
-          value: [{ uniquename: "A" }],
-          "@odata.nextLink": nextLink,
-        })
-        .mockResolvedValueOnce({ value: [{ uniquename: "B" }] }),
-    } as any;
-    registerAllTools(server as any, { client });
-
-    const result = await server.tools.get("list_solutions")!.handler({});
-    expect(client.get).toHaveBeenCalledTimes(2);
-    expect(client.get.mock.calls[1][0]).toBe(nextLink);
-    expect(result.content[0].text).toContain('"A"');
-    expect(result.content[0].text).toContain('"B"');
-  });
-});
+import { createMockServer } from "./helpers.js";
 
 describe("list_entities filters", () => {
   it("applies the prefix client-side when no solution is set", async () => {
@@ -696,30 +627,443 @@ describe("get_entity_schema", () => {
   });
 });
 
-describe("delete_record allowDelete", () => {
-  it("delete_record returns error when allowDelete is false", async () => {
+describe("get_picklist_options", () => {
+  it("reads a column backed by a Local OptionSet and reports is_global=false", async () => {
     const server = createMockServer();
-    registerAllTools(server as any, { client: mockClient, allowDelete: false });
+    const client = {
+      get: vi.fn().mockResolvedValue({
+        value: [
+          {
+            LogicalName: "fundai_status",
+            OptionSet: {
+              // A local set carries an auto-generated name derived from the column
+              Name: "fundai_x_fundai_status",
+              IsGlobal: false,
+              MetadataId: "11111111-1111-1111-1111-111111111111",
+              Options: [
+                {
+                  Value: 100000000,
+                  Label: {
+                    UserLocalizedLabel: { Label: "Active", LanguageCode: 1033 },
+                    LocalizedLabels: [{ Label: "Active", LanguageCode: 1033 }],
+                  },
+                },
+                {
+                  Value: 100000001,
+                  Label: {
+                    LocalizedLabels: [{ Label: "Inactive", LanguageCode: 1033 }],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    } as any;
+    registerAllTools(server as any, { client });
 
-    const deleteTool = server.tools.get("delete_record");
-    expect(deleteTool).toBeDefined();
-    expect(deleteTool!.description).toContain("disabled");
+    const result = await server.tools.get("get_picklist_options")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_status",
+    });
 
-    const result = await deleteTool!.handler({ entity_set: "leads", id: "123" });
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("DATAVERSE_ALLOW_DELETE");
+    const urls = client.get.mock.calls.map((c: unknown[]) => c[0] as string);
+    // Dataverse rejects a cast to the abstract EnumAttributeMetadata base (HTTP 500),
+    // so the lookup fans out over every concrete choice type instead — otherwise
+    // Status/State/MultiSelect columns would be unreachable.
+    expect(urls.map((u) => u.match(/CRM\.(\w+)/)![1]).sort()).toEqual([
+      "MultiSelectPicklistAttributeMetadata",
+      "PicklistAttributeMetadata",
+      "StateAttributeMetadata",
+      "StatusAttributeMetadata",
+    ]);
+    for (const u of urls) {
+      expect(u).toContain(
+        "/EntityDefinitions(LogicalName='fundai_x')/Attributes/",
+      );
+    }
+    const url = urls[0];
+    const qs = new URLSearchParams(url.slice(url.indexOf("?") + 1));
+    expect(qs.get("$filter")).toBe("LogicalName eq 'fundai_status'");
+    expect(qs.get("$select")).toBe("LogicalName");
+    expect(qs.get("$expand")).toBe(
+      "OptionSet($select=Name,IsGlobal,MetadataId,Options)",
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed).toEqual({
+      option_set: {
+        name: "fundai_x_fundai_status",
+        is_global: false,
+        metadata_id: "11111111-1111-1111-1111-111111111111",
+      },
+      options: [
+        { value: 100000000, label: "Active" },
+        { value: 100000001, label: "Inactive" },
+      ],
+    });
   });
 
-  it("delete_record calls client.delete when allowDelete is true", async () => {
+  it("reports is_global=true and the global set's identity when a column is bound to one", async () => {
+    // The scenario issue #61 exists for: values alone are identical to a local copy,
+    // only the OptionSet identity distinguishes a real binding.
     const server = createMockServer();
-    const client = { delete: vi.fn() } as any;
-    registerAllTools(server as any, { client, allowDelete: true });
+    const client = {
+      get: vi.fn().mockResolvedValue({
+        value: [
+          {
+            LogicalName: "fundai_source",
+            OptionSet: {
+              Name: "fundai_source",
+              IsGlobal: true,
+              MetadataId: "8f2c0000-0000-0000-0000-00000000abcd",
+              Options: [
+                {
+                  Value: 909890000,
+                  Label: {
+                    UserLocalizedLabel: {
+                      Label: "Website",
+                      LanguageCode: 1033,
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    } as any;
+    registerAllTools(server as any, { client });
 
-    const deleteTool = server.tools.get("delete_record");
-    expect(deleteTool).toBeDefined();
-    expect(deleteTool!.description).not.toContain("disabled");
+    const result = await server.tools.get("get_picklist_options")!.handler({
+      entity_logical_name: "opportunity",
+      attribute_logical_name: "fundai_source",
+    });
 
-    await deleteTool!.handler({ entity_set: "leads", id: "123" });
-    expect(client.delete).toHaveBeenCalledWith("/leads(123)");
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.option_set).toEqual({
+      name: "fundai_source",
+      is_global: true,
+      metadata_id: "8f2c0000-0000-0000-0000-00000000abcd",
+    });
+    expect(parsed.options).toEqual([{ value: 909890000, label: "Website" }]);
+  });
+
+  it("drills into a Status column, which only the Status cast returns", async () => {
+    const server = createMockServer();
+    // Mirrors Dataverse: a cast that does not match the column's type answers with
+    // an empty collection rather than an error.
+    const client = {
+      get: vi.fn(async (url: string) =>
+        url.includes("StatusAttributeMetadata")
+          ? {
+              value: [
+                {
+                  LogicalName: "statuscode",
+                  OptionSet: {
+                    Name: "opportunity_statuscode",
+                    IsGlobal: false,
+                    MetadataId: "22222222-2222-2222-2222-222222222222",
+                    Options: [
+                      {
+                        Value: 1,
+                        Label: {
+                          UserLocalizedLabel: {
+                            Label: "In Progress",
+                            LanguageCode: 1033,
+                          },
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            }
+          : { value: [] },
+      ),
+    } as any;
+    registerAllTools(server as any, { client });
+
+    const result = await server.tools.get("get_picklist_options")!.handler({
+      entity_logical_name: "opportunity",
+      attribute_logical_name: "statuscode",
+    });
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.options).toEqual([{ value: 1, label: "In Progress" }]);
+    expect(parsed.option_set.name).toBe("opportunity_statuscode");
+  });
+
+  it("reads a Global OptionSet via keyed access (single-object response)", async () => {
+    const server = createMockServer();
+    // Dataverse returns a single OptionSetMetadata object here, NOT wrapped in { value: [...] }
+    const client = {
+      get: vi.fn().mockResolvedValue({
+        Name: "MyGlobalSet",
+        IsGlobal: true,
+        MetadataId: "33333333-3333-3333-3333-333333333333",
+        Options: [
+          {
+            Value: 1,
+            Label: {
+              UserLocalizedLabel: { Label: "One", LanguageCode: 1033 },
+            },
+          },
+        ],
+      }),
+    } as any;
+    registerAllTools(server as any, { client });
+
+    const result = await server.tools.get("get_picklist_options")!.handler({
+      option_set_name: "MyGlobalSet",
+    });
+
+    const url = client.get.mock.calls[0][0] as string;
+    expect(url).toContain(
+      "/GlobalOptionSetDefinitions(Name='MyGlobalSet')/Microsoft.Dynamics.CRM.OptionSetMetadata",
+    );
+    // $filter is NOT supported on this path — must use keyed access
+    const qs = new URLSearchParams(url.slice(url.indexOf("?") + 1));
+    expect(qs.get("$filter")).toBeNull();
+    expect(qs.get("$select")).toBe("Name,IsGlobal,MetadataId,Options");
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed).toEqual({
+      option_set: {
+        name: "MyGlobalSet",
+        is_global: true,
+        metadata_id: "33333333-3333-3333-3333-333333333333",
+      },
+      options: [{ value: 1, label: "One" }],
+    });
+  });
+
+  it("throws when the choice attribute is not found", async () => {
+    const server = createMockServer();
+    const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
+    registerAllTools(server as any, { client });
+
+    await expect(
+      server.tools.get("get_picklist_options")!.handler({
+        entity_logical_name: "fundai_x",
+        attribute_logical_name: "missing_attr",
+      }),
+    ).rejects.toThrow(/Choice attribute not found: fundai_x\.missing_attr/);
+  });
+
+  it("throws rather than reporting is_global=false when OptionSet is missing", async () => {
+    // A row matched a cast but carries no expanded OptionSet. Defaulting it would
+    // answer "local set" with full confidence on data that never arrived.
+    const server = createMockServer();
+    const client = {
+      get: vi.fn(async (url: string) =>
+        url.includes("PicklistAttributeMetadata")
+          ? { value: [{ LogicalName: "fundai_status" }] }
+          : { value: [] },
+      ),
+    } as any;
+    registerAllTools(server as any, { client });
+
+    await expect(
+      server.tools.get("get_picklist_options")!.handler({
+        entity_logical_name: "fundai_x",
+        attribute_logical_name: "fundai_status",
+      }),
+    ).rejects.toThrow(/OptionSet metadata missing for fundai_x\.fundai_status/);
+  });
+
+  it("propagates a failing cast instead of reporting the column as not found", async () => {
+    // Swallowing the error here would turn a transient failure into a confident
+    // "not a choice column" — a wrong answer rather than a failure.
+    const server = createMockServer();
+    const client = {
+      get: vi.fn(async (url: string) => {
+        if (url.includes("StatusAttributeMetadata")) {
+          throw new Error("Dataverse API error (503): service unavailable");
+        }
+        return { value: [] };
+      }),
+    } as any;
+    registerAllTools(server as any, { client });
+
+    await expect(
+      server.tools.get("get_picklist_options")!.handler({
+        entity_logical_name: "fundai_x",
+        attribute_logical_name: "fundai_status",
+      }),
+    ).rejects.toThrow(/503/);
+  });
+
+  it("throws a helpful error when Global OptionSet returns 404", async () => {
+    const server = createMockServer();
+    const client = {
+      get: vi
+        .fn()
+        .mockRejectedValue(new Error("Dataverse API error (404): not found")),
+    } as any;
+    registerAllTools(server as any, { client });
+
+    await expect(
+      server.tools.get("get_picklist_options")!.handler({
+        option_set_name: "Missing",
+      }),
+    ).rejects.toThrow(/Global OptionSet not found: 'Missing'/);
+  });
+
+  it("returns an empty options list when the Global OptionSet has no Options", async () => {
+    const server = createMockServer();
+    const client = {
+      get: vi
+        .fn()
+        .mockResolvedValue({ Name: "Empty", IsGlobal: true, Options: [] }),
+    } as any;
+    registerAllTools(server as any, { client });
+
+    const result = await server.tools.get("get_picklist_options")!.handler({
+      option_set_name: "Empty",
+    });
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.options).toEqual([]);
+    expect(parsed.option_set.is_global).toBe(true);
+  });
+
+  it("returns null label gracefully when no localized label exists", async () => {
+    const server = createMockServer();
+    const client = {
+      get: vi.fn().mockResolvedValue({
+        value: [
+          {
+            LogicalName: "fundai_status",
+            OptionSet: {
+              Name: "fundai_x_fundai_status",
+              IsGlobal: false,
+              Options: [{ Value: 42, Label: { LocalizedLabels: [] } }],
+            },
+          },
+        ],
+      }),
+    } as any;
+    registerAllTools(server as any, { client });
+
+    const result = await server.tools.get("get_picklist_options")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_status",
+    });
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.options).toEqual([{ value: 42, label: null }]);
+    // MetadataId absent in the payload must degrade to null, not undefined
+    expect(parsed.option_set.metadata_id).toBeNull();
+  });
+});
+
+describe("list_entity_keys", () => {
+  it("flattens the /Keys collection and prefers UserLocalizedLabel for display_name", async () => {
+    const server = createMockServer();
+    const client = {
+      get: vi.fn().mockResolvedValue({
+        value: [
+          {
+            LogicalName: "contoso_contactproviderkey",
+            SchemaName: "Contoso_ContactProviderKey",
+            DisplayName: {
+              UserLocalizedLabel: { Label: "Contact+Provider", LanguageCode: 1033 },
+              LocalizedLabels: [
+                { Label: "Contact+Provider (en)", LanguageCode: 1033 },
+              ],
+            },
+            KeyAttributes: ["contoso_contactid", "contoso_provider"],
+            EntityKeyIndexStatus: "Active",
+            MetadataId: "11111111-1111-1111-1111-111111111111",
+          },
+        ],
+      }),
+    } as any;
+    registerAllTools(server as any, { client });
+
+    const result = await server.tools.get("list_entity_keys")!.handler({
+      entity_logical_name: "contoso_record",
+    });
+
+    expect(client.get).toHaveBeenCalledWith(
+      "/EntityDefinitions(LogicalName='contoso_record')/Keys",
+    );
+    expect(JSON.parse(result.content[0].text)).toEqual([
+      {
+        logical_name: "contoso_contactproviderkey",
+        schema_name: "Contoso_ContactProviderKey",
+        // UserLocalizedLabel wins over LocalizedLabels[0] when both are present —
+        // Dataverse returns UserLocalizedLabel for the caller's UI language, so
+        // it's what users actually see.
+        display_name: "Contact+Provider",
+        key_attributes: ["contoso_contactid", "contoso_provider"],
+        entity_key_index_status: "Active",
+        metadata_id: "11111111-1111-1111-1111-111111111111",
+      },
+    ]);
+  });
+
+  it("falls back to LocalizedLabels[0] when UserLocalizedLabel is absent", async () => {
+    const server = createMockServer();
+    const client = {
+      get: vi.fn().mockResolvedValue({
+        value: [
+          {
+            LogicalName: "contoso_k",
+            DisplayName: {
+              LocalizedLabels: [{ Label: "Fallback", LanguageCode: 1033 }],
+            },
+            KeyAttributes: ["a"],
+          },
+        ],
+      }),
+    } as any;
+    registerAllTools(server as any, { client });
+
+    const result = await server.tools.get("list_entity_keys")!.handler({
+      entity_logical_name: "e",
+    });
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload[0].display_name).toBe("Fallback");
+  });
+
+  it("returns an empty array when no keys are defined", async () => {
+    const server = createMockServer();
+    const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
+    registerAllTools(server as any, { client });
+
+    const result = await server.tools.get("list_entity_keys")!.handler({
+      entity_logical_name: "e",
+    });
+    expect(JSON.parse(result.content[0].text)).toEqual([]);
+  });
+
+  it("maps 404 to a friendly 'Entity not found' error", async () => {
+    const server = createMockServer();
+    const client = {
+      get: vi
+        .fn()
+        .mockRejectedValue(new Error("Dataverse API error (404): not found")),
+    } as any;
+    registerAllTools(server as any, { client });
+
+    await expect(
+      server.tools.get("list_entity_keys")!.handler({
+        entity_logical_name: "missing_table",
+      }),
+    ).rejects.toThrow(/Entity not found: missing_table/);
+  });
+
+  it("escapes single quotes in entity name (OData injection)", async () => {
+    const server = createMockServer();
+    const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
+    registerAllTools(server as any, { client });
+
+    await server.tools.get("list_entity_keys")!.handler({
+      entity_logical_name: "weird'name",
+    });
+    expect(client.get).toHaveBeenCalledWith(
+      "/EntityDefinitions(LogicalName='weird''name')/Keys",
+    );
   });
 });

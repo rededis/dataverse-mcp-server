@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { DataverseClient } from "../src/client.js";
 import { registerAllTools } from "../src/tools/all.js";
 import { registerDevelopmentTools } from "../src/tools/development/index.js";
-import { SERVER_TOOL_GROUPS } from "../src/tools/index.js";
+import { SERVER_TOOL_GROUPS } from "../src/tools/server-groups.js";
 import type { RegisterTools } from "../src/tools/types.js";
 
 const client = {} as DataverseClient;
@@ -94,7 +94,7 @@ describe("tool groups", () => {
   }
 });
 
-// A server entry point may import src/tools/index.ts. Nothing reachable from it
+// A server entry point may import src/tools/server-groups.ts. Nothing reachable from it
 // may import src/tools/development/, or the development tools end up in the
 // server bundle (ADR-0001 §1). The only way in is src/index.ts (stdio) →
 // src/tools/all.ts → development/. #79 adds the bundle-level check in CI.
@@ -115,9 +115,9 @@ describe("import boundary", () => {
     });
   }
 
-  it("nothing reachable from src/tools/index.ts imports development/", () => {
+  it("nothing reachable from src/tools/server-groups.ts imports development/", () => {
     const seen = new Set<string>();
-    const queue = [resolve(root, "src/tools/index.ts")];
+    const queue = [resolve(root, "src/tools/server-groups.ts")];
     while (queue.length > 0) {
       const file = queue.pop() as string;
       if (seen.has(file)) continue;
