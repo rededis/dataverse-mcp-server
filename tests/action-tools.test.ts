@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import { registerAllTools } from "../src/tools/all.js";
 import {
   buildFunctionCall,
   formatODataLiteral,
   qualifyOperationName,
-  registerActionTools,
   resolveBinding,
-} from "../src/tools/action-tools.js";
+} from "../src/tools/shared/operations.js";
 
 function createMockServer() {
   const tools = new Map<string, { description: string; handler: Function }>();
@@ -85,7 +85,7 @@ describe("invoke_action", () => {
   it("posts an unbound action to /<name> with parameters as body", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({ ok: true }) } as any;
-    registerActionTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools
       .get("invoke_action")!
@@ -103,7 +103,7 @@ describe("invoke_action", () => {
   it("posts a bound action to /<set>(<id>)/Microsoft.Dynamics.CRM.<name>", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerActionTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await server.tools
       .get("invoke_action")!
@@ -125,7 +125,7 @@ describe("invoke_action", () => {
   it("posts bound PublishDuplicateRule to the duplicaterule entity", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerActionTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await server.tools
       .get("invoke_action")!
@@ -144,7 +144,7 @@ describe("invoke_action", () => {
   it("sends an empty body when no parameters are given", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerActionTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await server.tools.get("invoke_action")!.handler({ name: "WhoAmI" });
     expect(client.post).toHaveBeenCalledWith("/WhoAmI", {});
@@ -153,7 +153,7 @@ describe("invoke_action", () => {
   it("rejects an invalid operation name", async () => {
     const server = createMockServer();
     const client = { post: vi.fn() } as any;
-    registerActionTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await expect(
       server.tools.get("invoke_action")!.handler({ name: "../accounts" }),
@@ -164,7 +164,7 @@ describe("invoke_action", () => {
   it("rejects a half-specified binding", async () => {
     const server = createMockServer();
     const client = { post: vi.fn() } as any;
-    registerActionTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await expect(
       server.tools
@@ -181,7 +181,7 @@ describe("invoke_function", () => {
     const client = {
       get: vi.fn().mockResolvedValue({ UserId: GUID }),
     } as any;
-    registerActionTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools
       .get("invoke_function")!
@@ -194,7 +194,7 @@ describe("invoke_function", () => {
   it("rejects a parameter name that could inject into the URL", async () => {
     const server = createMockServer();
     const client = { get: vi.fn() } as any;
-    registerActionTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await expect(
       server.tools
@@ -207,7 +207,7 @@ describe("invoke_function", () => {
   it("inlines parameters into a bound function URL", async () => {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerActionTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await server.tools
       .get("invoke_function")!

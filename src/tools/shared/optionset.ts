@@ -1,9 +1,6 @@
-// Shared OptionSet metadata helpers.
-//
-// Lives in its own module rather than in data-tools.ts or picklist-tools.ts
-// because both of those need it (get_entity_schema and get_picklist_options),
-// and picklist-tools already imports the OData helpers from data-tools — putting
-// these there too would create an import cycle.
+// Shared OptionSet metadata helpers, used by get_entity_schema and
+// get_picklist_options (metadata-read) and by add_attribute / create_entity
+// (development).
 
 // OptionSet is declared on EnumAttributeMetadata, not on the base AttributeMetadata
 // that the plain /Attributes collection returns — so reading it always requires a

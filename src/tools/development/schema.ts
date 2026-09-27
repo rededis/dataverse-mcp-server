@@ -1,8 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { DataverseClient } from "../client.js";
-import { buildODataQuery, escapeODataString } from "./data-tools.js";
-import { globalOptionSetNotFound } from "./optionset-utils.js";
+import type { DataverseClient } from "../../client.js";
+import { buildODataQuery, escapeODataString } from "../shared/odata.js";
+import { globalOptionSetNotFound } from "../shared/optionset.js";
+import type { ToolDeps } from "../types.js";
 
 const ATTRIBUTE_ODATA_TYPE_MAP: Record<string, string> = {
   String: "Microsoft.Dynamics.CRM.StringAttributeMetadata",
@@ -409,42 +410,175 @@ async function resolveDependencyNames(
   return map;
 }
 
-export function registerSchemaTools(
-  server: McpServer,
-  client: DataverseClient,
-  allowDelete = false,
-): void {
+const DELETE_ENTITY_KEY_SHAPE = {
+  entity_logical_name: z.string().describe("Logical name of the entity"),
+  key_logical_name: z
+    .string()
+    .describe("Logical name of the alternate key to delete"),
+} as const;
+
+const CREATE_ENTITY_SHAPE = {
+  logical_name: z
+    .string()
+    .describe("Logical name with publisher prefix (e.g. 'contoso_newtable')"),
+  display_name: z.string().describe("Display name"),
+  display_collection_name: z.string().describe("Plural display name"),
+  description: z.string().optional().describe("Table description"),
+  primary_attribute_name: z
+    .string()
+    .optional()
+    .describe(
+      "Logical name for primary name attribute (default: '{prefix}_name')",
+    ),
+  primary_attribute_display_name: z
+    .string()
+    .optional()
+    .describe("Display name for primary name attribute (default: 'Name')"),
+  ownership_type: z
+    .enum(["UserOwned", "OrganizationOwned"])
+    .optional()
+    .describe("Ownership type (default: UserOwned)"),
+  attributes: z
+    .array(AttributeSchema)
+    .optional()
+    .describe("Additional attributes to create with the entity"),
+};
+
+const ADD_ATTRIBUTE_SHAPE = {
+  entity_logical_name: z.string().describe("Logical name of the entity"),
+  attribute: AttributeSchema,
+};
+
+const CREATE_RELATIONSHIP_SHAPE = {
+  type: z.enum(["OneToMany", "ManyToMany"]).describe("Relationship type"),
+  primary_entity: z
+    .string()
+    .describe("Primary (referenced) entity logical name"),
+  related_entity: z
+    .string()
+    .describe("Related (referencing) entity logical name"),
+  schema_name: z.string().describe("Unique schema name for the relationship"),
+  lookup_name: z
+    .string()
+    .optional()
+    .describe("Logical name for lookup attribute (OneToMany only)"),
+  lookup_display_name: z
+    .string()
+    .optional()
+    .describe("Display name for lookup attribute (OneToMany only)"),
+};
+
+const UPDATE_ATTRIBUTE_SHAPE = {
+  entity_logical_name: z.string().describe("Logical name of the entity"),
+  attribute_logical_name: z
+    .string()
+    .describe("Logical name of the column to update"),
+  type: z
+    .enum([
+      "String",
+      "Integer",
+      "BigInt",
+      "Decimal",
+      "Double",
+      "Money",
+      "DateTime",
+      "Uniqueidentifier",
+      "Memo",
+      "Boolean",
+      "Picklist",
+    ])
+    .describe(
+      "Current type of the attribute (required to build the correct metadata discriminator; must match the existing type — type changes are not allowed)",
+    ),
+  display_name: z.string().optional().describe("New display name"),
+  description: z.string().optional().describe("New description"),
+  required: z
+    .enum(["None", "ApplicationRequired", "SystemRequired"])
+    .optional()
+    .describe("New required level"),
+  max_length: z
+    .number()
+    .optional()
+    .describe("New max length (String/Memo only)"),
+  min_value: z
+    .number()
+    .optional()
+    .describe("New min value (numeric types only)"),
+  max_value: z
+    .number()
+    .optional()
+    .describe("New max value (numeric types only)"),
+  precision: z
+    .number()
+    .optional()
+    .describe("New precision (Decimal/Money only)"),
+  date_format: z
+    .enum(["DateOnly", "DateAndTime"])
+    .optional()
+    .describe(
+      "DateTime only: change UI presentation. See add_attribute for semantics.",
+    ),
+  date_behavior: z
+    .enum(["UserLocal", "DateOnly", "TimeZoneIndependent"])
+    .optional()
+    .describe(
+      "DateTime only: change storage semantics. ONE-WAY per Microsoft — you can switch from UserLocal to DateOnly or TimeZoneIndependent once, but cannot switch back or between the non-UserLocal values. Dataverse will return 400 if the behavior is already locked.",
+    ),
+  language_code: z
+    .number()
+    .optional()
+    .describe("Language code for labels (default: 1033)"),
+  merge_labels: z
+    .boolean()
+    .optional()
+    .describe(
+      "If true, preserve existing localized labels in other languages; if false (default), replace all localized labels with just the new one.",
+    ),
+};
+
+const DELETE_ATTRIBUTE_SHAPE = {
+  entity_logical_name: z.string().describe("Logical name of the entity"),
+  attribute_logical_name: z
+    .string()
+    .describe("Logical name of the column to delete"),
+};
+
+const DELETE_ATTRIBUTE_DISABLED_SHAPE = {
+  entity_logical_name: z.string().describe("Logical name of the entity"),
+  attribute_logical_name: z.string().describe("Logical name of the column"),
+};
+
+const GET_ATTRIBUTE_DEPENDENCIES_SHAPE = {
+  entity_logical_name: z.string().describe("Logical name of the entity"),
+  attribute_logical_name: z.string().describe("Logical name of the column"),
+};
+
+const ADD_ENTITY_KEY_SHAPE = {
+  entity_logical_name: z.string().describe("Logical name of the entity"),
+  logical_name: z
+    .string()
+    .describe(
+      "Logical name of the new key with publisher prefix (e.g. 'contoso_contactproviderkey')",
+    ),
+  display_name: z.string().describe("Display name for the key"),
+  key_attributes: z
+    .array(z.string())
+    .min(1)
+    .describe(
+      "Logical names of attributes that compose the key (one for a single-column key, multiple for a composite key). Lookups and supported primitive types only — Dataverse rejects keys over Memo, image, or file columns.",
+    ),
+  solution_unique_name: z
+    .string()
+    .optional()
+    .describe("Solution unique name (defaults to the Default Solution)"),
+};
+
+export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
+  const { client, allowDelete = false } = deps;
   server.tool(
     "create_entity",
     "Create a new Dataverse table (entity) with specified attributes",
-    {
-      logical_name: z
-        .string()
-        .describe(
-          "Logical name with publisher prefix (e.g. 'contoso_newtable')",
-        ),
-      display_name: z.string().describe("Display name"),
-      display_collection_name: z.string().describe("Plural display name"),
-      description: z.string().optional().describe("Table description"),
-      primary_attribute_name: z
-        .string()
-        .optional()
-        .describe(
-          "Logical name for primary name attribute (default: '{prefix}_name')",
-        ),
-      primary_attribute_display_name: z
-        .string()
-        .optional()
-        .describe("Display name for primary name attribute (default: 'Name')"),
-      ownership_type: z
-        .enum(["UserOwned", "OrganizationOwned"])
-        .optional()
-        .describe("Ownership type (default: UserOwned)"),
-      attributes: z
-        .array(AttributeSchema)
-        .optional()
-        .describe("Additional attributes to create with the entity"),
-    },
+    CREATE_ENTITY_SHAPE,
     async (params) => {
       const separatorIndex = params.logical_name.indexOf("_");
       if (
@@ -576,10 +710,7 @@ export function registerSchemaTools(
   server.tool(
     "add_attribute",
     "Add a column (attribute) to an existing Dataverse table",
-    {
-      entity_logical_name: z.string().describe("Logical name of the entity"),
-      attribute: AttributeSchema,
-    },
+    ADD_ATTRIBUTE_SHAPE,
     async ({ entity_logical_name, attribute }) => {
       // Validate before the lookup so a mutually-exclusive pair fails without
       // spending a round trip on a name we are going to reject anyway.
@@ -602,26 +733,7 @@ export function registerSchemaTools(
   server.tool(
     "create_relationship",
     "Create a relationship between two Dataverse tables",
-    {
-      type: z.enum(["OneToMany", "ManyToMany"]).describe("Relationship type"),
-      primary_entity: z
-        .string()
-        .describe("Primary (referenced) entity logical name"),
-      related_entity: z
-        .string()
-        .describe("Related (referencing) entity logical name"),
-      schema_name: z
-        .string()
-        .describe("Unique schema name for the relationship"),
-      lookup_name: z
-        .string()
-        .optional()
-        .describe("Logical name for lookup attribute (OneToMany only)"),
-      lookup_display_name: z
-        .string()
-        .optional()
-        .describe("Display name for lookup attribute (OneToMany only)"),
-    },
+    CREATE_RELATIONSHIP_SHAPE,
     async (params) => {
       if (params.type === "OneToMany") {
         const body = {
@@ -686,73 +798,7 @@ export function registerSchemaTools(
   server.tool(
     "update_attribute",
     "Update metadata of an existing column: display name, description, required level, max length, min/max value, precision. Dataverse fixes a column's type and logical name at creation — to change either, add_attribute a new column, migrate the values with update_record, then delete_attribute the old one.",
-    {
-      entity_logical_name: z.string().describe("Logical name of the entity"),
-      attribute_logical_name: z
-        .string()
-        .describe("Logical name of the column to update"),
-      type: z
-        .enum([
-          "String",
-          "Integer",
-          "BigInt",
-          "Decimal",
-          "Double",
-          "Money",
-          "DateTime",
-          "Uniqueidentifier",
-          "Memo",
-          "Boolean",
-          "Picklist",
-        ])
-        .describe(
-          "Current type of the attribute (required to build the correct metadata discriminator; must match the existing type — type changes are not allowed)",
-        ),
-      display_name: z.string().optional().describe("New display name"),
-      description: z.string().optional().describe("New description"),
-      required: z
-        .enum(["None", "ApplicationRequired", "SystemRequired"])
-        .optional()
-        .describe("New required level"),
-      max_length: z
-        .number()
-        .optional()
-        .describe("New max length (String/Memo only)"),
-      min_value: z
-        .number()
-        .optional()
-        .describe("New min value (numeric types only)"),
-      max_value: z
-        .number()
-        .optional()
-        .describe("New max value (numeric types only)"),
-      precision: z
-        .number()
-        .optional()
-        .describe("New precision (Decimal/Money only)"),
-      date_format: z
-        .enum(["DateOnly", "DateAndTime"])
-        .optional()
-        .describe(
-          "DateTime only: change UI presentation. See add_attribute for semantics.",
-        ),
-      date_behavior: z
-        .enum(["UserLocal", "DateOnly", "TimeZoneIndependent"])
-        .optional()
-        .describe(
-          "DateTime only: change storage semantics. ONE-WAY per Microsoft — you can switch from UserLocal to DateOnly or TimeZoneIndependent once, but cannot switch back or between the non-UserLocal values. Dataverse will return 400 if the behavior is already locked.",
-        ),
-      language_code: z
-        .number()
-        .optional()
-        .describe("Language code for labels (default: 1033)"),
-      merge_labels: z
-        .boolean()
-        .optional()
-        .describe(
-          "If true, preserve existing localized labels in other languages; if false (default), replace all localized labels with just the new one.",
-        ),
-    },
+    UPDATE_ATTRIBUTE_SHAPE,
     async (params) => {
       validateDateTimeFields(params);
 
@@ -857,12 +903,7 @@ export function registerSchemaTools(
     server.tool(
       "delete_attribute",
       "Permanently delete a column (attribute) from a Dataverse table. ⚠️ DESTROYS the data stored in that column across ALL records, recoverable only from a full environment backup. Confirm with the user before calling. To rename a column or change its type, follow the migration recipe in update_attribute instead.",
-      {
-        entity_logical_name: z.string().describe("Logical name of the entity"),
-        attribute_logical_name: z
-          .string()
-          .describe("Logical name of the column to delete"),
-      },
+      DELETE_ATTRIBUTE_SHAPE,
       async ({ entity_logical_name, attribute_logical_name }) => {
         const entityEscaped = escapeODataString(entity_logical_name);
         const attrEscaped = escapeODataString(attribute_logical_name);
@@ -883,12 +924,7 @@ export function registerSchemaTools(
     server.tool(
       "delete_attribute",
       "Delete a column from a Dataverse table (currently disabled for safety)",
-      {
-        entity_logical_name: z.string().describe("Logical name of the entity"),
-        attribute_logical_name: z
-          .string()
-          .describe("Logical name of the column"),
-      },
+      DELETE_ATTRIBUTE_DISABLED_SHAPE,
       async () => ({
         content: [
           {
@@ -912,10 +948,7 @@ export function registerSchemaTools(
   server.tool(
     "get_attribute_dependencies",
     "List CRM components that reference a column — forms, views, workflows, business rules, plugins. Call this when delete_attribute fails with 0x8004f01f, or before any destructive change to a column. Component names are best-effort: resolved for common types, null otherwise. Backed by the Dataverse RetrieveDependenciesForDelete function.",
-    {
-      entity_logical_name: z.string().describe("Logical name of the entity"),
-      attribute_logical_name: z.string().describe("Logical name of the column"),
-    },
+    GET_ATTRIBUTE_DEPENDENCIES_SHAPE,
     async ({ entity_logical_name, attribute_logical_name }) => {
       const entityEscaped = escapeODataString(entity_logical_name);
       const attrEscaped = escapeODataString(attribute_logical_name);
@@ -993,82 +1026,9 @@ export function registerSchemaTools(
   );
 
   server.tool(
-    "list_entity_keys",
-    "List alternate keys defined on a Dataverse table. Returns a flat array of { logical_name, schema_name, display_name, key_attributes, entity_key_index_status, metadata_id }. entity_key_index_status reflects the background index build (Pending → Active, or Failed) — alt keys are not usable for keyed-PATCH upserts until Active.",
-    {
-      entity_logical_name: z.string().describe("Logical name of the entity"),
-    },
-    async ({ entity_logical_name }) => {
-      const entityEscaped = escapeODataString(entity_logical_name);
-      let result: {
-        value: Array<{
-          LogicalName?: string;
-          SchemaName?: string;
-          DisplayName?: {
-            UserLocalizedLabel?: { Label?: string };
-            LocalizedLabels?: Array<{ Label?: string }>;
-          };
-          KeyAttributes?: string[];
-          EntityKeyIndexStatus?: string;
-          MetadataId?: string;
-        }>;
-      };
-      try {
-        result = (await client.get(
-          `/EntityDefinitions(LogicalName='${entityEscaped}')/Keys`,
-        )) as typeof result;
-      } catch (err) {
-        if (
-          err instanceof Error &&
-          /Dataverse API error \(404\)/.test(err.message)
-        ) {
-          throw new Error(`Entity not found: ${entity_logical_name}`);
-        }
-        throw err;
-      }
-
-      const flat = (result.value ?? []).map((k) => ({
-        logical_name: k.LogicalName ?? null,
-        schema_name: k.SchemaName ?? null,
-        display_name:
-          k.DisplayName?.UserLocalizedLabel?.Label ??
-          k.DisplayName?.LocalizedLabels?.[0]?.Label ??
-          null,
-        key_attributes: k.KeyAttributes ?? [],
-        entity_key_index_status: k.EntityKeyIndexStatus ?? null,
-        metadata_id: k.MetadataId ?? null,
-      }));
-
-      return {
-        content: [
-          { type: "text" as const, text: JSON.stringify(flat, null, 2) },
-        ],
-      };
-    },
-  );
-
-  server.tool(
     "add_entity_key",
     "Create an alternate key on a Dataverse table (composite supported via key_attributes). Use for race-safe upserts via keyed-PATCH or to enforce a uniqueness constraint that the primary key doesn't cover. NOTE: Dataverse builds the supporting unique index asynchronously — the key is not usable for keyed lookups until its EntityKeyIndexStatus becomes 'Active'. Poll with list_entity_keys.",
-    {
-      entity_logical_name: z.string().describe("Logical name of the entity"),
-      logical_name: z
-        .string()
-        .describe(
-          "Logical name of the new key with publisher prefix (e.g. 'contoso_contactproviderkey')",
-        ),
-      display_name: z.string().describe("Display name for the key"),
-      key_attributes: z
-        .array(z.string())
-        .min(1)
-        .describe(
-          "Logical names of attributes that compose the key (one for a single-column key, multiple for a composite key). Lookups and supported primitive types only — Dataverse rejects keys over Memo, image, or file columns.",
-        ),
-      solution_unique_name: z
-        .string()
-        .optional()
-        .describe("Solution unique name (defaults to the Default Solution)"),
-    },
+    ADD_ENTITY_KEY_SHAPE,
     async (params) => {
       const body: Record<string, unknown> = {
         "@odata.type": "Microsoft.Dynamics.CRM.EntityKeyMetadata",
@@ -1096,18 +1056,11 @@ export function registerSchemaTools(
     },
   );
 
-  const deleteEntityKeyShape = {
-    entity_logical_name: z.string().describe("Logical name of the entity"),
-    key_logical_name: z
-      .string()
-      .describe("Logical name of the alternate key to delete"),
-  } as const;
-
   if (allowDelete) {
     server.tool(
       "delete_entity_key",
       "Permanently delete an alternate key from a Dataverse table. ⚠️ Drops the supporting unique index; any client code relying on keyed-PATCH upserts against this key will stop working. The underlying attributes and their data are NOT affected — only the key definition and its index are removed.",
-      deleteEntityKeyShape,
+      DELETE_ENTITY_KEY_SHAPE,
       async ({ entity_logical_name, key_logical_name }) => {
         const entityEscaped = escapeODataString(entity_logical_name);
         const keyEscaped = escapeODataString(key_logical_name);
@@ -1128,7 +1081,7 @@ export function registerSchemaTools(
     server.tool(
       "delete_entity_key",
       "Delete an alternate key from a Dataverse table (currently disabled for safety)",
-      deleteEntityKeyShape,
+      DELETE_ENTITY_KEY_SHAPE,
       async () => ({
         content: [
           {

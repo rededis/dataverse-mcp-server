@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Tools are registered by purpose instead of by topic (closes #72): `metadata-read`, `data-read`, `data-write`, `actions`, `functions` and `development`, as named in [ADR-0001](docs/adr/0001-local-and-remote-variants.md) §4. Nothing a client sees changes except order: tool names, descriptions, input schemas and `DATAVERSE_ALLOW_DELETE` behaviour are identical, pinned by a `tools/list` snapshot taken before the change. `tools/list` now returns tools grouped this way rather than in the old per-file order.
+- Tool input schemas are built once at module load instead of on every registration, ahead of SDK v2 building a server instance per HTTP request.
+
 ## [0.7.1] - 2026-08-17
 
 ### Fixed

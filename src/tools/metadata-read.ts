@@ -2,27 +2,28 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DataverseClient } from "../client.js";
 import {
+  buildODataQuery,
+  escapeODataString,
+  fetchAllPages,
+} from "./shared/odata.js";
+import {
   CHOICE_ATTRIBUTE_CASTS,
+  fetchChoiceAttributes,
   fetchChoiceAttributesSettled,
+  flattenOption,
+  flattenOptionSet,
+  globalOptionSetNotFound,
   OPTION_SET_EXPAND,
+  OPTION_SET_IDENTITY_SELECT,
   type OptionSetSummary,
+  type RawOptionSet,
   summarizeOptionSet,
-} from "./optionset-utils.js";
-
-export function escapeODataString(value: string): string {
-  return value.replace(/'/g, "''");
-}
-
-export function buildODataQuery(
-  params: Record<string, string | number | undefined>,
-): string {
-  const qs = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) qs.set(key, String(value));
-  }
-  const str = qs.toString();
-  return str ? `?${str}` : "";
-}
+} from "./shared/optionset.js";
+import {
+  LOCATION_SHAPE,
+  validatePicklistLocation,
+} from "./shared/picklist-location.js";
+import type { ToolDeps } from "./types.js";
 
 const METADATA_ID_CHUNK_SIZE = 50;
 
@@ -31,23 +32,6 @@ const ENTITY_DEFINITION_SELECT =
 
 interface EntityDefinitionRow {
   LogicalName?: string;
-}
-
-async function fetchAllPages<T>(
-  client: DataverseClient,
-  path: string,
-): Promise<T[]> {
-  const results: T[] = [];
-  let next: string | undefined = path;
-  while (next) {
-    const page = (await client.get(next)) as {
-      value: T[];
-      "@odata.nextLink"?: string;
-    };
-    results.push(...page.value);
-    next = page["@odata.nextLink"];
-  }
-  return results;
 }
 
 async function getEntityIdsInSolution(
@@ -80,30 +64,46 @@ async function getEntityIdsInSolution(
   return components.map((c) => c.objectid);
 }
 
-export function registerDataTools(
+const LIST_ENTITIES_SHAPE = {
+  prefix: z
+    .string()
+    .optional()
+    .describe(
+      "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified.",
+    ),
+  solution: z
+    .string()
+    .optional()
+    .describe(
+      "Filter entities by solution unique name (e.g. 'MySolution'). Uses DATAVERSE_SOLUTION_NAME env if not specified. Pass an empty string to disable the default filter.",
+    ),
+};
+
+const GET_ENTITY_SCHEMA_SHAPE = {
+  entity_logical_name: z
+    .string()
+    .describe(
+      "Logical name of the entity (e.g. 'account', 'contact', 'contoso_bankaccount')",
+    ),
+};
+
+const LIST_ENTITY_KEYS_SHAPE = {
+  entity_logical_name: z.string().describe("Logical name of the entity"),
+};
+
+export function registerMetadataReadTools(
   server: McpServer,
-  client: DataverseClient,
-  defaultPrefix?: string,
-  allowDelete = false,
-  defaultSolution?: string,
+  deps: ToolDeps,
 ): void {
+  const {
+    client,
+    entityPrefix: defaultPrefix,
+    solutionName: defaultSolution,
+  } = deps;
   server.tool(
     "list_entities",
     "List Dataverse tables (entities) with optional prefix and solution filters",
-    {
-      prefix: z
-        .string()
-        .optional()
-        .describe(
-          "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified.",
-        ),
-      solution: z
-        .string()
-        .optional()
-        .describe(
-          "Filter entities by solution unique name (e.g. 'MySolution'). Uses DATAVERSE_SOLUTION_NAME env if not specified. Pass an empty string to disable the default filter.",
-        ),
-    },
+    LIST_ENTITIES_SHAPE,
     async ({ prefix, solution }) => {
       const effectivePrefix = prefix ?? defaultPrefix;
       const effectiveSolution =
@@ -155,7 +155,7 @@ export function registerDataTools(
         return asJson(entities);
       }
 
-      // Paged, like the /solutions and /solutioncomponents reads above. A live
+      // Paged, like the /solutioncomponents read above and list_solutions. A live
       // org returns all 2078 definitions in one response with no @odata.nextLink,
       // but the prefix is now applied to whatever comes back, so completeness is
       // load-bearing — worth not resting on an unwritten platform guarantee.
@@ -172,49 +172,9 @@ export function registerDataTools(
   );
 
   server.tool(
-    "list_solutions",
-    "List Dataverse solutions (uniquename is used to filter list_entities)",
-    {
-      include_managed: z
-        .boolean()
-        .optional()
-        .describe(
-          "Include managed solutions (default: false — only unmanaged are returned)",
-        ),
-    },
-    async ({ include_managed }) => {
-      const filters = ["isvisible eq true"];
-      if (!include_managed) filters.push("ismanaged eq false");
-      const query = buildODataQuery({
-        $select: "solutionid,uniquename,friendlyname,version,ismanaged",
-        $filter: filters.join(" and "),
-        $orderby: "friendlyname",
-      });
-      const solutions = await fetchAllPages<unknown>(
-        client,
-        `/solutions${query}`,
-      );
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(solutions, null, 2),
-          },
-        ],
-      };
-    },
-  );
-
-  server.tool(
     "get_entity_schema",
     "Get attributes (columns) of a specific Dataverse table. Choice-style columns (Choice, Status, State, MultiSelect) carry an option_set summary with is_global and option_count, so one dump shows which choice lists are shared org-wide. Read the option values per column with get_picklist_options.",
-    {
-      entity_logical_name: z
-        .string()
-        .describe(
-          "Logical name of the entity (e.g. 'account', 'contact', 'contoso_bankaccount')",
-        ),
-    },
+    GET_ENTITY_SCHEMA_SHAPE,
     async ({ entity_logical_name }) => {
       const escaped = escapeODataString(entity_logical_name);
       const attributesPath = `/EntityDefinitions(LogicalName='${escaped}')/Attributes`;
@@ -304,168 +264,123 @@ export function registerDataTools(
   );
 
   server.tool(
-    "query_records",
-    "Query records from a Dataverse table with OData filters",
-    {
-      entity_set: z
-        .string()
-        .describe("Entity set name (plural, e.g. 'accounts', 'contacts')"),
-      select: z
-        .string()
-        .optional()
-        .describe("Comma-separated list of columns to return ($select)"),
-      filter: z
-        .string()
-        .optional()
-        .describe("OData filter expression ($filter)"),
-      top: z
-        .number()
-        .optional()
-        .describe("Maximum number of records to return ($top)"),
-      orderby: z.string().optional().describe("Order by expression ($orderby)"),
-      expand: z
-        .string()
-        .optional()
-        .describe("Related entities to expand ($expand)"),
-    },
-    async ({ entity_set, select, filter, top, orderby, expand }) => {
-      const query = buildODataQuery({
-        $select: select,
-        $filter: filter,
-        $top: top !== undefined ? top : undefined,
-        $orderby: orderby,
-        $expand: expand,
-      });
-      const result = (await client.get(`/${entity_set}${query}`)) as {
-        value: unknown[];
+    "get_picklist_options",
+    "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns.",
+    LOCATION_SHAPE,
+    async (params) => {
+      validatePicklistLocation(params);
+      let optionSet: RawOptionSet;
+      if (params.option_set_name) {
+        const escaped = escapeODataString(params.option_set_name);
+        const query = buildODataQuery({
+          $select: `${OPTION_SET_IDENTITY_SELECT},Options`,
+        });
+        // Dataverse rejects $filter on /GlobalOptionSetDefinitions (405), so address by alternate key (Name).
+        // Cast to OptionSetMetadata — Options lives on the derived type, not the base GlobalOptionSetDefinition.
+        try {
+          optionSet = (await client.get(
+            `/GlobalOptionSetDefinitions(Name='${escaped}')/Microsoft.Dynamics.CRM.OptionSetMetadata${query}`,
+          )) as RawOptionSet;
+        } catch (err) {
+          if (err instanceof Error && /\b404\b/.test(err.message)) {
+            throw globalOptionSetNotFound(params.option_set_name);
+          }
+          throw err;
+        }
+      } else {
+        // validatePicklistLocation guarantees both are present when option_set_name is absent
+        const entity = params.entity_logical_name ?? "";
+        const attr = params.attribute_logical_name ?? "";
+        const entityEscaped = escapeODataString(entity);
+        const attrEscaped = escapeODataString(attr);
+        const query = buildODataQuery({
+          $filter: `LogicalName eq '${attrEscaped}'`,
+          $select: "LogicalName",
+          $expand: OPTION_SET_EXPAND,
+        });
+        const rows = await fetchChoiceAttributes(
+          client,
+          `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes`,
+          query,
+        );
+        if (rows.length === 0) {
+          throw new Error(
+            `Choice attribute not found: ${entity}.${attr} — no Choice, Status, State or MultiSelect column with that logical name`,
+          );
+        }
+        // Not defaulted to {}: an absent OptionSet would flatten to
+        // is_global: false, reporting a local set with full confidence on data that
+        // never arrived. is_global is the entire point of this tool, so an unknown
+        // answer has to fail rather than guess.
+        if (!rows[0].OptionSet) {
+          throw new Error(
+            `OptionSet metadata missing for ${entity}.${attr} — cannot tell whether it is Local or Global`,
+          );
+        }
+        optionSet = rows[0].OptionSet;
+      }
+      const payload = {
+        option_set: flattenOptionSet(optionSet),
+        options: (optionSet.Options ?? []).map(flattenOption),
       };
       return {
         content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(result.value, null, 2),
-          },
+          { type: "text" as const, text: JSON.stringify(payload, null, 2) },
         ],
       };
     },
   );
 
   server.tool(
-    "get_record",
-    "Get a single record by ID from a Dataverse table",
-    {
-      entity_set: z
-        .string()
-        .describe("Entity set name (plural, e.g. 'accounts', 'contacts')"),
-      id: z.string().describe("Record GUID"),
-      select: z
-        .string()
-        .optional()
-        .describe("Comma-separated list of columns to return ($select)"),
-      expand: z
-        .string()
-        .optional()
-        .describe("Related entities to expand ($expand)"),
-    },
-    async ({ entity_set, id, select, expand }) => {
-      const query = buildODataQuery({ $select: select, $expand: expand });
-      const result = await client.get(`/${entity_set}(${id})${query}`);
+    "list_entity_keys",
+    "List alternate keys defined on a Dataverse table. Returns a flat array of { logical_name, schema_name, display_name, key_attributes, entity_key_index_status, metadata_id }. entity_key_index_status reflects the background index build (Pending → Active, or Failed) — alt keys are not usable for keyed-PATCH upserts until Active.",
+    LIST_ENTITY_KEYS_SHAPE,
+    async ({ entity_logical_name }) => {
+      const entityEscaped = escapeODataString(entity_logical_name);
+      let result: {
+        value: Array<{
+          LogicalName?: string;
+          SchemaName?: string;
+          DisplayName?: {
+            UserLocalizedLabel?: { Label?: string };
+            LocalizedLabels?: Array<{ Label?: string }>;
+          };
+          KeyAttributes?: string[];
+          EntityKeyIndexStatus?: string;
+          MetadataId?: string;
+        }>;
+      };
+      try {
+        result = (await client.get(
+          `/EntityDefinitions(LogicalName='${entityEscaped}')/Keys`,
+        )) as typeof result;
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          /Dataverse API error \(404\)/.test(err.message)
+        ) {
+          throw new Error(`Entity not found: ${entity_logical_name}`);
+        }
+        throw err;
+      }
+
+      const flat = (result.value ?? []).map((k) => ({
+        logical_name: k.LogicalName ?? null,
+        schema_name: k.SchemaName ?? null,
+        display_name:
+          k.DisplayName?.UserLocalizedLabel?.Label ??
+          k.DisplayName?.LocalizedLabels?.[0]?.Label ??
+          null,
+        key_attributes: k.KeyAttributes ?? [],
+        entity_key_index_status: k.EntityKeyIndexStatus ?? null,
+        metadata_id: k.MetadataId ?? null,
+      }));
+
       return {
         content: [
-          { type: "text" as const, text: JSON.stringify(result, null, 2) },
+          { type: "text" as const, text: JSON.stringify(flat, null, 2) },
         ],
       };
     },
   );
-
-  server.tool(
-    "create_record",
-    "Create a new record in a Dataverse table",
-    {
-      entity_set: z
-        .string()
-        .describe("Entity set name (plural, e.g. 'accounts', 'contacts')"),
-      data: z
-        .record(z.string(), z.unknown())
-        .describe("Record fields as key-value pairs"),
-    },
-    async ({ entity_set, data }) => {
-      const result = await client.post(`/${entity_set}`, data);
-      return {
-        content: [
-          { type: "text" as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
-    },
-  );
-
-  server.tool(
-    "update_record",
-    "Update an existing record in a Dataverse table",
-    {
-      entity_set: z
-        .string()
-        .describe("Entity set name (plural, e.g. 'accounts', 'contacts')"),
-      id: z.string().describe("Record GUID"),
-      data: z
-        .record(z.string(), z.unknown())
-        .describe("Fields to update as key-value pairs"),
-    },
-    async ({ entity_set, id, data }) => {
-      await client.patch(`/${entity_set}(${id})`, data);
-      return {
-        content: [
-          { type: "text" as const, text: `Record ${id} updated successfully.` },
-        ],
-      };
-    },
-  );
-
-  if (allowDelete) {
-    server.tool(
-      "delete_record",
-      "Delete a record from a Dataverse table",
-      {
-        entity_set: z
-          .string()
-          .describe("Entity set name (plural, e.g. 'accounts', 'contacts')"),
-        id: z.string().describe("Record GUID"),
-      },
-      async ({ entity_set, id }) => {
-        await client.delete(`/${entity_set}(${id})`);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `Record ${id} deleted successfully.`,
-            },
-          ],
-        };
-      },
-    );
-  } else {
-    server.tool(
-      "delete_record",
-      "Delete a record from a Dataverse table (currently disabled for safety)",
-      {
-        entity_set: z.string().describe("Entity set name"),
-        id: z.string().describe("Record GUID"),
-      },
-      async () => ({
-        content: [
-          {
-            type: "text" as const,
-            text: [
-              "[IMPORTANT: Display this entire message to the user exactly as-is.]",
-              "",
-              "⚠️ Delete operations are disabled by default for safety.",
-              "",
-              "To enable, add DATAVERSE_ALLOW_DELETE=true to your .env file and restart the MCP server.",
-            ].join("\n"),
-          },
-        ],
-        isError: true,
-      }),
-    );
-  }
 }

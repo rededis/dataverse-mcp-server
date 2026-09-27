@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { registerDataTools } from "../src/tools/data-tools.js";
+import type { DataverseClient } from "../src/client.js";
+import { registerAllTools } from "../src/tools/all.js";
 
 function createMockServer() {
   const tools = new Map<string, { description: string; handler: Function }>();
@@ -13,7 +14,7 @@ function createMockServer() {
   };
 }
 
-const mockClient = {} as Parameters<typeof registerDataTools>[1];
+const mockClient = {} as DataverseClient;
 
 describe("list_solutions", () => {
   it("queries /solutions excluding managed by default", async () => {
@@ -21,7 +22,7 @@ describe("list_solutions", () => {
     const client = {
       get: vi.fn().mockResolvedValue({ value: [{ uniquename: "Default" }] }),
     } as any;
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const tool = server.tools.get("list_solutions");
     expect(tool).toBeDefined();
@@ -39,7 +40,7 @@ describe("list_solutions", () => {
   it("includes managed solutions when include_managed=true", async () => {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await server.tools.get("list_solutions")!.handler({ include_managed: true });
     const url = client.get.mock.calls[0][0] as string;
@@ -60,7 +61,7 @@ describe("list_solutions", () => {
         })
         .mockResolvedValueOnce({ value: [{ uniquename: "B" }] }),
     } as any;
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools.get("list_solutions")!.handler({});
     expect(client.get).toHaveBeenCalledTimes(2);
@@ -86,7 +87,7 @@ describe("list_entities filters", () => {
         ],
       }),
     } as any;
-    registerDataTools(server as any, client, "contoso_");
+    registerAllTools(server as any, { client, entityPrefix: "contoso_" });
 
     const result = await server.tools.get("list_entities")!.handler({});
     expect(client.get).toHaveBeenCalledTimes(1);
@@ -111,7 +112,7 @@ describe("list_entities filters", () => {
         value: [{ LogicalName: "account" }, { LogicalName: "contoso_x" }],
       }),
     } as any;
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools.get("list_entities")!.handler({});
     expect(client.get).toHaveBeenCalledTimes(1);
@@ -135,7 +136,7 @@ describe("list_entities filters", () => {
           value: [{ LogicalName: "contoso_b" }, { LogicalName: "account" }],
         }),
     } as any;
-    registerDataTools(server as any, client, "contoso_");
+    registerAllTools(server as any, { client, entityPrefix: "contoso_" });
 
     const result = await server.tools.get("list_entities")!.handler({});
     expect(client.get).toHaveBeenCalledTimes(2);
@@ -165,7 +166,7 @@ describe("list_entities filters", () => {
           value: [{ LogicalName: "contoso_a" }, { LogicalName: "contoso_b" }],
         }),
     } as any;
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools
       .get("list_entities")!
@@ -220,7 +221,7 @@ describe("list_entities filters", () => {
           ],
         }),
     } as any;
-    registerDataTools(server as any, client, "contoso_");
+    registerAllTools(server as any, { client, entityPrefix: "contoso_" });
 
     const result = await server.tools
       .get("list_entities")!
@@ -247,7 +248,11 @@ describe("list_entities filters", () => {
         .mockResolvedValueOnce({ value: [{ solutionid: solutionId }] })
         .mockResolvedValueOnce({ value: [] }),
     } as any;
-    registerDataTools(server as any, client, undefined, false, "DefaultSol");
+    registerAllTools(server as any, {
+      client,
+      allowDelete: false,
+      solutionName: "DefaultSol",
+    });
 
     const result = await server.tools.get("list_entities")!.handler({});
     expect(client.get).toHaveBeenCalledTimes(2);
@@ -262,7 +267,11 @@ describe("list_entities filters", () => {
   it("empty-string solution parameter disables default solution filter", async () => {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerDataTools(server as any, client, undefined, false, "DefaultSol");
+    registerAllTools(server as any, {
+      client,
+      allowDelete: false,
+      solutionName: "DefaultSol",
+    });
 
     await server.tools.get("list_entities")!.handler({ solution: "" });
     expect(client.get).toHaveBeenCalledTimes(1);
@@ -276,7 +285,7 @@ describe("list_entities filters", () => {
     const client = {
       get: vi.fn().mockResolvedValueOnce({ value: [] }),
     } as any;
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await expect(
       server.tools.get("list_entities")!.handler({ solution: "Missing" }),
@@ -292,7 +301,7 @@ describe("list_entities filters", () => {
         .mockResolvedValueOnce({ value: [{ solutionid: solutionId }] })
         .mockResolvedValueOnce({ value: [] }),
     } as any;
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools
       .get("list_entities")!
@@ -319,7 +328,7 @@ describe("list_entities filters", () => {
         .mockResolvedValueOnce({ value: [{ objectid: entityB }] })
         .mockResolvedValueOnce({ value: [] }),
     } as any;
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await server.tools
       .get("list_entities")!
@@ -353,7 +362,7 @@ describe("list_entities filters", () => {
         })
         .mockResolvedValue({ value: [] }),
     } as any;
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await server.tools
       .get("list_entities")!
@@ -394,7 +403,7 @@ describe("get_entity_schema", () => {
   it("issues the base request plus one cast request per concrete choice type", async () => {
     const server = createMockServer();
     const client = schemaClient([STRING_ATTR]);
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await server.tools
       .get("get_entity_schema")!
@@ -443,7 +452,7 @@ describe("get_entity_schema", () => {
         },
       ],
     });
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -476,7 +485,7 @@ describe("get_entity_schema", () => {
         },
       ],
     });
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -503,7 +512,7 @@ describe("get_entity_schema", () => {
         },
       ],
     });
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -524,7 +533,7 @@ describe("get_entity_schema", () => {
         },
       ],
     });
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -565,7 +574,7 @@ describe("get_entity_schema", () => {
         ],
       },
     );
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -601,7 +610,7 @@ describe("get_entity_schema", () => {
         return { value: [STRING_ATTR, PICKLIST_ATTR] };
       }),
     } as any;
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -626,7 +635,7 @@ describe("get_entity_schema", () => {
     const client = schemaClient([PICKLIST_ATTR], {
       PicklistAttributeMetadata: [{ LogicalName: "fundai_source" }],
     });
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -644,7 +653,7 @@ describe("get_entity_schema", () => {
   it("emits no warning block when every cast succeeds", async () => {
     const server = createMockServer();
     const client = schemaClient([STRING_ATTR]);
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -663,7 +672,7 @@ describe("get_entity_schema", () => {
         throw new Error("Dataverse API error (404): table not found");
       }),
     } as any;
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await expect(
       server.tools
@@ -675,7 +684,7 @@ describe("get_entity_schema", () => {
   it("escapes single quotes in the entity logical name on both requests", async () => {
     const server = createMockServer();
     const client = schemaClient([]);
-    registerDataTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await server.tools
       .get("get_entity_schema")!
@@ -687,10 +696,10 @@ describe("get_entity_schema", () => {
   });
 });
 
-describe("registerDataTools allowDelete", () => {
+describe("delete_record allowDelete", () => {
   it("delete_record returns error when allowDelete is false", async () => {
     const server = createMockServer();
-    registerDataTools(server as any, mockClient, undefined, false);
+    registerAllTools(server as any, { client: mockClient, allowDelete: false });
 
     const deleteTool = server.tools.get("delete_record");
     expect(deleteTool).toBeDefined();
@@ -704,7 +713,7 @@ describe("registerDataTools allowDelete", () => {
   it("delete_record calls client.delete when allowDelete is true", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn() } as any;
-    registerDataTools(server as any, client, undefined, true);
+    registerAllTools(server as any, { client, allowDelete: true });
 
     const deleteTool = server.tools.get("delete_record");
     expect(deleteTool).toBeDefined();

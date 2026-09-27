@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { registerPicklistTools } from "../src/tools/picklist-tools.js";
+import { registerAllTools } from "../src/tools/all.js";
 
 function createMockServer() {
   const tools = new Map<string, { description: string; handler: Function }>();
@@ -31,7 +31,7 @@ describe("picklist location XOR validation", () => {
       const server = createMockServer();
       const client = { post: vi.fn(), get: vi.fn() } as any;
       // allowDelete=true so the delete_picklist_option real handler (not the stub) is registered
-      registerPicklistTools(server as any, client, true);
+      registerAllTools(server as any, { client, allowDelete: true });
 
       await expect(
         server.tools.get(name)!.handler({
@@ -47,7 +47,7 @@ describe("picklist location XOR validation", () => {
     it(`${name}: throws when neither Local pair nor Global is provided`, async () => {
       const server = createMockServer();
       const client = { post: vi.fn(), get: vi.fn() } as any;
-      registerPicklistTools(server as any, client, true);
+      registerAllTools(server as any, { client, allowDelete: true });
 
       await expect(
         server.tools.get(name)!.handler({ label: "L", value: 1 }),
@@ -57,7 +57,7 @@ describe("picklist location XOR validation", () => {
     it(`${name}: throws when Local pair is incomplete (entity only)`, async () => {
       const server = createMockServer();
       const client = { post: vi.fn(), get: vi.fn() } as any;
-      registerPicklistTools(server as any, client, true);
+      registerAllTools(server as any, { client, allowDelete: true });
 
       await expect(
         server.tools.get(name)!.handler({
@@ -76,7 +76,7 @@ describe("add_picklist_option", () => {
     const client = {
       post: vi.fn().mockResolvedValue({ NewOptionValue: 909890007 }),
     } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools.get("add_picklist_option")!.handler({
       entity_logical_name: "fundai_achtransaction",
@@ -100,7 +100,7 @@ describe("add_picklist_option", () => {
   it("posts InsertOptionValue with OptionSetName for Global", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await server.tools.get("add_picklist_option")!.handler({
       option_set_name: "MyGlobalSet",
@@ -118,7 +118,7 @@ describe("add_picklist_option", () => {
     const client = {
       post: vi.fn().mockResolvedValue({ NewOptionValue: 100000042 }),
     } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await server.tools.get("add_picklist_option")!.handler({
       option_set_name: "MyGlobalSet",
@@ -132,7 +132,7 @@ describe("add_picklist_option", () => {
   it("includes Description and SolutionUniqueName when provided", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await server.tools.get("add_picklist_option")!.handler({
       option_set_name: "MyGlobalSet",
@@ -156,7 +156,7 @@ describe("update_picklist_option", () => {
   it("posts UpdateOptionValue with Value, Label and MergeLabels=false by default", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools
       .get("update_picklist_option")!
@@ -181,7 +181,7 @@ describe("update_picklist_option", () => {
   it("forwards merge_labels=true to MergeLabels", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await server.tools.get("update_picklist_option")!.handler({
       option_set_name: "MyGlobalSet",
@@ -199,7 +199,7 @@ describe("delete_picklist_option", () => {
   it("posts DeleteOptionValue with Value and location when allowDelete is true", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerPicklistTools(server as any, client, true);
+    registerAllTools(server as any, { client, allowDelete: true });
 
     const result = await server.tools
       .get("delete_picklist_option")!
@@ -218,7 +218,10 @@ describe("delete_picklist_option", () => {
 
   it("description warns about orphan values when allowDelete is true", async () => {
     const server = createMockServer();
-    registerPicklistTools(server as any, { post: vi.fn() } as any, true);
+    registerAllTools(server as any, {
+      client: { post: vi.fn() } as any,
+      allowDelete: true,
+    });
     const tool = server.tools.get("delete_picklist_option")!;
     expect(tool.description.toLowerCase()).toContain("orphan");
   });
@@ -226,7 +229,7 @@ describe("delete_picklist_option", () => {
   it("returns isError when allowDelete is false (default)", async () => {
     const server = createMockServer();
     const client = { post: vi.fn() } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const tool = server.tools.get("delete_picklist_option")!;
     expect(tool.description).toContain("disabled");
@@ -274,7 +277,7 @@ describe("get_picklist_options", () => {
         ],
       }),
     } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools.get("get_picklist_options")!.handler({
       entity_logical_name: "fundai_x",
@@ -347,7 +350,7 @@ describe("get_picklist_options", () => {
         ],
       }),
     } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools.get("get_picklist_options")!.handler({
       entity_logical_name: "opportunity",
@@ -396,7 +399,7 @@ describe("get_picklist_options", () => {
           : { value: [] },
       ),
     } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools.get("get_picklist_options")!.handler({
       entity_logical_name: "opportunity",
@@ -426,7 +429,7 @@ describe("get_picklist_options", () => {
         ],
       }),
     } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools.get("get_picklist_options")!.handler({
       option_set_name: "MyGlobalSet",
@@ -455,7 +458,7 @@ describe("get_picklist_options", () => {
   it("throws when the choice attribute is not found", async () => {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await expect(
       server.tools.get("get_picklist_options")!.handler({
@@ -476,7 +479,7 @@ describe("get_picklist_options", () => {
           : { value: [] },
       ),
     } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await expect(
       server.tools.get("get_picklist_options")!.handler({
@@ -498,7 +501,7 @@ describe("get_picklist_options", () => {
         return { value: [] };
       }),
     } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await expect(
       server.tools.get("get_picklist_options")!.handler({
@@ -515,7 +518,7 @@ describe("get_picklist_options", () => {
         .fn()
         .mockRejectedValue(new Error("Dataverse API error (404): not found")),
     } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     await expect(
       server.tools.get("get_picklist_options")!.handler({
@@ -531,7 +534,7 @@ describe("get_picklist_options", () => {
         .fn()
         .mockResolvedValue({ Name: "Empty", IsGlobal: true, Options: [] }),
     } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools.get("get_picklist_options")!.handler({
       option_set_name: "Empty",
@@ -557,7 +560,7 @@ describe("get_picklist_options", () => {
         ],
       }),
     } as any;
-    registerPicklistTools(server as any, client);
+    registerAllTools(server as any, { client });
 
     const result = await server.tools.get("get_picklist_options")!.handler({
       entity_logical_name: "fundai_x",
