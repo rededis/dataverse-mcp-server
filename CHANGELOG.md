@@ -7,10 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `DATAVERSE_REQUEST_TIMEOUT_MS` (default 30000): every Dataverse request and the token request to Microsoft Entra ID now time out instead of hanging a tool call indefinitely. The error says which request timed out. A value that is not a positive whole number is reported through `dataverse_setup` like a missing variable, rather than silently replaced by the default (#73).
+
 ### Changed
 
 - Tools are registered by purpose instead of by topic (closes #72): `metadata-read`, `data-read`, `data-write`, `actions`, `functions` and `development`, as named in [ADR-0001](docs/adr/0001-local-and-remote-variants.md) §4. Nothing a client sees changes except order: tool names, descriptions, input schemas and `DATAVERSE_ALLOW_DELETE` behaviour are identical, pinned by a `tools/list` snapshot taken before the change. `tools/list` now returns tools grouped this way rather than in the old per-file order.
 - Tool input schemas are built once at module load instead of on every registration, ahead of SDK v2 building a server instance per HTTP request.
+- When the cached token has expired, concurrent tool calls share one token request instead of each sending their own (#73).
+- The client reports failures as typed errors (`DataverseApiError` with `status` and the Dataverse error `code`, `DataverseTimeoutError`, `DataverseNetworkError`, `DataverseAuthError`), and tools map "not found" by status rather than by matching message text. API error messages read as before. A network failure now says which request failed and why, instead of a bare `fetch failed` (#73).
+- HTTP execution sits behind a `RequestExecutor` interface, the seam for throttling handling (#74), acting on behalf of a user (#77) and audit logging (#78) (#73).
+
+### Fixed
+
+- `get_picklist_options`, `add_attribute` and `create_entity` no longer report "Global OptionSet not found" for a server error whose body happens to contain "404". They matched `404` anywhere in the message; they now check the status (#73).
 
 ## [0.7.1] - 2026-08-17
 

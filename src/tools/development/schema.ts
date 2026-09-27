@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DataverseClient } from "../../client.js";
+import { isNotFound } from "../../errors.js";
 import { buildODataQuery, escapeODataString } from "../shared/odata.js";
 import { globalOptionSetNotFound } from "../shared/optionset.js";
 import type { ToolDeps } from "../types.js";
@@ -162,7 +163,7 @@ async function resolveGlobalOptionSetId(
       `/GlobalOptionSetDefinitions(Name='${escapeODataString(name)}')/Microsoft.Dynamics.CRM.OptionSetMetadata${query}`,
     )) as { MetadataId?: string };
   } catch (err) {
-    if (err instanceof Error && /\b404\b/.test(err.message)) {
+    if (isNotFound(err)) {
       throw globalOptionSetNotFound(name);
     }
     throw err;
@@ -964,10 +965,7 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
           MetadataId?: string;
         };
       } catch (err) {
-        if (
-          err instanceof Error &&
-          /Dataverse API error \(404\)/.test(err.message)
-        ) {
+        if (isNotFound(err)) {
           throw new Error(
             `Attribute not found: ${entity_logical_name}.${attribute_logical_name}`,
           );

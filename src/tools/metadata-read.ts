@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { DataverseClient } from "../client.js";
+import { isNotFound } from "../errors.js";
 import {
   buildODataQuery,
   escapeODataString,
@@ -282,7 +283,7 @@ export function registerMetadataReadTools(
             `/GlobalOptionSetDefinitions(Name='${escaped}')/Microsoft.Dynamics.CRM.OptionSetMetadata${query}`,
           )) as RawOptionSet;
         } catch (err) {
-          if (err instanceof Error && /\b404\b/.test(err.message)) {
+          if (isNotFound(err)) {
             throw globalOptionSetNotFound(params.option_set_name);
           }
           throw err;
@@ -355,10 +356,7 @@ export function registerMetadataReadTools(
           `/EntityDefinitions(LogicalName='${entityEscaped}')/Keys`,
         )) as typeof result;
       } catch (err) {
-        if (
-          err instanceof Error &&
-          /Dataverse API error \(404\)/.test(err.message)
-        ) {
+        if (isNotFound(err)) {
           throw new Error(`Entity not found: ${entity_logical_name}`);
         }
         throw err;
