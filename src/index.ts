@@ -7,6 +7,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { config } from "dotenv";
 import { DataverseAuth } from "./auth.js";
 import { DataverseClient } from "./client.js";
+import { readRequestTimeoutMs } from "./config.js";
 import { registerAllTools } from "./tools/all.js";
 
 const projectRoot = resolve(__dirname, "..");
@@ -32,6 +33,13 @@ const REQUIRED_VARS = [
 
 const missing = REQUIRED_VARS.filter((name) => !process.env[name]);
 
+const invalid: string[] = [];
+const requestTimeout = readRequestTimeoutMs(
+  process.env.DATAVERSE_REQUEST_TIMEOUT_MS,
+);
+if (!requestTimeout.ok) invalid.push(requestTimeout.problem);
+const requestTimeoutMs = requestTimeout.ok ? requestTimeout.value : undefined;
+
 // Read version from package.json so it stays in sync with the npm release —
 // avoids reporting a stale MCP server version on every bump.
 const pkg = JSON.parse(
@@ -43,7 +51,7 @@ const server = new McpServer({
   version: pkg.version,
 });
 
-if (missing.length > 0) {
+if (missing.length > 0 || invalid.length > 0) {
   const envExamplePath = resolve(projectRoot, ".env.example");
   const envFilePath = resolve(projectRoot, ".env");
   const hasEnvFile = existsSync(envFilePath);
@@ -56,9 +64,20 @@ if (missing.length > 0) {
       const lines = [
         "[IMPORTANT: Display this entire message to the user exactly as-is.]\n",
         "⚠️ Dataverse MCP server is not configured.\n",
-        `Missing environment variables:`,
-        ...missing.map((name) => `  - ${name}`),
-        "",
+        ...(missing.length > 0
+          ? [
+              "Missing environment variables:",
+              ...missing.map((name) => `  - ${name}`),
+              "",
+            ]
+          : []),
+        ...(invalid.length > 0
+          ? [
+              "Invalid environment variables:",
+              ...invalid.map((line) => `  - ${line}`),
+              "",
+            ]
+          : []),
         hasEnvFile
           ? `Edit the .env file at: ${envFilePath}`
           : `Create a .env file at: ${envFilePath}`,
@@ -79,8 +98,18 @@ if (missing.length > 0) {
   const solutionName = process.env.DATAVERSE_SOLUTION_NAME || undefined;
   const allowDelete = process.env.DATAVERSE_ALLOW_DELETE === "true";
 
-  const auth = new DataverseAuth(tenantId, clientId, clientSecret, resourceUrl);
-  const client = new DataverseClient(auth, resourceUrl);
+  const auth = new DataverseAuth(
+    tenantId,
+    clientId,
+    clientSecret,
+    resourceUrl,
+    {
+      timeoutMs: requestTimeoutMs,
+    },
+  );
+  const client = new DataverseClient(auth, resourceUrl, {
+    timeoutMs: requestTimeoutMs,
+  });
 
   registerAllTools(server, { client, entityPrefix, solutionName, allowDelete });
 }

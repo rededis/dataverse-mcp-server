@@ -1,4 +1,6 @@
 import type { DataverseAuth } from "./auth.js";
+import { DataverseApiError } from "./errors.js";
+import { FetchExecutor, type RequestExecutor } from "./executor.js";
 
 export interface DataverseRequestOptions {
   method?: string;
@@ -6,16 +8,26 @@ export interface DataverseRequestOptions {
   headers?: Record<string, string>;
 }
 
+export interface DataverseClientOptions {
+  apiVersion?: string;
+  /** Performs the HTTP exchange. Defaults to a FetchExecutor with `timeoutMs`. */
+  executor?: RequestExecutor;
+  /** Per-request timeout for the default executor. Ignored when `executor` is given. */
+  timeoutMs?: number;
+}
+
 export class DataverseClient {
   private baseUrl: string;
+  private executor: RequestExecutor;
 
   constructor(
     private auth: DataverseAuth,
     resourceUrl: string,
-    apiVersion: string = "v9.2",
+    options: DataverseClientOptions = {},
   ) {
     const normalizedUrl = resourceUrl.replace(/\/+$/, "");
-    this.baseUrl = `${normalizedUrl}/api/data/${apiVersion}`;
+    this.baseUrl = `${normalizedUrl}/api/data/${options.apiVersion ?? "v9.2"}`;
+    this.executor = options.executor ?? new FetchExecutor(options.timeoutMs);
   }
 
   async request(
@@ -24,6 +36,7 @@ export class DataverseClient {
   ): Promise<unknown> {
     const token = await this.auth.getToken();
     const url = path.startsWith("http") ? path : `${this.baseUrl}${path}`;
+    const method = options.method || "GET";
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
@@ -37,8 +50,9 @@ export class DataverseClient {
       headers["Content-Type"] = "application/json";
     }
 
-    const response = await fetch(url, {
-      method: options.method || "GET",
+    const response = await this.executor.execute({
+      method,
+      url,
       headers,
       body:
         options.body !== undefined ? JSON.stringify(options.body) : undefined,
@@ -49,12 +63,11 @@ export class DataverseClient {
       return entityId ? { "@odata.entityId": entityId } : {};
     }
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Dataverse API error (${response.status}): ${text}`);
+    if (response.status < 200 || response.status >= 300) {
+      throw new DataverseApiError(response.status, method, url, response.body);
     }
 
-    return response.json();
+    return JSON.parse(response.body);
   }
 
   async get(path: string): Promise<unknown> {

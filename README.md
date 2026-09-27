@@ -155,6 +155,7 @@ DATAVERSE_RESOURCE_URL=https://your-org.crm.dynamics.com
 DATAVERSE_ENTITY_PREFIX=contoso_          # optional, default prefix filter for list_entities
 DATAVERSE_SOLUTION_NAME=MySolution        # optional, default solution unique name for list_entities
 DATAVERSE_ALLOW_DELETE=true               # optional, enable delete operations (disabled by default)
+DATAVERSE_REQUEST_TIMEOUT_MS=30000        # optional, per-request timeout in ms for Dataverse and token calls (default 30000)
 ```
 
 ### Azure App Registration
