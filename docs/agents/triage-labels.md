@@ -22,4 +22,4 @@ Of the five, only `wontfix` exists in `rededis/dataverse-mcp-server` today. The 
 gh label create needs-triage --description "Maintainer needs to evaluate this issue"
 ```
 
-The repo also carries labels outside this vocabulary — `enhancement`, `documentation`, `epic`, `cowork-remote`, plus the GitHub defaults. They classify subject matter rather than triage state, so they coexist with the five roles rather than competing with them.
+The repo also carries labels outside this vocabulary — `enhancement`, `documentation`, `epic`, `cowork-remote`, `tech-debt`, plus the GitHub defaults. They classify subject matter rather than triage state, so they coexist with the five roles rather than competing with them.
