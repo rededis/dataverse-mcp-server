@@ -82,13 +82,33 @@ export class DataverseAuth {
       );
     }
 
-    const data = JSON.parse(text) as {
-      access_token: string;
-      expires_in: number;
-    };
+    // A 200 is not proof of a usable token: validate before caching, or a
+    // missing access_token would be sent as "Bearer undefined" until expiry.
+    let data: { access_token?: unknown; expires_in?: unknown };
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      throw new DataverseAuthError(
+        `OAuth token response is not JSON (${response.status})`,
+        response.status,
+        { cause: err },
+      );
+    }
+    const expiresIn = Number(data?.expires_in);
+    if (
+      typeof data?.access_token !== "string" ||
+      data.access_token === "" ||
+      !Number.isFinite(expiresIn) ||
+      expiresIn <= 0
+    ) {
+      throw new DataverseAuthError(
+        "OAuth token response is missing access_token or a valid expires_in",
+        response.status,
+      );
+    }
     this.tokenCache = {
       accessToken: data.access_token,
-      expiresAt: Date.now() + data.expires_in * 1000,
+      expiresAt: Date.now() + expiresIn * 1000,
     };
 
     return this.tokenCache.accessToken;

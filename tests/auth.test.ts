@@ -156,6 +156,26 @@ describe("DataverseAuth", () => {
     }
   });
 
+  for (const [label, body] of [
+    ["is not JSON", "<html>login</html>"],
+    ["has no access_token", '{"expires_in":3600}'],
+    ["has an empty access_token", '{"access_token":"","expires_in":3600}'],
+    ["has no expires_in", '{"access_token":"t"}'],
+    ["has a non-numeric expires_in", '{"access_token":"t","expires_in":"soon"}'],
+  ]) {
+    it(`rejects a 200 token response that ${label}, and caches nothing`, async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(new Response(body, { status: 200 }))
+        .mockResolvedValueOnce(tokenResponse("good"));
+      const auth = makeAuth();
+
+      await expect(auth.getToken()).rejects.toBeInstanceOf(DataverseAuthError);
+      expect(await auth.getToken()).toBe("good");
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+  }
+
   it("times out the token request with DataverseAuthError", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(
       (_url, init) =>
