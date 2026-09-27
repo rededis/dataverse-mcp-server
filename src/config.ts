@@ -1,3 +1,6 @@
+/** Upper bound for DATAVERSE_REQUEST_TIMEOUT_MS: generous for heavy requests, and far below the 2^31 ms where Node timers overflow to 1 ms. */
+export const MAX_REQUEST_TIMEOUT_MS = 180_000;
+
 export type ConfigValue<T> =
   | { ok: true; value: T | undefined }
   | { ok: false; problem: string };
@@ -11,9 +14,11 @@ export function readRequestTimeoutMs(
   raw: string | undefined,
 ): ConfigValue<number> {
   if (!raw) return { ok: true, value: undefined };
-  if (/^[1-9]\d*$/.test(raw)) return { ok: true, value: Number(raw) };
+  if (/^[1-9]\d*$/.test(raw) && Number(raw) <= MAX_REQUEST_TIMEOUT_MS) {
+    return { ok: true, value: Number(raw) };
+  }
   return {
     ok: false,
-    problem: `DATAVERSE_REQUEST_TIMEOUT_MS=${raw} (expected a positive whole number of milliseconds)`,
+    problem: `DATAVERSE_REQUEST_TIMEOUT_MS=${raw} (expected a whole number of milliseconds from 1 to ${MAX_REQUEST_TIMEOUT_MS})`,
   };
 }
