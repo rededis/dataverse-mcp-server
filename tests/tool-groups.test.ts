@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { DataverseClient } from "../src/client.js";
@@ -9,14 +9,14 @@ import type { RegisterTools } from "../src/tools/types.js";
 
 const client = {} as DataverseClient;
 
-function captureTools(register: RegisterTools) {
+function captureTools(register: RegisterTools, allowDelete = false) {
   const shapes = new Map<string, unknown>();
   const server = {
     tool: (name: string, _description: string, shape: unknown) => {
       shapes.set(name, shape);
     },
   };
-  register(server as any, { client });
+  register(server as any, { client, allowDelete });
   return shapes;
 }
 
@@ -81,18 +81,23 @@ describe("tool groups", () => {
   // SDK v2 builds a server instance per HTTP request. Input schemas built
   // inside the register functions would be rebuilt every time; module-level
   // shapes are built once and shared.
-  it("input shapes are shared between registrations, not rebuilt", () => {
-    const first = captureTools(registerAllTools);
-    const second = captureTools(registerAllTools);
-    for (const [name, shape] of first) {
-      expect(second.get(name), name).toBe(shape);
-    }
-  });
+  // Both modes: the enabled delete tools and their disabled stubs use
+  // different shapes.
+  for (const allowDelete of [false, true]) {
+    it(`input shapes are shared between registrations, not rebuilt (allowDelete: ${allowDelete})`, () => {
+      const first = captureTools(registerAllTools, allowDelete);
+      const second = captureTools(registerAllTools, allowDelete);
+      for (const [name, shape] of first) {
+        expect(second.get(name), name).toBe(shape);
+      }
+    });
+  }
 });
 
 // A server entry point may import src/tools/index.ts. Nothing reachable from it
 // may import src/tools/development/, or the development tools end up in the
-// server bundle (ADR-0001 §1). #79 adds the bundle-level check in CI.
+// server bundle (ADR-0001 §1). The only way in is src/index.ts (stdio) →
+// src/tools/all.ts → development/. #79 adds the bundle-level check in CI.
 describe("import boundary", () => {
   const root = resolve(__dirname, "..");
 
@@ -122,5 +127,39 @@ describe("import boundary", () => {
     const reached = [...seen].map((f) => relative(root, f));
     expect(reached).toContain("src/tools/metadata-read.ts");
     expect(reached.filter((f) => f.includes("/development/"))).toEqual([]);
+  });
+
+  function importersOf(): Map<string, string[]> {
+    const files = readdirSync(resolve(root, "src"), { recursive: true })
+      .map(String)
+      .filter((f) => f.endsWith(".ts"))
+      .map((f) => resolve(root, "src", f));
+    const importers = new Map<string, string[]>();
+    for (const file of files) {
+      for (const target of localImports(file)) {
+        const key = relative(root, target);
+        importers.set(key, [
+          ...(importers.get(key) ?? []),
+          relative(root, file),
+        ]);
+      }
+    }
+    return importers;
+  }
+
+  // Guards the entry points themselves, which the reachability check above
+  // cannot see: a server entry point importing all.ts or development/ directly
+  // fails here.
+  it("only src/tools/all.ts imports development/, and only src/index.ts imports all.ts", () => {
+    const importers = importersOf();
+    const isDevelopment = (f: string) => f.startsWith("src/tools/development/");
+    const outsideImporters = new Set(
+      [...importers]
+        .filter(([target]) => isDevelopment(target))
+        .flatMap(([, from]) => from)
+        .filter((from) => !isDevelopment(from)),
+    );
+    expect([...outsideImporters]).toEqual(["src/tools/all.ts"]);
+    expect(importers.get("src/tools/all.ts")).toEqual(["src/index.ts"]);
   });
 });
