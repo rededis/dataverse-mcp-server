@@ -155,7 +155,10 @@ DATAVERSE_RESOURCE_URL=https://your-org.crm.dynamics.com
 DATAVERSE_ENTITY_PREFIX=contoso_          # optional, default prefix filter for list_entities
 DATAVERSE_SOLUTION_NAME=MySolution        # optional, default solution unique name for list_entities
 DATAVERSE_ALLOW_DELETE=true               # optional, enable delete operations (disabled by default)
+DATAVERSE_REQUEST_TIMEOUT_MS=30000        # optional, per-request timeout in ms for Dataverse and token calls (default 30000, max 120000)
 ```
+
+`DATAVERSE_REQUEST_TIMEOUT_MS` bounds how long a tool call waits for Dataverse. Dataverse itself cancels any operation after 2 minutes, hence the maximum. Schema changes such as `create_entity` with many columns can take longer than the 30-second default. When that happens the tool reports a timeout, but Dataverse still finishes the change, so check before retrying, or raise the value.
 
 ### Azure App Registration
 

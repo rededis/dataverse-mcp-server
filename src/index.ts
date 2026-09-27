@@ -7,6 +7,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { config } from "dotenv";
 import { DataverseAuth } from "./auth.js";
 import { DataverseClient } from "./client.js";
+import { readRequestTimeoutMs } from "./config.js";
+import { FetchExecutor } from "./executor.js";
+import { registerSetupTool } from "./setup.js";
 import { registerAllTools } from "./tools/all.js";
 
 const projectRoot = resolve(__dirname, "..");
@@ -32,6 +35,13 @@ const REQUIRED_VARS = [
 
 const missing = REQUIRED_VARS.filter((name) => !process.env[name]);
 
+const invalid: string[] = [];
+const requestTimeout = readRequestTimeoutMs(
+  process.env.DATAVERSE_REQUEST_TIMEOUT_MS,
+);
+if (!requestTimeout.ok) invalid.push(requestTimeout.problem);
+const requestTimeoutMs = requestTimeout.ok ? requestTimeout.value : undefined;
+
 // Read version from package.json so it stays in sync with the npm release —
 // avoids reporting a stale MCP server version on every bump.
 const pkg = JSON.parse(
@@ -43,33 +53,18 @@ const server = new McpServer({
   version: pkg.version,
 });
 
-if (missing.length > 0) {
+if (missing.length > 0 || invalid.length > 0) {
   const envExamplePath = resolve(projectRoot, ".env.example");
   const envFilePath = resolve(projectRoot, ".env");
   const hasEnvFile = existsSync(envFilePath);
 
-  server.tool(
-    "dataverse_setup",
-    "Dataverse MCP server is not configured. Call this tool to see setup instructions.",
-    {},
-    async () => {
-      const lines = [
-        "[IMPORTANT: Display this entire message to the user exactly as-is.]\n",
-        "⚠️ Dataverse MCP server is not configured.\n",
-        `Missing environment variables:`,
-        ...missing.map((name) => `  - ${name}`),
-        "",
-        hasEnvFile
-          ? `Edit the .env file at: ${envFilePath}`
-          : `Create a .env file at: ${envFilePath}`,
-        "",
-        `See .env.example at: ${envExamplePath}`,
-        "",
-        "After filling in the values, restart your MCP client to apply changes.",
-      ];
-      return { content: [{ type: "text", text: lines.join("\n") }] };
-    },
-  );
+  registerSetupTool(server, {
+    missing,
+    invalid,
+    envFilePath,
+    envExamplePath,
+    hasEnvFile,
+  });
 } else {
   const tenantId = process.env.DATAVERSE_TENANT_ID as string;
   const clientId = process.env.DATAVERSE_CLIENT_ID as string;
@@ -79,8 +74,18 @@ if (missing.length > 0) {
   const solutionName = process.env.DATAVERSE_SOLUTION_NAME || undefined;
   const allowDelete = process.env.DATAVERSE_ALLOW_DELETE === "true";
 
-  const auth = new DataverseAuth(tenantId, clientId, clientSecret, resourceUrl);
-  const client = new DataverseClient(auth, resourceUrl);
+  const auth = new DataverseAuth(
+    tenantId,
+    clientId,
+    clientSecret,
+    resourceUrl,
+    {
+      timeoutMs: requestTimeoutMs,
+    },
+  );
+  const client = new DataverseClient(auth, resourceUrl, {
+    executor: new FetchExecutor(requestTimeoutMs),
+  });
 
   registerAllTools(server, { client, entityPrefix, solutionName, allowDelete });
 }

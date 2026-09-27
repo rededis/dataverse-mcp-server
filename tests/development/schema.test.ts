@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DataverseClient } from "../../src/client.js";
 import { registerAllTools } from "../../src/tools/all.js";
 import { buildAttributeBody } from "../../src/tools/development/schema.js";
-import { createMockServer, GUID } from "../helpers.js";
+import { createMockServer, GUID, notFound } from "../helpers.js";
 
 const mockClient = {} as DataverseClient;
 
@@ -381,7 +381,7 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
     return {
       get: vi.fn(async () => {
         if (metadataId === null) {
-          throw new Error("Dataverse API error (404): not found");
+          throw notFound();
         }
         return { MetadataId: metadataId };
       }),
@@ -1046,15 +1046,17 @@ describe("get_attribute_dependencies", () => {
 
   it("maps a 404 from the metadata GET to a friendly 'Attribute not found' error", async () => {
     const server = createMockServer();
-    // DataverseClient throws `Error("Dataverse API error (404): ...")` on a
-    // missing entity/attribute logical name — that's what reaches the tool in
+    // DataverseClient throws a DataverseApiError with status 404 on a missing
+    // entity/attribute logical name — that's what reaches the tool in
     // production, not a 200 with an empty body.
     const client = {
-      get: vi.fn().mockRejectedValue(
-        new Error(
-          'Dataverse API error (404): {"error":{"code":"0x80060888","message":"Resource not found"}}',
+      get: vi
+        .fn()
+        .mockRejectedValue(
+          notFound(
+            '{"error":{"code":"0x80060888","message":"Resource not found"}}',
+          ),
         ),
-      ),
     } as any;
     registerAllTools(server as any, { client });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { DataverseApiError } from "../src/errors.js";
 import { registerAllTools } from "../src/tools/all.js";
-import { createMockServer } from "./helpers.js";
+import { createMockServer, notFound } from "./helpers.js";
 
 describe("list_entities filters", () => {
   it("applies the prefix client-side when no solution is set", async () => {
@@ -899,7 +900,7 @@ describe("get_picklist_options", () => {
     const client = {
       get: vi
         .fn()
-        .mockRejectedValue(new Error("Dataverse API error (404): not found")),
+        .mockRejectedValue(notFound()),
     } as any;
     registerAllTools(server as any, { client });
 
@@ -908,6 +909,25 @@ describe("get_picklist_options", () => {
         option_set_name: "Missing",
       }),
     ).rejects.toThrow(/Global OptionSet not found: 'Missing'/);
+  });
+
+  // The old check matched /\b404\b/ anywhere in the message, so a server error
+  // whose body happened to mention 404 read as "not found".
+  it("does not read a non-404 error that mentions 404 as not found", async () => {
+    const server = createMockServer();
+    const failure = new DataverseApiError(
+      500,
+      { method: "GET", url: "https://org.crm.dynamics.com/api/data/v9.2/stub" },
+      "upstream returned 404 while resolving the plugin",
+    );
+    const client = { get: vi.fn().mockRejectedValue(failure) } as any;
+    registerAllTools(server as any, { client });
+
+    await expect(
+      server.tools.get("get_picklist_options")!.handler({
+        option_set_name: "Missing",
+      }),
+    ).rejects.toBe(failure);
   });
 
   it("returns an empty options list when the Global OptionSet has no Options", async () => {
@@ -1043,7 +1063,7 @@ describe("list_entity_keys", () => {
     const client = {
       get: vi
         .fn()
-        .mockRejectedValue(new Error("Dataverse API error (404): not found")),
+        .mockRejectedValue(notFound()),
     } as any;
     registerAllTools(server as any, { client });
 
