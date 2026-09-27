@@ -1,0 +1,467 @@
+# ADR-0001: Local and remote variants
+
+- **Status:** Accepted
+- **Date:** 2026-09-27
+- **Epic:** #70
+
+## Context
+
+Until now this repository shipped one artifact: an npm package that runs as a
+local stdio MCP server and exposes the whole Dataverse surface, schema changes
+included. It is a development tool for one person working against a dev org.
+
+Remote agents (Claude Code on another machine, Claude Desktop, other MCP
+clients) need access to Dataverse **data**, not to its schema. They need it
+through a server that someone else operates, with credentials the agents never
+see and permissions narrower than the application user's.
+
+The decisions below fix the repository layout and decide where future code
+goes. The evidence behind them was gathered on 2026-09-22 from primary sources
+and local experiments; what this record relies on is reproduced in
+[Evidence](#evidence) at the end (E1–E4).
+
+## Decisions
+
+### 1. One repository, one source tree, two artifacts
+
+The HTTP server is a second entry point in the same package. It shares the
+Dataverse client and the tools with the stdio entry point.
+
+- **npm package** (`@rededis/dataverse-mcp-server`): the stdio server. It keeps
+  every tool, development tools included.
+- **Docker image** (`ghcr.io/rededis/dataverse-mcp-server-http`): the HTTP
+  server. It is built from a single bundle of the server entry point, so only
+  what that entry point imports ends up in the image. That includes the
+  read-only metadata tools; what it excludes is the `development` group
+  (schema changes, solutions, dependency checks, see §4).
+
+Development tools live in modules that nothing outside the stdio entry point
+imports. A CI check fails the build if the server bundle contains any of them
+(#79). The guarantee is physical absence, not a runtime flag that a
+misconfiguration could flip.
+
+*Why not npm workspaces now:* the core has one consumer shape today (two entry
+points in one package). Workspaces add release and build machinery without
+buying anything the bundle does not already give. See Deferred.
+
+### 2. Mechanism in code, policy in configuration
+
+Whatever differs between installations is configuration: Dataverse endpoint
+and credentials, limits, tokens, roles, allowlists, logging options. Code
+provides the mechanisms (token verification, role checks, limiter, audit
+logger), each behind an interface so an installation's needs do not require a
+fork.
+
+### 3. One server instance serves one Dataverse environment
+
+Another environment means another instance. This keeps the configuration flat,
+keeps the Dataverse limits of one environment isolated from another's, and
+means a token can never reach an environment it was not issued for.
+
+### 4. Tool groups
+
+Tools are grouped by purpose, and the group names are the vocabulary of role
+configuration (#72, #77):
+
+| Group | Tools |
+|---|---|
+| `metadata-read` | `list_entities`, `get_entity_schema`, `get_picklist_options`, `list_entity_keys` |
+| `data-read` | `query_records`, `get_record` |
+| `data-write` | `create_record`, `update_record`, `delete_record` |
+| `actions` | `invoke_action` |
+| `functions` | `invoke_function` |
+| `development` | `list_solutions`, `get_attribute_dependencies`, `create_entity`, `add_attribute`, `update_attribute`, `delete_attribute`, `create_relationship`, `add_entity_key`, `delete_entity_key`, `add_picklist_option`, `update_picklist_option`, `delete_picklist_option` |
+
+The npm package registers all six. The server image contains the first five;
+each role picks from those.
+
+Solutions and dependency checks sit in `development` because they serve
+packaging customizations and preparing destructive schema changes. An agent
+working with data does not need them.
+
+### 5. Protocol split
+
+- **HTTP server: MCP 2026-07-28 only.** It is built on SDK v2
+  `createMcpHandler` with `legacy: 'reject'`. A 2025-era request gets the
+  SDK's unsupported-protocol-version error (`-32022`, HTTP 400) naming the
+  supported revision ([E1](#e1-mcp-typescript-sdk-v2)).
+- **stdio package: stays compatible with 2025-era clients.** Today's clients
+  speak 2025-11-25 over stdio; Claude Code 2.1.278 was observed doing so. SDK v2
+  `serveStdio` pins such a connection to the legacy era by default ([E1](#e1-mcp-typescript-sdk-v2)).
+
+*Why reject legacy on HTTP:* 2026-07-28 is stateless by design (no `initialize`,
+no `Mcp-Session-Id`), which is what a horizontally scaled, per-request
+authenticated server wants. Serving 2025-era HTTP as well would double the
+surface to test, audit and secure, for no client we need: Claude Code already
+speaks 2026-07-28 over HTTP ([E1](#e1-mcp-typescript-sdk-v2)), and the `mcp-remote` bridge does when given
+`--protocol auto` (verified with 0.14.3; without it the bridge speaks
+2025-11-25 and is rejected).
+
+*Why keep legacy on stdio:* rejecting it would break every existing user of the
+npm package with no benefit; the SDK serves both eras from one factory.
+
+Migrating to SDK v2 (#75) raises `engines.node` from `>=18` to `>=20`, because
+`@modelcontextprotocol/server` and `@modelcontextprotocol/core` 2.0.0 require
+it ([E1](#e1-mcp-typescript-sdk-v2)). That is a breaking change for the npm package and is released as
+0.9.0.
+
+### 6. Proxy headers
+
+A 2026-07-28 request carries its method and protocol version in HTTP headers
+(`Mcp-Method`, `MCP-Protocol-Version`) as well as in the body. The SDK checks
+that they agree and answers **400** (`-32020`, "the request headers and body
+disagree") when a header is missing ([E1](#e1-mcp-typescript-sdk-v2)). If an
+installation puts a reverse proxy, gateway or WAF in front of the server, it
+must pass these headers through unchanged. The server documentation says so
+(#80).
+
+### 7. Access: bearer tokens from a config file
+
+- Tokens are stored as SHA-256 hashes in a JSON config file, compared in
+  constant time, and may carry an expiry date.
+- Every request is verified; there is no session to cache a verdict on. A
+  failure answers 401 with `WWW-Authenticate`.
+- Verification sits behind a `TokenVerifier` interface; the SDK's handler does
+  no verification of its own and only passes `authInfo` through ([E1](#e1-mcp-typescript-sdk-v2)).
+- OAuth discovery probes (`/.well-known/oauth-*`,
+  `/.well-known/openid-configuration`) answer 404, so clients do not assume
+  OAuth.
+- Config changes apply on restart.
+
+*Why not OAuth now:* the clients in scope (Claude Code, `mcp-remote`, other
+programmatic clients) all send a static header. OAuth pays off only when people
+must be told apart or the server is added through the Claude UI. See Deferred.
+
+### 8. Permissions: roles as rules in configuration
+
+A role lists the tool groups it may use; for `data-write`, the entity sets it
+may create, update or delete, per operation; and the action and function names
+it may call. Everything that writes, deletes or invokes an action or function
+is **off unless listed**. An empty allowlist means the corresponding tool is not
+registered.
+
+A token may optionally map to a Dataverse user. Calls are then made on that
+user's behalf, and **both** the role and the user's Dataverse privileges apply.
+
+Fixed roles would not survive the first real installation. The typical case
+that shaped this: a support role that reads everything but may only prepare
+and send messages to customers. Depending on the org, sending is either
+"create an `email` in Draft, then call `SendEmail`" or "create a record in a
+queued state that a flow or plugin picks up". Only per-entity-set and per-action
+allowlists can express both (#77).
+
+### 9. Per-caller tool lists
+
+`tools/list` returns only what the caller's role allows. The 2026-07-28 tools
+page permits this explicitly ([E2](#e2-mcp-specification-2026-07-28)):
+
+> [The set] **MUST NOT** vary per-connection or as a side effect of other
+> requests on the connection. The set **MAY** vary by the authorization
+> presented on the request — for example, returning only the tools the
+> caller's granted scopes permit — since credentials are per-request input,
+> not connection state.
+
+Consequences:
+
+- The role comes from the bearer token on each request, never from earlier
+  calls. The SDK v2 factory builds the tool set from `ctx.authInfo` per
+  request, which matches.
+- Lists are returned with `cacheScope: "private"` (the SDK default). The caching
+  page says caches with that scope "MUST NOT be shared across authorization
+  contexts". Never configure `public` for role-filtered lists.
+- The caching page also says servers "MUST NOT rely on `cacheScope` alone to
+  prevent unauthorized access". Permissions are therefore re-checked on every
+  `tools/call`, and entity-set and action allowlists are checked on the
+  arguments, which a filtered list cannot do.
+- Tool order is deterministic (a SHOULD in the same section).
+
+### 10. Dataverse limits
+
+Service protection limits apply **per user per web server**. The documented
+defaults are 6,000 requests and 20 minutes of combined execution time within a
+5-minute sliding window, plus 52 or more concurrent requests; Microsoft notes
+they "can change and might vary between different environments" (Dataverse
+service protection API limits page). Application users get the same limits as
+everyone else ([E3](#e3-microsoft-dataverse-limits-and-licensing)). A server that sends every caller's traffic through one application user
+concentrates all of it on one user's limits.
+
+The server protects Dataverse, not itself: a concurrency limit, a bounded queue
+with a maximum wait, retry on 429 honouring `Retry-After` (failing fast when the
+wait is long), and per-request timeouts (#73, #74). These also benefit the
+stdio package, where parallel tool calls hit the same limits.
+
+Adding application users would only spread the 5-minute limits. All
+application users in a tenant **share one tenant-level daily allowance**
+([E3](#e3-microsoft-dataverse-limits-and-licensing)), so extra users add no daily capacity.
+See Deferred for the pool.
+
+### 11. No inbound rate limiting or TLS in the server
+
+The server does not terminate TLS and does not limit how often a client may
+call it. What sits in front of it is the installation's choice: a reverse
+proxy, an API gateway, a platform ingress, or nothing, with clients calling it
+directly. This repository does not decide that for the operator.
+
+The server's own protection points at Dataverse (§10), not at its callers. An
+installation that exposes the server directly gets bearer-token authentication
+and nothing else between the network and the server; the server documentation
+says so plainly, so that is a decision the operator makes knowingly (#80).
+
+### 12. Audit log records the shape of a call, not its content
+
+Per call: time, token name, role, the Dataverse user acted on behalf of,
+tool, entity set, selected columns, `$filter` with literals masked, status,
+record count, duration, Dataverse request count, and whether throttling
+occurred.
+
+Never logged: bearer tokens, secrets, request or response bodies, and raw
+Dataverse error text. Field values are not logged **by default**. The only
+exception is opt-in: an installation may name specific entity-set/field pairs
+in a config allowlist, and only those values are logged (#78).
+
+### 13. Two independent release lines
+
+- Tags `v*` publish the npm package (`release.yml`).
+- Tags `server-v*` publish the image (`server-release.yml`), with its own
+  version and CHANGELOG. `release.yml` ignores `server-v*`.
+
+Deploying a particular installation is outside this repository.
+
+### 14. The server ships as 0.x, as-is
+
+Documentation covers running and configuring the server and connecting
+clients (#80). No compatibility promise until real installations shape the
+configuration format.
+
+## Licensing
+
+Using the server does not change how many Microsoft licences are needed.
+Microsoft's multiplexing guidance for Dynamics 365, Power Platform and
+Dataverse:
+
+> There is no such thing as "unlicensed user access" and a Multiplexing setup
+> does not reduce the number of licenses required to access a Dynamics 365
+> service, regardless of the pooling connection created. Any user or device
+> that accesses the Dynamics 365 service—whether directly or indirectly—must be
+> properly licensed.
+
+People who reach Dataverse through the server still need their own licences,
+even though the server uses an application user. The server documentation says
+so and links the guidance (#80).
+
+## Deferred
+
+Not planned now. Each item names what would make it worth revisiting.
+
+| Item | Revisit when |
+|---|---|
+| npm workspaces (core / development / stdio / server packages) | The core gets a second consumer, or the single-bundle approach becomes painful. |
+| Config reload without restart | Restarts become a real operational cost for an installation. |
+| Setup guides for Microsoft Foundry and Amazon Bedrock AgentCore | Someone actually connects them. |
+| JWT verification (Microsoft Entra or another identity provider) | Foundry agent identity or Bedrock OAuth modes are needed. The `TokenVerifier` interface is the seam. |
+| OAuth for Claude connectors | The server should be added through the Claude UI, shared within an organization, or individual people must be distinguished. Note: claude.ai custom connectors also offer static request headers as a beta for a limited set of organizations; that connection comes from Anthropic's cloud, one header per connector, and which protocol era it speaks was not verified ([E4](#e4-claude-clients)). |
+| Separate Dataverse credentials per role | Acting on behalf of a Dataverse user turns out to be unsuitable. |
+| Extensions (custom module, derived image, upstream proxy, server as a library) | The first concrete request for custom behaviour. |
+| Shared limiter across instances (e.g. Redis) | More than one instance runs against the same Dataverse budget. |
+| Pool of Dataverse application users | One application user's limits are the bottleneck. Extra users only spread the 5-minute limits and share the tenant's daily allowance. Microsoft's Product Terms forbid working "around any technical limitations"; whether a pool counts is unresolved ([E3](#e3-microsoft-dataverse-limits-and-licensing)), so check it first. |
+| `structuredContent` / `outputSchema` | Programmatic consumers need a typed response contract. |
+| Excluding field-secured columns (`IsSecured`) from logs | Field value logging is enabled for an installation. |
+
+## Evidence
+
+Gathered on 2026-09-22 from primary sources (spec Markdown sources, SDK type
+declarations in the published npm tarballs, Microsoft Learn and licensing
+terms, Anthropic docs) and from local experiments. Versions:
+`@modelcontextprotocol/server` 2.0.0, `@modelcontextprotocol/sdk` 1.30.0,
+Claude Code 2.1.278, Node 24.9.0. The experiment scripts were throwaway and are
+not committed; their results are recorded here.
+
+### E1. MCP TypeScript SDK v2
+
+Package shape, from the `@modelcontextprotocol/server` 2.0.0 tarball:
+
+- `package.json` declares `"engines": { "node": ">=20" }`; so does
+  `@modelcontextprotocol/core` 2.0.0.
+- It ships a CJS build (`require` conditions point to `dist/*.cjs` with
+  `dist/*.d.cts` types). A file importing `McpServer`, `createMcpHandler` and
+  `serveStdio` compiled with this repo's `tsconfig.json` (`module: Node16`) and
+  `tsc` 5.9.3, and ran.
+- Its dependency `zod ^4.2.0` is compatible with this repo's `zod ^4.3.6`.
+
+stdio, `dist/stdio.d.cts`, `ServeStdioOptions.legacy?: 'serve' | 'reject'`:
+
+> `'serve'` (default) — the connection is pinned to a 2025-era instance from
+> the same factory and served exactly as a hand-wired stdio server serves it
+> today.
+
+HTTP, `dist/createMcpHandler-*.d.cts`,
+`CreateMcpHandlerOptions.legacy?: 'stateless' | 'reject'`:
+
+> `'reject'` — modern-only strict: legacy-classified requests are rejected with
+> the unsupported-protocol-version error naming the endpoint's supported
+> revisions (legacy-classified notifications are acknowledged with `202` and
+> dropped). **There is no 2025 serving in this mode.**
+
+Authentication, same file:
+
+> The entry performs no token verification: `authInfo` given to `fetch` is
+> passed through to handlers and the factory as-is and is never derived from
+> request headers.
+
+Cache defaults, same file: 2026-07-28 cacheable results default to
+`{ ttlMs: 0, cacheScope: 'private' }`, overridable per method with the
+`cacheHints` option.
+
+Experiments:
+
+- **2025-era clients over stdio.** A v2 `serveStdio` server answered a raw
+  2025-11-25 JSON-RPC client, the v1 SDK 1.30.0 client, and Claude Code 2.1.278
+  (`initialize`, `tools/list`, `tools/call`). The factory saw `era=legacy`.
+  Claude Code sends a 2025-11-25 `initialize` over stdio.
+- **2025-era request against `legacy: 'reject'`:**
+  `400 {"error":{"code":-32022,"message":"Unsupported protocol version: 2025-11-25","data":{"supported":["2026-07-28"],"requested":"2025-11-25"}}}`
+- **2026-07-28 request without the `Mcp-Method` header:**
+  `400 {"error":{"code":-32020,"message":"Bad Request: the request headers and body disagree: the body names method tools/list but the required Mcp-Method header is absent"}}`
+- **Per-caller lists.** `tools/list` without `authInfo` returned one tool; with
+  `authInfo` carrying an admin role it returned two. Both results carried
+  `ttlMs: 0, cacheScope: "private"`.
+- **Claude Code 2.1.278 over HTTP**, with a static `Authorization` header: it
+  opens with a 2026-07-28 `server/discover`, then sends `subscriptions/listen`,
+  `tools/list` and `tools/call`, each with the `MCP-Protocol-Version: 2026-07-28`
+  and `Mcp-Method` headers. It never sends `initialize` or `Mcp-Session-Id`. The
+  `Authorization` header arrived on every request.
+
+### E2. MCP specification 2026-07-28
+
+Tools page, "Capabilities" section
+(https://modelcontextprotocol.io/specification/2026-07-28/server/tools):
+
+> Servers that declare the `tools` capability **MUST** respond to `tools/list`
+> requests with the set of tools currently available to the requesting client.
+> This set **MAY** be empty and **MAY** change over time (see List Changed
+> Notification), but **MUST NOT** vary per-connection or as a side effect of
+> other requests on the connection. The set **MAY** vary by the authorization
+> presented on the request — for example, returning only the tools the caller's
+> granted scopes permit — since credentials are per-request input, not
+> connection state.
+>
+> Servers **SHOULD** return tools in a deterministic order.
+
+SEP-2567 "Sessionless MCP", section "Session-independent list endpoints"
+(https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567):
+
+> This does not preclude varying the list by the authorization presented on the
+> request: credentials are carried on each request, so a server returning
+> different tool sets to different principals or scopes is relying on
+> per-request input, not connection state.
+
+Caching page
+(https://modelcontextprotocol.io/specification/2026-07-28/server/utilities/caching):
+
+> `"private"` — The response contains private data that is not meant to be
+> shared between callers. Cached responses **MAY** be reused for the same
+> authorization context. Caches **MUST NOT** be shared across authorization
+> contexts (e.g. a different access token requires a different cache).
+>
+> Servers MUST be aware that responses with a `"public"` `cacheScope` may be
+> shared between callers even if the Result is coming from an authenticated
+> endpoint. … Server implementors … MUST apply appropriate per-primitive access
+> controls, and MUST NOT rely on `cacheScope` alone to prevent unauthorized
+> access to primitives.
+
+Changelog (sessions and `initialize` removed, `server/discover` added):
+https://modelcontextprotocol.io/specification/2026-07-28/changelog
+
+### E3. Microsoft: Dataverse limits and licensing
+
+Service protection API limits
+(https://learn.microsoft.com/en-us/power-apps/developer/data-platform/api-limits,
+re-checked 2026-09-27):
+
+> The system evaluates service protection API limits for each user. Each
+> authenticated user has an independent limit.
+>
+> Each web server that your environment makes available enforces these limits
+> independently.
+>
+> Are limits applied differently for application users? No. The system applies
+> the same limits to all users.
+
+Default limits per web server: 6,000 requests and 20 minutes (1,200 s) of
+combined execution time within a five-minute sliding window, and "52 or
+higher" concurrent requests. "These limits can change and might vary between
+different environments." A 429 carries a `Retry-After` header in seconds.
+
+Request limits and allocations
+(https://learn.microsoft.com/en-us/power-platform/admin/api-request-limits-allocations):
+
+> Does each application user, non-interactive user, administrative user, or
+> system user get their own tenant-level limit? No, they don't. All application
+> users, non-interactive users, administrative users, and system users within
+> the tenant share tenant-level limits.
+
+The Dataverse page neither recommends nor forbids spreading load across several
+application users. The Finance & Operations docs, a different Dynamics 365
+product, do recommend it
+(https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/data-entities/service-protection-maximizing-api-throughput,
+"Distribute workloads across multiple service principals"). Applying that to
+Dataverse is an inference, not documented.
+
+Product Terms, Universal License Terms for Online Services, "Technical
+Limitations" (https://www.microsoft.com/licensing/terms/product/ForOnlineServices/all):
+
+> Customer must comply with, and may not work around, any technical limitations
+> in an Online Service that only allow Customer to use it in certain ways.
+
+No Microsoft source says whether several application users count as working
+around service protection limits.
+
+Multiplexing guidance, "Details – Dynamics 365, Power Platform, & Dataverse"
+(https://www.microsoft.com/licensing/guidance/Multiplexing), quoted in
+[Licensing](#licensing) above. The Power Platform Licensing Guide, September
+2026, p. 24, "Multiplexing"
+(https://cdn-dynmedia-1.microsoft.com/is/content/microsoftcorp/microsoft/bade/documents/products-and-services/en-us/bizapps/PowerPlatformLicensingGuideSeptember-2026.pdf)
+says the same:
+
+> Any user or device that inputs data into, queries, views data from or
+> otherwise accesses Power Apps, Power Automate and Power Pages apps, directly
+> or indirectly must be properly licensed. The number of tiers of hardware or
+> software between Power Platform apps and the users or devices that ultimately
+> use Power Platform indirectly does not affect the number of USLs required.
+
+### E4. Claude clients
+
+Claude Code (https://code.claude.com/docs/en/mcp) adds a remote HTTP server
+with a static header:
+
+```bash
+claude mcp add --transport http <name> <url> --header "Authorization: Bearer <token>"
+```
+
+Verified locally on 2.1.278 (see E1).
+
+claude.ai, Claude Desktop and mobile custom connectors
+(https://claude.com/docs/connectors/building/authentication):
+
+> `static_headers` — Fixed credential (API key or bearer token) entered by an
+> organization administrator as a request header when adding the connector —
+> **Beta**
+>
+> The credential is shared by the organization rather than pasted per user.
+
+https://claude.com/docs/connectors/custom/remote-mcp:
+
+> Request header authentication is in beta and available to a limited set of
+> organizations.
+
+Custom connectors connect from Anthropic's cloud, not from the user's device
+(https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp),
+so a server used that way must be reachable from the internet. Which protocol
+era these connectors speak could not be observed.
+
+Claude Desktop's `claude_desktop_config.json` is documented for local (stdio)
+servers only. A static token from it needs a stdio bridge such as `mcp-remote`
+(README of `mcp-remote` 0.14.3, `npm view mcp-remote@0.14.3 readme`), which
+supports `--header` and `--header-file`. That the bridge needs
+`--protocol auto` to reach a 2026-07-28-only server was found in a spike with
+0.14.3 (see §5).
