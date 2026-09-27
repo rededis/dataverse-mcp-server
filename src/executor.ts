@@ -4,20 +4,9 @@ import {
   DataverseTimeoutError,
   isTimeout,
 } from "./errors.js";
+import { fetchComplete, type HttpRequest, type HttpResponse } from "./http.js";
 
-export interface HttpRequest {
-  method: string;
-  url: string;
-  headers: Record<string, string>;
-  body?: string;
-}
-
-/** A complete response: the body is already read, so it can be retried or logged. */
-export interface HttpResponse {
-  status: number;
-  headers: Headers;
-  body: string;
-}
+export type { HttpRequest, HttpResponse } from "./http.js";
 
 /**
  * Performs one HTTP exchange with Dataverse. DataverseClient builds the
@@ -40,30 +29,15 @@ export class FetchExecutor implements RequestExecutor {
   constructor(private timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS) {}
 
   async execute(request: HttpRequest): Promise<HttpResponse> {
-    // The timeout covers one attempt, body included; the signal stays armed
-    // until text() finishes. Queueing and retries in #74 get their own limits.
-    const signal = AbortSignal.timeout(this.timeoutMs);
+    // One attempt, body included. Queueing and retries in #74 get their own
+    // limits.
     try {
-      const response = await fetch(request.url, {
-        method: request.method,
-        headers: request.headers,
-        body: request.body,
-        signal,
-      });
-      return {
-        status: response.status,
-        headers: response.headers,
-        body: await response.text(),
-      };
+      return await fetchComplete(request, this.timeoutMs);
     } catch (err) {
       if (isTimeout(err)) {
-        throw new DataverseTimeoutError(
-          this.timeoutMs,
-          request.method,
-          request.url,
-        );
+        throw new DataverseTimeoutError(this.timeoutMs, request);
       }
-      throw new DataverseNetworkError(request.method, request.url, err);
+      throw new DataverseNetworkError(request, err);
     }
   }
 }

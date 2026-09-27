@@ -917,8 +917,7 @@ describe("get_picklist_options", () => {
     const server = createMockServer();
     const failure = new DataverseApiError(
       500,
-      "GET",
-      "https://org.crm.dynamics.com/api/data/v9.2/stub",
+      { method: "GET", url: "https://org.crm.dynamics.com/api/data/v9.2/stub" },
       "upstream returned 404 while resolving the plugin",
     );
     const client = { get: vi.fn().mockRejectedValue(failure) } as any;

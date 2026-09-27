@@ -78,6 +78,28 @@ describe("FetchExecutor", () => {
     );
   });
 
+  // Headers arrive in time but the body does not: the timeout still applies,
+  // because the signal is not released until the body is read.
+  it("times out while the body is still arriving", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      const signal = init?.signal as AbortSignal;
+      return {
+        status: 200,
+        headers: new Headers(),
+        text: () =>
+          new Promise<string>((_resolve, reject) =>
+            signal.addEventListener("abort", () => reject(signal.reason)),
+          ),
+      } as unknown as Response;
+    });
+
+    const error = await new FetchExecutor(20)
+      .execute(request)
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(DataverseTimeoutError);
+  });
+
   it("rejects with DataverseNetworkError when fetch fails before a response", async () => {
     vi.spyOn(globalThis, "fetch").mockRejectedValue(
       new TypeError("fetch failed", {

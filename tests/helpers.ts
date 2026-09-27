@@ -27,8 +27,7 @@ export const GUID = "11111111-1111-1111-1111-111111111111";
 export function notFound(body = "not found") {
   return new DataverseApiError(
     404,
-    "GET",
-    "https://org.crm.dynamics.com/api/data/v9.2/stub",
+    { method: "GET", url: "https://org.crm.dynamics.com/api/data/v9.2/stub" },
     body,
   );
 }

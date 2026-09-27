@@ -8,6 +8,8 @@ import { config } from "dotenv";
 import { DataverseAuth } from "./auth.js";
 import { DataverseClient } from "./client.js";
 import { readRequestTimeoutMs } from "./config.js";
+import { FetchExecutor } from "./executor.js";
+import { registerSetupTool } from "./setup.js";
 import { registerAllTools } from "./tools/all.js";
 
 const projectRoot = resolve(__dirname, "..");
@@ -56,39 +58,13 @@ if (missing.length > 0 || invalid.length > 0) {
   const envFilePath = resolve(projectRoot, ".env");
   const hasEnvFile = existsSync(envFilePath);
 
-  server.tool(
-    "dataverse_setup",
-    "Dataverse MCP server is not configured. Call this tool to see setup instructions.",
-    {},
-    async () => {
-      const lines = [
-        "[IMPORTANT: Display this entire message to the user exactly as-is.]\n",
-        "⚠️ Dataverse MCP server is not configured.\n",
-        ...(missing.length > 0
-          ? [
-              "Missing environment variables:",
-              ...missing.map((name) => `  - ${name}`),
-              "",
-            ]
-          : []),
-        ...(invalid.length > 0
-          ? [
-              "Invalid environment variables:",
-              ...invalid.map((line) => `  - ${line}`),
-              "",
-            ]
-          : []),
-        hasEnvFile
-          ? `Edit the .env file at: ${envFilePath}`
-          : `Create a .env file at: ${envFilePath}`,
-        "",
-        `See .env.example at: ${envExamplePath}`,
-        "",
-        "After filling in the values, restart your MCP client to apply changes.",
-      ];
-      return { content: [{ type: "text", text: lines.join("\n") }] };
-    },
-  );
+  registerSetupTool(server, {
+    missing,
+    invalid,
+    envFilePath,
+    envExamplePath,
+    hasEnvFile,
+  });
 } else {
   const tenantId = process.env.DATAVERSE_TENANT_ID as string;
   const clientId = process.env.DATAVERSE_CLIENT_ID as string;
@@ -108,7 +84,7 @@ if (missing.length > 0 || invalid.length > 0) {
     },
   );
   const client = new DataverseClient(auth, resourceUrl, {
-    timeoutMs: requestTimeoutMs,
+    executor: new FetchExecutor(requestTimeoutMs),
   });
 
   registerAllTools(server, { client, entityPrefix, solutionName, allowDelete });

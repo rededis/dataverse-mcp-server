@@ -1,5 +1,6 @@
 import { DEFAULT_REQUEST_TIMEOUT_MS } from "./config.js";
 import { DataverseAuthError, describeCause, isTimeout } from "./errors.js";
+import { fetchComplete, type HttpResponse } from "./http.js";
 
 interface TokenCache {
   accessToken: string;
@@ -50,18 +51,19 @@ export class DataverseAuth {
       scope: `${this.resourceUrl}/.default`,
     });
 
-    let response: Response;
-    let text: string;
+    let response: HttpResponse;
     try {
       // Bounded like Dataverse requests: with a shared in-flight request, a
       // hung token call would otherwise stall every caller at once.
-      response = await fetch(tokenUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: body.toString(),
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
-      text = await response.text();
+      response = await fetchComplete(
+        {
+          method: "POST",
+          url: tokenUrl,
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: body.toString(),
+        },
+        this.timeoutMs,
+      );
     } catch (err) {
       if (isTimeout(err)) {
         throw new DataverseAuthError(
@@ -75,7 +77,8 @@ export class DataverseAuth {
       );
     }
 
-    if (!response.ok) {
+    const text = response.body;
+    if (response.status < 200 || response.status >= 300) {
       throw new DataverseAuthError(
         `OAuth token request failed (${response.status}): ${text}`,
         response.status,

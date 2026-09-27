@@ -8,8 +8,8 @@ export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
  */
 export const MAX_REQUEST_TIMEOUT_MS = 120_000;
 
-export type ConfigValue<T> =
-  | { ok: true; value: T | undefined }
+export type RequestTimeoutSetting =
+  | { ok: true; value: number | undefined }
   | { ok: false; problem: string };
 
 /**
@@ -19,7 +19,7 @@ export type ConfigValue<T> =
  */
 export function readRequestTimeoutMs(
   raw: string | undefined,
-): ConfigValue<number> {
+): RequestTimeoutSetting {
   if (!raw) return { ok: true, value: undefined };
   if (/^[1-9]\d*$/.test(raw) && Number(raw) <= MAX_REQUEST_TIMEOUT_MS) {
     return { ok: true, value: Number(raw) };

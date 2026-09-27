@@ -10,10 +10,8 @@ export interface DataverseRequestOptions {
 
 export interface DataverseClientOptions {
   apiVersion?: string;
-  /** Performs the HTTP exchange. Defaults to a FetchExecutor with `timeoutMs`. */
+  /** Performs the HTTP exchange. Defaults to a FetchExecutor with the default timeout. */
   executor?: RequestExecutor;
-  /** Per-request timeout for the default executor. Ignored when `executor` is given. */
-  timeoutMs?: number;
 }
 
 export class DataverseClient {
@@ -27,7 +25,7 @@ export class DataverseClient {
   ) {
     const normalizedUrl = resourceUrl.replace(/\/+$/, "");
     this.baseUrl = `${normalizedUrl}/api/data/${options.apiVersion ?? "v9.2"}`;
-    this.executor = options.executor ?? new FetchExecutor(options.timeoutMs);
+    this.executor = options.executor ?? new FetchExecutor();
   }
 
   async request(
@@ -64,7 +62,11 @@ export class DataverseClient {
     }
 
     if (response.status < 200 || response.status >= 300) {
-      throw new DataverseApiError(response.status, method, url, response.body);
+      throw new DataverseApiError(
+        response.status,
+        { method, url },
+        response.body,
+      );
     }
 
     try {
