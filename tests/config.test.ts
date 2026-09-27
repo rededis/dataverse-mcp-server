@@ -18,7 +18,7 @@ describe("readRequestTimeoutMs", () => {
     });
   });
 
-  // 180001 is just over the cap; 3000000000 would overflow Node's timers and
+  // 120001 is just over the cap; 3000000000 would overflow Node's timers and
   // silently become a 1 ms timeout; 99999999999 makes AbortSignal.timeout throw.
   for (const raw of [
     "0",
@@ -27,7 +27,7 @@ describe("readRequestTimeoutMs", () => {
     "1.5",
     "30s",
     " 100",
-    "180001",
+    "120001",
     "3000000000",
     "99999999999",
   ]) {

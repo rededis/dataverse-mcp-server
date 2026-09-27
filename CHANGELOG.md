@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `DATAVERSE_REQUEST_TIMEOUT_MS` (default 30000, maximum 180000): every Dataverse request and the token request to Microsoft Entra ID now time out instead of hanging a tool call indefinitely. The error says which request timed out. A value that is not a whole number from 1 to 180000 is reported through `dataverse_setup` like a missing variable, rather than silently replaced by the default (#73).
+- `DATAVERSE_REQUEST_TIMEOUT_MS` (default 30000, maximum 120000, matching Dataverse's own 2-minute limit on a message operation): every Dataverse request and the token request to Microsoft Entra ID now time out instead of hanging a tool call indefinitely. The error says which request timed out. A value that is not a whole number from 1 to 120000 is reported through `dataverse_setup` like a missing variable, rather than silently replaced by the default (#73).
 
 ### Changed
 
