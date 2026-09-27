@@ -35,10 +35,28 @@ Dataverse client and the tools with the stdio entry point.
   read-only metadata tools; what it excludes is the `development` group
   (schema changes, solutions, dependency checks, see §4).
 
-Development tools live in modules that nothing outside the stdio entry point
-imports. A CI check fails the build if the server bundle contains any of them
-(#79). The guarantee is physical absence, not a runtime flag that a
-misconfiguration could flip.
+Development tools live under `src/tools/development/`, which nothing a server
+entry point can reach imports. A CI check fails the build if the server bundle
+contains any of them (#79). The guarantee is physical absence, not a runtime
+flag that a misconfiguration could flip.
+
+*Mechanism* (#72):
+
+- The server entry point takes its tools from `src/tools/server-groups.ts`
+  (`SERVER_TOOL_GROUPS`, the five server-safe groups). Nothing reachable from
+  it imports `development/`.
+- `development/` has exactly one importer, `src/tools/all.ts`
+  (`registerAllTools`: every group, development included), and `all.ts` has
+  exactly one, `src/index.ts`, the stdio entry point. `all.ts` is a separate
+  module rather than code inside `src/index.ts` because `src/index.ts` loads
+  `.env` and connects stdio on import, so no test can import it; with `all.ts`
+  the `tools/list` snapshot registers tools exactly as stdio does.
+- Code needed by more than one group lives in `src/tools/shared/`. Group
+  modules never import each other, so a helper cannot pull another group,
+  or development, in after it.
+- `tests/tool-groups.test.ts` enforces both rules: reachability from
+  `server-groups.ts`, and the importer allowlist. The bundle check in #79
+  covers the same boundary from the build side.
 
 *Why not npm workspaces now:* the core has one consumer shape today (two entry
 points in one package). Workspaces add release and build machinery without
@@ -73,7 +91,8 @@ configuration (#72, #77):
 | `development` | `list_solutions`, `get_attribute_dependencies`, `create_entity`, `add_attribute`, `update_attribute`, `delete_attribute`, `create_relationship`, `add_entity_key`, `delete_entity_key`, `add_picklist_option`, `update_picklist_option`, `delete_picklist_option` |
 
 The npm package registers all six. The server image contains the first five;
-each role picks from those.
+each role picks from those. The server gets them from `SERVER_TOOL_GROUPS`,
+keyed by these names.
 
 Solutions and dependency checks sit in `development` because they serve
 packaging customizations and preparing destructive schema changes. An agent
@@ -173,7 +192,10 @@ Consequences:
   prevent unauthorized access". Permissions are therefore re-checked on every
   `tools/call`, and entity-set and action allowlists are checked on the
   arguments, which a filtered list cannot do.
-- Tool order is deterministic (a SHOULD in the same section).
+- Tool order is deterministic (a SHOULD in the same section): the key order of
+  `SERVER_TOOL_GROUPS`, then development. A test pins it. The list is part of
+  the model's prompt, so a new order costs clients their prompt cache; change
+  it deliberately.
 
 ### 10. Dataverse limits
 

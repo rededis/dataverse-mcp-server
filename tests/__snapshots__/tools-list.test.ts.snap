@@ -1,0 +1,1941 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
+[
+  {
+    "description": "Add a column (attribute) to an existing Dataverse table",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute": {
+          "properties": {
+            "date_behavior": {
+              "description": "DateTime only: storage/projection semantics. 'UserLocal' (default) shifts by viewer's TZ; 'DateOnly' stores a calendar date (requires date_format=DateOnly); 'TimeZoneIndependent' stores wall-clock time identical across TZs. Per Microsoft docs, changing DateTimeBehavior on an existing column is a one-way operation (UserLocal → other) and cannot be reverted.",
+              "enum": [
+                "UserLocal",
+                "DateOnly",
+                "TimeZoneIndependent",
+              ],
+              "type": "string",
+            },
+            "date_format": {
+              "description": "DateTime only: UI presentation — 'DateOnly' hides the time picker (calendar columns), 'DateAndTime' shows both (default).",
+              "enum": [
+                "DateOnly",
+                "DateAndTime",
+              ],
+              "type": "string",
+            },
+            "description": {
+              "description": "Description",
+              "type": "string",
+            },
+            "display_name": {
+              "description": "Display name",
+              "type": "string",
+            },
+            "global_option_set": {
+              "description": "Picklist only: bind the column to an existing Global OptionSet by its set name (e.g. 'contoso_sourceset') so the column shares one org-wide list instead of a private copy. Mutually exclusive with options.",
+              "minLength": 1,
+              "type": "string",
+            },
+            "logical_name": {
+              "description": "Logical name (e.g. 'contoso_amount')",
+              "type": "string",
+            },
+            "max_length": {
+              "description": "Max length for String/Memo",
+              "type": "number",
+            },
+            "max_value": {
+              "description": "Max value for numeric types",
+              "type": "number",
+            },
+            "min_value": {
+              "description": "Min value for numeric types",
+              "type": "number",
+            },
+            "options": {
+              "description": "Options for Boolean (2 items: false=0, true=1) or Picklist types. Creates a Local OptionSet owned by this one column; mutually exclusive with global_option_set.",
+              "items": {
+                "properties": {
+                  "label": {
+                    "type": "string",
+                  },
+                  "value": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "label",
+                  "value",
+                ],
+                "type": "object",
+              },
+              "type": "array",
+            },
+            "precision": {
+              "description": "Decimal precision for Decimal/Money",
+              "type": "number",
+            },
+            "required": {
+              "description": "Required level (default: None)",
+              "enum": [
+                "None",
+                "ApplicationRequired",
+                "SystemRequired",
+              ],
+              "type": "string",
+            },
+            "type": {
+              "description": "Attribute type",
+              "enum": [
+                "String",
+                "Integer",
+                "BigInt",
+                "Decimal",
+                "Double",
+                "Money",
+                "DateTime",
+                "Uniqueidentifier",
+                "Memo",
+                "Boolean",
+                "Picklist",
+              ],
+              "type": "string",
+            },
+          },
+          "required": [
+            "logical_name",
+            "type",
+            "display_name",
+          ],
+          "type": "object",
+        },
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+        "attribute",
+      ],
+      "type": "object",
+    },
+    "name": "add_attribute",
+  },
+  {
+    "description": "Create an alternate key on a Dataverse table (composite supported via key_attributes). Use for race-safe upserts via keyed-PATCH or to enforce a uniqueness constraint that the primary key doesn't cover. NOTE: Dataverse builds the supporting unique index asynchronously — the key is not usable for keyed lookups until its EntityKeyIndexStatus becomes 'Active'. Poll with list_entity_keys.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "display_name": {
+          "description": "Display name for the key",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+        "key_attributes": {
+          "description": "Logical names of attributes that compose the key (one for a single-column key, multiple for a composite key). Lookups and supported primitive types only — Dataverse rejects keys over Memo, image, or file columns.",
+          "items": {
+            "type": "string",
+          },
+          "minItems": 1,
+          "type": "array",
+        },
+        "logical_name": {
+          "description": "Logical name of the new key with publisher prefix (e.g. 'contoso_contactproviderkey')",
+          "type": "string",
+        },
+        "solution_unique_name": {
+          "description": "Solution unique name (defaults to the Default Solution)",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+        "logical_name",
+        "display_name",
+        "key_attributes",
+      ],
+      "type": "object",
+    },
+    "name": "add_entity_key",
+  },
+  {
+    "description": "Add an option to an existing Local or Global OptionSet (Dataverse InsertOptionValue action). Requires Customizer or System Administrator role; HTTP 403 otherwise.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Picklist attribute logical name (Local OptionSet; pair with entity_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "description": {
+          "description": "Optional description",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Entity logical name (Local OptionSet; pair with attribute_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "label": {
+          "description": "UI label for the new option (e.g. 'Queued')",
+          "type": "string",
+        },
+        "language_code": {
+          "description": "Language code for the label (default: 1033 = English)",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+        "option_set_name": {
+          "description": "Global OptionSet name. Mutually exclusive with entity_logical_name/attribute_logical_name.",
+          "type": "string",
+        },
+        "solution_unique_name": {
+          "description": "Solution unique name (defaults to the Default Solution)",
+          "type": "string",
+        },
+        "value": {
+          "description": "Explicit option value. Must fall within the publisher's customization prefix range (e.g. 909890XXX). If omitted, Dataverse assigns the next free value.",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+      },
+      "required": [
+        "label",
+      ],
+      "type": "object",
+    },
+    "name": "add_picklist_option",
+  },
+  {
+    "description": "Create a new Dataverse table (entity) with specified attributes",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attributes": {
+          "description": "Additional attributes to create with the entity",
+          "items": {
+            "properties": {
+              "date_behavior": {
+                "description": "DateTime only: storage/projection semantics. 'UserLocal' (default) shifts by viewer's TZ; 'DateOnly' stores a calendar date (requires date_format=DateOnly); 'TimeZoneIndependent' stores wall-clock time identical across TZs. Per Microsoft docs, changing DateTimeBehavior on an existing column is a one-way operation (UserLocal → other) and cannot be reverted.",
+                "enum": [
+                  "UserLocal",
+                  "DateOnly",
+                  "TimeZoneIndependent",
+                ],
+                "type": "string",
+              },
+              "date_format": {
+                "description": "DateTime only: UI presentation — 'DateOnly' hides the time picker (calendar columns), 'DateAndTime' shows both (default).",
+                "enum": [
+                  "DateOnly",
+                  "DateAndTime",
+                ],
+                "type": "string",
+              },
+              "description": {
+                "description": "Description",
+                "type": "string",
+              },
+              "display_name": {
+                "description": "Display name",
+                "type": "string",
+              },
+              "global_option_set": {
+                "description": "Picklist only: bind the column to an existing Global OptionSet by its set name (e.g. 'contoso_sourceset') so the column shares one org-wide list instead of a private copy. Mutually exclusive with options.",
+                "minLength": 1,
+                "type": "string",
+              },
+              "logical_name": {
+                "description": "Logical name (e.g. 'contoso_amount')",
+                "type": "string",
+              },
+              "max_length": {
+                "description": "Max length for String/Memo",
+                "type": "number",
+              },
+              "max_value": {
+                "description": "Max value for numeric types",
+                "type": "number",
+              },
+              "min_value": {
+                "description": "Min value for numeric types",
+                "type": "number",
+              },
+              "options": {
+                "description": "Options for Boolean (2 items: false=0, true=1) or Picklist types. Creates a Local OptionSet owned by this one column; mutually exclusive with global_option_set.",
+                "items": {
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                    },
+                    "value": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "label",
+                    "value",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "precision": {
+                "description": "Decimal precision for Decimal/Money",
+                "type": "number",
+              },
+              "required": {
+                "description": "Required level (default: None)",
+                "enum": [
+                  "None",
+                  "ApplicationRequired",
+                  "SystemRequired",
+                ],
+                "type": "string",
+              },
+              "type": {
+                "description": "Attribute type",
+                "enum": [
+                  "String",
+                  "Integer",
+                  "BigInt",
+                  "Decimal",
+                  "Double",
+                  "Money",
+                  "DateTime",
+                  "Uniqueidentifier",
+                  "Memo",
+                  "Boolean",
+                  "Picklist",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "logical_name",
+              "type",
+              "display_name",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "description": {
+          "description": "Table description",
+          "type": "string",
+        },
+        "display_collection_name": {
+          "description": "Plural display name",
+          "type": "string",
+        },
+        "display_name": {
+          "description": "Display name",
+          "type": "string",
+        },
+        "logical_name": {
+          "description": "Logical name with publisher prefix (e.g. 'contoso_newtable')",
+          "type": "string",
+        },
+        "ownership_type": {
+          "description": "Ownership type (default: UserOwned)",
+          "enum": [
+            "UserOwned",
+            "OrganizationOwned",
+          ],
+          "type": "string",
+        },
+        "primary_attribute_display_name": {
+          "description": "Display name for primary name attribute (default: 'Name')",
+          "type": "string",
+        },
+        "primary_attribute_name": {
+          "description": "Logical name for primary name attribute (default: '{prefix}_name')",
+          "type": "string",
+        },
+      },
+      "required": [
+        "logical_name",
+        "display_name",
+        "display_collection_name",
+      ],
+      "type": "object",
+    },
+    "name": "create_entity",
+  },
+  {
+    "description": "Create a new record in a Dataverse table",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "data": {
+          "additionalProperties": {},
+          "description": "Record fields as key-value pairs",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "entity_set": {
+          "description": "Entity set name (plural, e.g. 'accounts', 'contacts')",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_set",
+        "data",
+      ],
+      "type": "object",
+    },
+    "name": "create_record",
+  },
+  {
+    "description": "Create a relationship between two Dataverse tables",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "lookup_display_name": {
+          "description": "Display name for lookup attribute (OneToMany only)",
+          "type": "string",
+        },
+        "lookup_name": {
+          "description": "Logical name for lookup attribute (OneToMany only)",
+          "type": "string",
+        },
+        "primary_entity": {
+          "description": "Primary (referenced) entity logical name",
+          "type": "string",
+        },
+        "related_entity": {
+          "description": "Related (referencing) entity logical name",
+          "type": "string",
+        },
+        "schema_name": {
+          "description": "Unique schema name for the relationship",
+          "type": "string",
+        },
+        "type": {
+          "description": "Relationship type",
+          "enum": [
+            "OneToMany",
+            "ManyToMany",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "type",
+        "primary_entity",
+        "related_entity",
+        "schema_name",
+      ],
+      "type": "object",
+    },
+    "name": "create_relationship",
+  },
+  {
+    "description": "Delete a column from a Dataverse table (currently disabled for safety)",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Logical name of the column",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+        "attribute_logical_name",
+      ],
+      "type": "object",
+    },
+    "name": "delete_attribute",
+  },
+  {
+    "description": "Delete an alternate key from a Dataverse table (currently disabled for safety)",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+        "key_logical_name": {
+          "description": "Logical name of the alternate key to delete",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+        "key_logical_name",
+      ],
+      "type": "object",
+    },
+    "name": "delete_entity_key",
+  },
+  {
+    "description": "Remove an option from a Local or Global OptionSet (currently disabled for safety)",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Picklist attribute logical name (Local OptionSet; pair with entity_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Entity logical name (Local OptionSet; pair with attribute_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "option_set_name": {
+          "description": "Global OptionSet name. Mutually exclusive with entity_logical_name/attribute_logical_name.",
+          "type": "string",
+        },
+        "solution_unique_name": {
+          "description": "Solution unique name (defaults to the Default Solution)",
+          "type": "string",
+        },
+        "value": {
+          "description": "Numeric value of the option to remove",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+      },
+      "required": [
+        "value",
+      ],
+      "type": "object",
+    },
+    "name": "delete_picklist_option",
+  },
+  {
+    "description": "Delete a record from a Dataverse table (currently disabled for safety)",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_set": {
+          "description": "Entity set name",
+          "type": "string",
+        },
+        "id": {
+          "description": "Record GUID",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_set",
+        "id",
+      ],
+      "type": "object",
+    },
+    "name": "delete_record",
+  },
+  {
+    "description": "List CRM components that reference a column — forms, views, workflows, business rules, plugins. Call this when delete_attribute fails with 0x8004f01f, or before any destructive change to a column. Component names are best-effort: resolved for common types, null otherwise. Backed by the Dataverse RetrieveDependenciesForDelete function.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Logical name of the column",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+        "attribute_logical_name",
+      ],
+      "type": "object",
+    },
+    "name": "get_attribute_dependencies",
+  },
+  {
+    "description": "Get attributes (columns) of a specific Dataverse table. Choice-style columns (Choice, Status, State, MultiSelect) carry an option_set summary with is_global and option_count, so one dump shows which choice lists are shared org-wide. Read the option values per column with get_picklist_options.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_logical_name": {
+          "description": "Logical name of the entity (e.g. 'account', 'contact', 'contoso_bankaccount')",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+      ],
+      "type": "object",
+    },
+    "name": "get_entity_schema",
+  },
+  {
+    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Picklist attribute logical name (Local OptionSet; pair with entity_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Entity logical name (Local OptionSet; pair with attribute_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "option_set_name": {
+          "description": "Global OptionSet name. Mutually exclusive with entity_logical_name/attribute_logical_name.",
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "name": "get_picklist_options",
+  },
+  {
+    "description": "Get a single record by ID from a Dataverse table",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_set": {
+          "description": "Entity set name (plural, e.g. 'accounts', 'contacts')",
+          "type": "string",
+        },
+        "expand": {
+          "description": "Related entities to expand ($expand)",
+          "type": "string",
+        },
+        "id": {
+          "description": "Record GUID",
+          "type": "string",
+        },
+        "select": {
+          "description": "Comma-separated list of columns to return ($select)",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_set",
+        "id",
+      ],
+      "type": "object",
+    },
+    "name": "get_record",
+  },
+  {
+    "description": "Invoke a Dataverse Web API action (POST) — bound or unbound. Use for operations that are not plain CRUD, e.g. PublishDuplicateRule (bound to a duplicaterule) or QualifyLead (bound to a lead), or UnpublishDuplicateRule (unbound, takes DuplicateRuleId). Whether an action is bound is defined in the Web API $metadata. Pass entity_set+id for bound actions, neither for unbound. parameters becomes the JSON request body.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_set": {
+          "description": "Entity set (plural, e.g. 'leads') for a bound action. Omit for unbound actions.",
+          "type": "string",
+        },
+        "id": {
+          "description": "Record GUID the bound action targets. Required iff entity_set is set.",
+          "type": "string",
+        },
+        "name": {
+          "description": "Action name, e.g. 'PublishDuplicateRule', 'QualifyLead'. Bare names are namespaced automatically for bound calls; pass a fully-qualified name to override.",
+          "type": "string",
+        },
+        "parameters": {
+          "additionalProperties": {},
+          "description": "Action parameters sent as the JSON request body (e.g. { DuplicateRuleId } for PublishDuplicateRule, { CreateAccount, CreateContact, Status } for QualifyLead).",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "invoke_action",
+  },
+  {
+    "description": "Invoke a Dataverse Web API function (GET) — bound or unbound. Use for read-only operations exposed as functions, e.g. WhoAmI (unbound) or RetrieveDuplicates. Pass entity_set+id for bound functions, neither for unbound. parameters are inlined into the URL as OData function arguments.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_set": {
+          "description": "Entity set (plural) for a bound function. Omit for unbound functions.",
+          "type": "string",
+        },
+        "id": {
+          "description": "Record GUID the bound function targets. Required iff entity_set is set.",
+          "type": "string",
+        },
+        "name": {
+          "description": "Function name, e.g. 'WhoAmI'. Bare names are namespaced automatically for bound calls; pass a fully-qualified name to override.",
+          "type": "string",
+        },
+        "parameters": {
+          "additionalProperties": {},
+          "description": "Function parameters, inlined as OData arguments. Strings are quoted, GUIDs/numbers/booleans passed as-is.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "invoke_function",
+  },
+  {
+    "description": "List Dataverse tables (entities) with optional prefix and solution filters",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "prefix": {
+          "description": "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified.",
+          "type": "string",
+        },
+        "solution": {
+          "description": "Filter entities by solution unique name (e.g. 'MySolution'). Uses DATAVERSE_SOLUTION_NAME env if not specified. Pass an empty string to disable the default filter.",
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "name": "list_entities",
+  },
+  {
+    "description": "List alternate keys defined on a Dataverse table. Returns a flat array of { logical_name, schema_name, display_name, key_attributes, entity_key_index_status, metadata_id }. entity_key_index_status reflects the background index build (Pending → Active, or Failed) — alt keys are not usable for keyed-PATCH upserts until Active.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+      ],
+      "type": "object",
+    },
+    "name": "list_entity_keys",
+  },
+  {
+    "description": "List Dataverse solutions (uniquename is used to filter list_entities)",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "include_managed": {
+          "description": "Include managed solutions (default: false — only unmanaged are returned)",
+          "type": "boolean",
+        },
+      },
+      "type": "object",
+    },
+    "name": "list_solutions",
+  },
+  {
+    "description": "Query records from a Dataverse table with OData filters",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_set": {
+          "description": "Entity set name (plural, e.g. 'accounts', 'contacts')",
+          "type": "string",
+        },
+        "expand": {
+          "description": "Related entities to expand ($expand)",
+          "type": "string",
+        },
+        "filter": {
+          "description": "OData filter expression ($filter)",
+          "type": "string",
+        },
+        "orderby": {
+          "description": "Order by expression ($orderby)",
+          "type": "string",
+        },
+        "select": {
+          "description": "Comma-separated list of columns to return ($select)",
+          "type": "string",
+        },
+        "top": {
+          "description": "Maximum number of records to return ($top)",
+          "type": "number",
+        },
+      },
+      "required": [
+        "entity_set",
+      ],
+      "type": "object",
+    },
+    "name": "query_records",
+  },
+  {
+    "description": "Update metadata of an existing column: display name, description, required level, max length, min/max value, precision. Dataverse fixes a column's type and logical name at creation — to change either, add_attribute a new column, migrate the values with update_record, then delete_attribute the old one.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Logical name of the column to update",
+          "type": "string",
+        },
+        "date_behavior": {
+          "description": "DateTime only: change storage semantics. ONE-WAY per Microsoft — you can switch from UserLocal to DateOnly or TimeZoneIndependent once, but cannot switch back or between the non-UserLocal values. Dataverse will return 400 if the behavior is already locked.",
+          "enum": [
+            "UserLocal",
+            "DateOnly",
+            "TimeZoneIndependent",
+          ],
+          "type": "string",
+        },
+        "date_format": {
+          "description": "DateTime only: change UI presentation. See add_attribute for semantics.",
+          "enum": [
+            "DateOnly",
+            "DateAndTime",
+          ],
+          "type": "string",
+        },
+        "description": {
+          "description": "New description",
+          "type": "string",
+        },
+        "display_name": {
+          "description": "New display name",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+        "language_code": {
+          "description": "Language code for labels (default: 1033)",
+          "type": "number",
+        },
+        "max_length": {
+          "description": "New max length (String/Memo only)",
+          "type": "number",
+        },
+        "max_value": {
+          "description": "New max value (numeric types only)",
+          "type": "number",
+        },
+        "merge_labels": {
+          "description": "If true, preserve existing localized labels in other languages; if false (default), replace all localized labels with just the new one.",
+          "type": "boolean",
+        },
+        "min_value": {
+          "description": "New min value (numeric types only)",
+          "type": "number",
+        },
+        "precision": {
+          "description": "New precision (Decimal/Money only)",
+          "type": "number",
+        },
+        "required": {
+          "description": "New required level",
+          "enum": [
+            "None",
+            "ApplicationRequired",
+            "SystemRequired",
+          ],
+          "type": "string",
+        },
+        "type": {
+          "description": "Current type of the attribute (required to build the correct metadata discriminator; must match the existing type — type changes are not allowed)",
+          "enum": [
+            "String",
+            "Integer",
+            "BigInt",
+            "Decimal",
+            "Double",
+            "Money",
+            "DateTime",
+            "Uniqueidentifier",
+            "Memo",
+            "Boolean",
+            "Picklist",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+        "attribute_logical_name",
+        "type",
+      ],
+      "type": "object",
+    },
+    "name": "update_attribute",
+  },
+  {
+    "description": "Update an existing option's label/description on a Local or Global OptionSet (Dataverse UpdateOptionValue action). Requires Customizer or System Administrator role.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Picklist attribute logical name (Local OptionSet; pair with entity_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "description": {
+          "description": "New description",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Entity logical name (Local OptionSet; pair with attribute_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "label": {
+          "description": "New UI label",
+          "type": "string",
+        },
+        "language_code": {
+          "description": "Language code for the label (default: 1033)",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+        "merge_labels": {
+          "description": "If true, merge the new label with existing localized labels (other languages kept); if false (default), replace all localized labels with just the new one.",
+          "type": "boolean",
+        },
+        "option_set_name": {
+          "description": "Global OptionSet name. Mutually exclusive with entity_logical_name/attribute_logical_name.",
+          "type": "string",
+        },
+        "solution_unique_name": {
+          "description": "Solution unique name (defaults to the Default Solution)",
+          "type": "string",
+        },
+        "value": {
+          "description": "Numeric value of the option to update",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+      },
+      "required": [
+        "value",
+        "label",
+      ],
+      "type": "object",
+    },
+    "name": "update_picklist_option",
+  },
+  {
+    "description": "Update an existing record in a Dataverse table",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "data": {
+          "additionalProperties": {},
+          "description": "Fields to update as key-value pairs",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "entity_set": {
+          "description": "Entity set name (plural, e.g. 'accounts', 'contacts')",
+          "type": "string",
+        },
+        "id": {
+          "description": "Record GUID",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_set",
+        "id",
+        "data",
+      ],
+      "type": "object",
+    },
+    "name": "update_record",
+  },
+]
+`;
+
+exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
+[
+  {
+    "description": "Add a column (attribute) to an existing Dataverse table",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute": {
+          "properties": {
+            "date_behavior": {
+              "description": "DateTime only: storage/projection semantics. 'UserLocal' (default) shifts by viewer's TZ; 'DateOnly' stores a calendar date (requires date_format=DateOnly); 'TimeZoneIndependent' stores wall-clock time identical across TZs. Per Microsoft docs, changing DateTimeBehavior on an existing column is a one-way operation (UserLocal → other) and cannot be reverted.",
+              "enum": [
+                "UserLocal",
+                "DateOnly",
+                "TimeZoneIndependent",
+              ],
+              "type": "string",
+            },
+            "date_format": {
+              "description": "DateTime only: UI presentation — 'DateOnly' hides the time picker (calendar columns), 'DateAndTime' shows both (default).",
+              "enum": [
+                "DateOnly",
+                "DateAndTime",
+              ],
+              "type": "string",
+            },
+            "description": {
+              "description": "Description",
+              "type": "string",
+            },
+            "display_name": {
+              "description": "Display name",
+              "type": "string",
+            },
+            "global_option_set": {
+              "description": "Picklist only: bind the column to an existing Global OptionSet by its set name (e.g. 'contoso_sourceset') so the column shares one org-wide list instead of a private copy. Mutually exclusive with options.",
+              "minLength": 1,
+              "type": "string",
+            },
+            "logical_name": {
+              "description": "Logical name (e.g. 'contoso_amount')",
+              "type": "string",
+            },
+            "max_length": {
+              "description": "Max length for String/Memo",
+              "type": "number",
+            },
+            "max_value": {
+              "description": "Max value for numeric types",
+              "type": "number",
+            },
+            "min_value": {
+              "description": "Min value for numeric types",
+              "type": "number",
+            },
+            "options": {
+              "description": "Options for Boolean (2 items: false=0, true=1) or Picklist types. Creates a Local OptionSet owned by this one column; mutually exclusive with global_option_set.",
+              "items": {
+                "properties": {
+                  "label": {
+                    "type": "string",
+                  },
+                  "value": {
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "label",
+                  "value",
+                ],
+                "type": "object",
+              },
+              "type": "array",
+            },
+            "precision": {
+              "description": "Decimal precision for Decimal/Money",
+              "type": "number",
+            },
+            "required": {
+              "description": "Required level (default: None)",
+              "enum": [
+                "None",
+                "ApplicationRequired",
+                "SystemRequired",
+              ],
+              "type": "string",
+            },
+            "type": {
+              "description": "Attribute type",
+              "enum": [
+                "String",
+                "Integer",
+                "BigInt",
+                "Decimal",
+                "Double",
+                "Money",
+                "DateTime",
+                "Uniqueidentifier",
+                "Memo",
+                "Boolean",
+                "Picklist",
+              ],
+              "type": "string",
+            },
+          },
+          "required": [
+            "logical_name",
+            "type",
+            "display_name",
+          ],
+          "type": "object",
+        },
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+        "attribute",
+      ],
+      "type": "object",
+    },
+    "name": "add_attribute",
+  },
+  {
+    "description": "Create an alternate key on a Dataverse table (composite supported via key_attributes). Use for race-safe upserts via keyed-PATCH or to enforce a uniqueness constraint that the primary key doesn't cover. NOTE: Dataverse builds the supporting unique index asynchronously — the key is not usable for keyed lookups until its EntityKeyIndexStatus becomes 'Active'. Poll with list_entity_keys.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "display_name": {
+          "description": "Display name for the key",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+        "key_attributes": {
+          "description": "Logical names of attributes that compose the key (one for a single-column key, multiple for a composite key). Lookups and supported primitive types only — Dataverse rejects keys over Memo, image, or file columns.",
+          "items": {
+            "type": "string",
+          },
+          "minItems": 1,
+          "type": "array",
+        },
+        "logical_name": {
+          "description": "Logical name of the new key with publisher prefix (e.g. 'contoso_contactproviderkey')",
+          "type": "string",
+        },
+        "solution_unique_name": {
+          "description": "Solution unique name (defaults to the Default Solution)",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+        "logical_name",
+        "display_name",
+        "key_attributes",
+      ],
+      "type": "object",
+    },
+    "name": "add_entity_key",
+  },
+  {
+    "description": "Add an option to an existing Local or Global OptionSet (Dataverse InsertOptionValue action). Requires Customizer or System Administrator role; HTTP 403 otherwise.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Picklist attribute logical name (Local OptionSet; pair with entity_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "description": {
+          "description": "Optional description",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Entity logical name (Local OptionSet; pair with attribute_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "label": {
+          "description": "UI label for the new option (e.g. 'Queued')",
+          "type": "string",
+        },
+        "language_code": {
+          "description": "Language code for the label (default: 1033 = English)",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+        "option_set_name": {
+          "description": "Global OptionSet name. Mutually exclusive with entity_logical_name/attribute_logical_name.",
+          "type": "string",
+        },
+        "solution_unique_name": {
+          "description": "Solution unique name (defaults to the Default Solution)",
+          "type": "string",
+        },
+        "value": {
+          "description": "Explicit option value. Must fall within the publisher's customization prefix range (e.g. 909890XXX). If omitted, Dataverse assigns the next free value.",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+      },
+      "required": [
+        "label",
+      ],
+      "type": "object",
+    },
+    "name": "add_picklist_option",
+  },
+  {
+    "description": "Create a new Dataverse table (entity) with specified attributes",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attributes": {
+          "description": "Additional attributes to create with the entity",
+          "items": {
+            "properties": {
+              "date_behavior": {
+                "description": "DateTime only: storage/projection semantics. 'UserLocal' (default) shifts by viewer's TZ; 'DateOnly' stores a calendar date (requires date_format=DateOnly); 'TimeZoneIndependent' stores wall-clock time identical across TZs. Per Microsoft docs, changing DateTimeBehavior on an existing column is a one-way operation (UserLocal → other) and cannot be reverted.",
+                "enum": [
+                  "UserLocal",
+                  "DateOnly",
+                  "TimeZoneIndependent",
+                ],
+                "type": "string",
+              },
+              "date_format": {
+                "description": "DateTime only: UI presentation — 'DateOnly' hides the time picker (calendar columns), 'DateAndTime' shows both (default).",
+                "enum": [
+                  "DateOnly",
+                  "DateAndTime",
+                ],
+                "type": "string",
+              },
+              "description": {
+                "description": "Description",
+                "type": "string",
+              },
+              "display_name": {
+                "description": "Display name",
+                "type": "string",
+              },
+              "global_option_set": {
+                "description": "Picklist only: bind the column to an existing Global OptionSet by its set name (e.g. 'contoso_sourceset') so the column shares one org-wide list instead of a private copy. Mutually exclusive with options.",
+                "minLength": 1,
+                "type": "string",
+              },
+              "logical_name": {
+                "description": "Logical name (e.g. 'contoso_amount')",
+                "type": "string",
+              },
+              "max_length": {
+                "description": "Max length for String/Memo",
+                "type": "number",
+              },
+              "max_value": {
+                "description": "Max value for numeric types",
+                "type": "number",
+              },
+              "min_value": {
+                "description": "Min value for numeric types",
+                "type": "number",
+              },
+              "options": {
+                "description": "Options for Boolean (2 items: false=0, true=1) or Picklist types. Creates a Local OptionSet owned by this one column; mutually exclusive with global_option_set.",
+                "items": {
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                    },
+                    "value": {
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "label",
+                    "value",
+                  ],
+                  "type": "object",
+                },
+                "type": "array",
+              },
+              "precision": {
+                "description": "Decimal precision for Decimal/Money",
+                "type": "number",
+              },
+              "required": {
+                "description": "Required level (default: None)",
+                "enum": [
+                  "None",
+                  "ApplicationRequired",
+                  "SystemRequired",
+                ],
+                "type": "string",
+              },
+              "type": {
+                "description": "Attribute type",
+                "enum": [
+                  "String",
+                  "Integer",
+                  "BigInt",
+                  "Decimal",
+                  "Double",
+                  "Money",
+                  "DateTime",
+                  "Uniqueidentifier",
+                  "Memo",
+                  "Boolean",
+                  "Picklist",
+                ],
+                "type": "string",
+              },
+            },
+            "required": [
+              "logical_name",
+              "type",
+              "display_name",
+            ],
+            "type": "object",
+          },
+          "type": "array",
+        },
+        "description": {
+          "description": "Table description",
+          "type": "string",
+        },
+        "display_collection_name": {
+          "description": "Plural display name",
+          "type": "string",
+        },
+        "display_name": {
+          "description": "Display name",
+          "type": "string",
+        },
+        "logical_name": {
+          "description": "Logical name with publisher prefix (e.g. 'contoso_newtable')",
+          "type": "string",
+        },
+        "ownership_type": {
+          "description": "Ownership type (default: UserOwned)",
+          "enum": [
+            "UserOwned",
+            "OrganizationOwned",
+          ],
+          "type": "string",
+        },
+        "primary_attribute_display_name": {
+          "description": "Display name for primary name attribute (default: 'Name')",
+          "type": "string",
+        },
+        "primary_attribute_name": {
+          "description": "Logical name for primary name attribute (default: '{prefix}_name')",
+          "type": "string",
+        },
+      },
+      "required": [
+        "logical_name",
+        "display_name",
+        "display_collection_name",
+      ],
+      "type": "object",
+    },
+    "name": "create_entity",
+  },
+  {
+    "description": "Create a new record in a Dataverse table",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "data": {
+          "additionalProperties": {},
+          "description": "Record fields as key-value pairs",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "entity_set": {
+          "description": "Entity set name (plural, e.g. 'accounts', 'contacts')",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_set",
+        "data",
+      ],
+      "type": "object",
+    },
+    "name": "create_record",
+  },
+  {
+    "description": "Create a relationship between two Dataverse tables",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "lookup_display_name": {
+          "description": "Display name for lookup attribute (OneToMany only)",
+          "type": "string",
+        },
+        "lookup_name": {
+          "description": "Logical name for lookup attribute (OneToMany only)",
+          "type": "string",
+        },
+        "primary_entity": {
+          "description": "Primary (referenced) entity logical name",
+          "type": "string",
+        },
+        "related_entity": {
+          "description": "Related (referencing) entity logical name",
+          "type": "string",
+        },
+        "schema_name": {
+          "description": "Unique schema name for the relationship",
+          "type": "string",
+        },
+        "type": {
+          "description": "Relationship type",
+          "enum": [
+            "OneToMany",
+            "ManyToMany",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "type",
+        "primary_entity",
+        "related_entity",
+        "schema_name",
+      ],
+      "type": "object",
+    },
+    "name": "create_relationship",
+  },
+  {
+    "description": "Permanently delete a column (attribute) from a Dataverse table. ⚠️ DESTROYS the data stored in that column across ALL records, recoverable only from a full environment backup. Confirm with the user before calling. To rename a column or change its type, follow the migration recipe in update_attribute instead.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Logical name of the column to delete",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+        "attribute_logical_name",
+      ],
+      "type": "object",
+    },
+    "name": "delete_attribute",
+  },
+  {
+    "description": "Permanently delete an alternate key from a Dataverse table. ⚠️ Drops the supporting unique index; any client code relying on keyed-PATCH upserts against this key will stop working. The underlying attributes and their data are NOT affected — only the key definition and its index are removed.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+        "key_logical_name": {
+          "description": "Logical name of the alternate key to delete",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+        "key_logical_name",
+      ],
+      "type": "object",
+    },
+    "name": "delete_entity_key",
+  },
+  {
+    "description": "Remove an option from a Local or Global OptionSet (Dataverse DeleteOptionValue action). WARNING: existing records that hold this integer value are NOT updated and will retain the now-orphan number — warn the user before deleting.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Picklist attribute logical name (Local OptionSet; pair with entity_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Entity logical name (Local OptionSet; pair with attribute_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "option_set_name": {
+          "description": "Global OptionSet name. Mutually exclusive with entity_logical_name/attribute_logical_name.",
+          "type": "string",
+        },
+        "solution_unique_name": {
+          "description": "Solution unique name (defaults to the Default Solution)",
+          "type": "string",
+        },
+        "value": {
+          "description": "Numeric value of the option to remove",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+      },
+      "required": [
+        "value",
+      ],
+      "type": "object",
+    },
+    "name": "delete_picklist_option",
+  },
+  {
+    "description": "Delete a record from a Dataverse table",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_set": {
+          "description": "Entity set name (plural, e.g. 'accounts', 'contacts')",
+          "type": "string",
+        },
+        "id": {
+          "description": "Record GUID",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_set",
+        "id",
+      ],
+      "type": "object",
+    },
+    "name": "delete_record",
+  },
+  {
+    "description": "List CRM components that reference a column — forms, views, workflows, business rules, plugins. Call this when delete_attribute fails with 0x8004f01f, or before any destructive change to a column. Component names are best-effort: resolved for common types, null otherwise. Backed by the Dataverse RetrieveDependenciesForDelete function.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Logical name of the column",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+        "attribute_logical_name",
+      ],
+      "type": "object",
+    },
+    "name": "get_attribute_dependencies",
+  },
+  {
+    "description": "Get attributes (columns) of a specific Dataverse table. Choice-style columns (Choice, Status, State, MultiSelect) carry an option_set summary with is_global and option_count, so one dump shows which choice lists are shared org-wide. Read the option values per column with get_picklist_options.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_logical_name": {
+          "description": "Logical name of the entity (e.g. 'account', 'contact', 'contoso_bankaccount')",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+      ],
+      "type": "object",
+    },
+    "name": "get_entity_schema",
+  },
+  {
+    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Picklist attribute logical name (Local OptionSet; pair with entity_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Entity logical name (Local OptionSet; pair with attribute_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "option_set_name": {
+          "description": "Global OptionSet name. Mutually exclusive with entity_logical_name/attribute_logical_name.",
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "name": "get_picklist_options",
+  },
+  {
+    "description": "Get a single record by ID from a Dataverse table",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_set": {
+          "description": "Entity set name (plural, e.g. 'accounts', 'contacts')",
+          "type": "string",
+        },
+        "expand": {
+          "description": "Related entities to expand ($expand)",
+          "type": "string",
+        },
+        "id": {
+          "description": "Record GUID",
+          "type": "string",
+        },
+        "select": {
+          "description": "Comma-separated list of columns to return ($select)",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_set",
+        "id",
+      ],
+      "type": "object",
+    },
+    "name": "get_record",
+  },
+  {
+    "description": "Invoke a Dataverse Web API action (POST) — bound or unbound. Use for operations that are not plain CRUD, e.g. PublishDuplicateRule (bound to a duplicaterule) or QualifyLead (bound to a lead), or UnpublishDuplicateRule (unbound, takes DuplicateRuleId). Whether an action is bound is defined in the Web API $metadata. Pass entity_set+id for bound actions, neither for unbound. parameters becomes the JSON request body.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_set": {
+          "description": "Entity set (plural, e.g. 'leads') for a bound action. Omit for unbound actions.",
+          "type": "string",
+        },
+        "id": {
+          "description": "Record GUID the bound action targets. Required iff entity_set is set.",
+          "type": "string",
+        },
+        "name": {
+          "description": "Action name, e.g. 'PublishDuplicateRule', 'QualifyLead'. Bare names are namespaced automatically for bound calls; pass a fully-qualified name to override.",
+          "type": "string",
+        },
+        "parameters": {
+          "additionalProperties": {},
+          "description": "Action parameters sent as the JSON request body (e.g. { DuplicateRuleId } for PublishDuplicateRule, { CreateAccount, CreateContact, Status } for QualifyLead).",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "invoke_action",
+  },
+  {
+    "description": "Invoke a Dataverse Web API function (GET) — bound or unbound. Use for read-only operations exposed as functions, e.g. WhoAmI (unbound) or RetrieveDuplicates. Pass entity_set+id for bound functions, neither for unbound. parameters are inlined into the URL as OData function arguments.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_set": {
+          "description": "Entity set (plural) for a bound function. Omit for unbound functions.",
+          "type": "string",
+        },
+        "id": {
+          "description": "Record GUID the bound function targets. Required iff entity_set is set.",
+          "type": "string",
+        },
+        "name": {
+          "description": "Function name, e.g. 'WhoAmI'. Bare names are namespaced automatically for bound calls; pass a fully-qualified name to override.",
+          "type": "string",
+        },
+        "parameters": {
+          "additionalProperties": {},
+          "description": "Function parameters, inlined as OData arguments. Strings are quoted, GUIDs/numbers/booleans passed as-is.",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+      },
+      "required": [
+        "name",
+      ],
+      "type": "object",
+    },
+    "name": "invoke_function",
+  },
+  {
+    "description": "List Dataverse tables (entities) with optional prefix and solution filters",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "prefix": {
+          "description": "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified.",
+          "type": "string",
+        },
+        "solution": {
+          "description": "Filter entities by solution unique name (e.g. 'MySolution'). Uses DATAVERSE_SOLUTION_NAME env if not specified. Pass an empty string to disable the default filter.",
+          "type": "string",
+        },
+      },
+      "type": "object",
+    },
+    "name": "list_entities",
+  },
+  {
+    "description": "List alternate keys defined on a Dataverse table. Returns a flat array of { logical_name, schema_name, display_name, key_attributes, entity_key_index_status, metadata_id }. entity_key_index_status reflects the background index build (Pending → Active, or Failed) — alt keys are not usable for keyed-PATCH upserts until Active.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+      ],
+      "type": "object",
+    },
+    "name": "list_entity_keys",
+  },
+  {
+    "description": "List Dataverse solutions (uniquename is used to filter list_entities)",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "include_managed": {
+          "description": "Include managed solutions (default: false — only unmanaged are returned)",
+          "type": "boolean",
+        },
+      },
+      "type": "object",
+    },
+    "name": "list_solutions",
+  },
+  {
+    "description": "Query records from a Dataverse table with OData filters",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "entity_set": {
+          "description": "Entity set name (plural, e.g. 'accounts', 'contacts')",
+          "type": "string",
+        },
+        "expand": {
+          "description": "Related entities to expand ($expand)",
+          "type": "string",
+        },
+        "filter": {
+          "description": "OData filter expression ($filter)",
+          "type": "string",
+        },
+        "orderby": {
+          "description": "Order by expression ($orderby)",
+          "type": "string",
+        },
+        "select": {
+          "description": "Comma-separated list of columns to return ($select)",
+          "type": "string",
+        },
+        "top": {
+          "description": "Maximum number of records to return ($top)",
+          "type": "number",
+        },
+      },
+      "required": [
+        "entity_set",
+      ],
+      "type": "object",
+    },
+    "name": "query_records",
+  },
+  {
+    "description": "Update metadata of an existing column: display name, description, required level, max length, min/max value, precision. Dataverse fixes a column's type and logical name at creation — to change either, add_attribute a new column, migrate the values with update_record, then delete_attribute the old one.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Logical name of the column to update",
+          "type": "string",
+        },
+        "date_behavior": {
+          "description": "DateTime only: change storage semantics. ONE-WAY per Microsoft — you can switch from UserLocal to DateOnly or TimeZoneIndependent once, but cannot switch back or between the non-UserLocal values. Dataverse will return 400 if the behavior is already locked.",
+          "enum": [
+            "UserLocal",
+            "DateOnly",
+            "TimeZoneIndependent",
+          ],
+          "type": "string",
+        },
+        "date_format": {
+          "description": "DateTime only: change UI presentation. See add_attribute for semantics.",
+          "enum": [
+            "DateOnly",
+            "DateAndTime",
+          ],
+          "type": "string",
+        },
+        "description": {
+          "description": "New description",
+          "type": "string",
+        },
+        "display_name": {
+          "description": "New display name",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Logical name of the entity",
+          "type": "string",
+        },
+        "language_code": {
+          "description": "Language code for labels (default: 1033)",
+          "type": "number",
+        },
+        "max_length": {
+          "description": "New max length (String/Memo only)",
+          "type": "number",
+        },
+        "max_value": {
+          "description": "New max value (numeric types only)",
+          "type": "number",
+        },
+        "merge_labels": {
+          "description": "If true, preserve existing localized labels in other languages; if false (default), replace all localized labels with just the new one.",
+          "type": "boolean",
+        },
+        "min_value": {
+          "description": "New min value (numeric types only)",
+          "type": "number",
+        },
+        "precision": {
+          "description": "New precision (Decimal/Money only)",
+          "type": "number",
+        },
+        "required": {
+          "description": "New required level",
+          "enum": [
+            "None",
+            "ApplicationRequired",
+            "SystemRequired",
+          ],
+          "type": "string",
+        },
+        "type": {
+          "description": "Current type of the attribute (required to build the correct metadata discriminator; must match the existing type — type changes are not allowed)",
+          "enum": [
+            "String",
+            "Integer",
+            "BigInt",
+            "Decimal",
+            "Double",
+            "Money",
+            "DateTime",
+            "Uniqueidentifier",
+            "Memo",
+            "Boolean",
+            "Picklist",
+          ],
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_logical_name",
+        "attribute_logical_name",
+        "type",
+      ],
+      "type": "object",
+    },
+    "name": "update_attribute",
+  },
+  {
+    "description": "Update an existing option's label/description on a Local or Global OptionSet (Dataverse UpdateOptionValue action). Requires Customizer or System Administrator role.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "attribute_logical_name": {
+          "description": "Picklist attribute logical name (Local OptionSet; pair with entity_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "description": {
+          "description": "New description",
+          "type": "string",
+        },
+        "entity_logical_name": {
+          "description": "Entity logical name (Local OptionSet; pair with attribute_logical_name). Mutually exclusive with option_set_name.",
+          "type": "string",
+        },
+        "label": {
+          "description": "New UI label",
+          "type": "string",
+        },
+        "language_code": {
+          "description": "Language code for the label (default: 1033)",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+        "merge_labels": {
+          "description": "If true, merge the new label with existing localized labels (other languages kept); if false (default), replace all localized labels with just the new one.",
+          "type": "boolean",
+        },
+        "option_set_name": {
+          "description": "Global OptionSet name. Mutually exclusive with entity_logical_name/attribute_logical_name.",
+          "type": "string",
+        },
+        "solution_unique_name": {
+          "description": "Solution unique name (defaults to the Default Solution)",
+          "type": "string",
+        },
+        "value": {
+          "description": "Numeric value of the option to update",
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer",
+        },
+      },
+      "required": [
+        "value",
+        "label",
+      ],
+      "type": "object",
+    },
+    "name": "update_picklist_option",
+  },
+  {
+    "description": "Update an existing record in a Dataverse table",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "data": {
+          "additionalProperties": {},
+          "description": "Fields to update as key-value pairs",
+          "propertyNames": {
+            "type": "string",
+          },
+          "type": "object",
+        },
+        "entity_set": {
+          "description": "Entity set name (plural, e.g. 'accounts', 'contacts')",
+          "type": "string",
+        },
+        "id": {
+          "description": "Record GUID",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_set",
+        "id",
+        "data",
+      ],
+      "type": "object",
+    },
+    "name": "update_record",
+  },
+]
+`;
