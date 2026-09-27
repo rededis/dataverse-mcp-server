@@ -1,3 +1,4 @@
+import { DEFAULT_REQUEST_TIMEOUT_MS } from "./config.js";
 import {
   DataverseNetworkError,
   DataverseTimeoutError,
@@ -32,8 +33,6 @@ export interface HttpResponse {
 export interface RequestExecutor {
   execute(request: HttpRequest): Promise<HttpResponse>;
 }
-
-export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 export class FetchExecutor implements RequestExecutor {
   constructor(private timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS) {}

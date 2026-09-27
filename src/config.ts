@@ -1,3 +1,6 @@
+/** DATAVERSE_REQUEST_TIMEOUT_MS when unset. */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
 /**
  * Upper bound for DATAVERSE_REQUEST_TIMEOUT_MS. Dataverse cancels any message
  * operation after 2 minutes, so waiting longer than that buys nothing; it is

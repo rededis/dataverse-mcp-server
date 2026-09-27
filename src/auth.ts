@@ -1,5 +1,5 @@
+import { DEFAULT_REQUEST_TIMEOUT_MS } from "./config.js";
 import { DataverseAuthError, isTimeout } from "./errors.js";
-import { DEFAULT_REQUEST_TIMEOUT_MS } from "./executor.js";
 
 interface TokenCache {
   accessToken: string;
