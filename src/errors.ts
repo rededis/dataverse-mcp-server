@@ -83,6 +83,26 @@ export class DataverseAuthError extends DataverseError {
   }
 }
 
+/** Why a request was turned away without an answer from Dataverse. */
+export type BusyReason = "throttled" | "queue-full" | "queue-timeout";
+
+/**
+ * Dataverse cannot take the request now: it is throttling this application
+ * user (service protection limits), or too many requests are already waiting
+ * here. The message is ours, so unlike a DataverseApiError it is safe to show
+ * and to log, and it says when to try again if Dataverse told us.
+ */
+export class DataverseBusyError extends DataverseError {
+  constructor(
+    readonly reason: BusyReason,
+    message: string,
+    /** How long Dataverse asked the caller to wait, when it said. */
+    readonly retryAfterMs?: number,
+  ) {
+    super(message);
+  }
+}
+
 function errorCode(body: string): string | undefined {
   try {
     const code = (JSON.parse(body) as { error?: { code?: unknown } }).error

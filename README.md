@@ -156,9 +156,25 @@ DATAVERSE_ENTITY_PREFIX=contoso_          # optional, default prefix filter for 
 DATAVERSE_SOLUTION_NAME=MySolution        # optional, default solution unique name for list_entities
 DATAVERSE_ALLOW_DELETE=true               # optional, enable delete operations (disabled by default)
 DATAVERSE_REQUEST_TIMEOUT_MS=30000        # optional, per-request timeout in ms for Dataverse and token calls (default 30000, max 120000)
+DATAVERSE_MAX_CONCURRENCY=8               # optional, requests sent to Dataverse at once (default 8, 1 to 100)
+DATAVERSE_MAX_QUEUE_LENGTH=100            # optional, requests that may wait for a free slot (default 100, 0 to 10000)
+DATAVERSE_MAX_QUEUE_WAIT_MS=30000         # optional, longest wait for a free slot in ms (default 30000, max 120000)
+DATAVERSE_MAX_ATTEMPTS=3                  # optional, times a throttled request is sent, the first try included (default 3, 1 to 10)
+DATAVERSE_MAX_RETRY_WAIT_MS=30000         # optional, longest wait on throttling per request in ms (default 30000, max 120000)
 ```
 
 `DATAVERSE_REQUEST_TIMEOUT_MS` bounds how long a tool call waits for Dataverse. Dataverse itself cancels any operation after 2 minutes, hence the maximum. Schema changes such as `create_entity` with many columns can take longer than the 30-second default. When that happens the tool reports a timeout, but Dataverse still finishes the change, so check before retrying, or raise the value.
+
+#### Service protection limits
+
+Dataverse throttles each user with [service protection limits](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/api-limits) and answers `429 Too Many Requests` when one is reached. Parallel tool calls can reach them even from one machine. The server handles this in two ways, and all five `DATAVERSE_MAX_*` variables above are optional:
+
+- **It limits what it sends.** At most `DATAVERSE_MAX_CONCURRENCY` requests are in flight; the rest wait in arrival order. A request is turned away with a "Dataverse is busy" error when `DATAVERSE_MAX_QUEUE_LENGTH` requests are already waiting, or when it has waited `DATAVERSE_MAX_QUEUE_WAIT_MS` without getting a slot.
+- **It retries a 429.** The server waits for as long as the `Retry-After` header says, then resends, up to `DATAVERSE_MAX_ATTEMPTS` sends in total. While it waits, no other request is sent either, because Dataverse extends the wait for a client that keeps sending. If the waits of one request would add up to more than `DATAVERSE_MAX_RETRY_WAIT_MS`, the tool call fails at once with an error that says in how many seconds to retry.
+
+With the defaults, these limits can add up to 60 seconds of waiting to one request: 30 in the queue and 30 on throttling. That is on top of the request itself, which `DATAVERSE_REQUEST_TIMEOUT_MS` bounds. A client built on the MCP TypeScript SDK gives up on a request after 60 seconds unless configured otherwise, so a call that hits both waits can be abandoned by the client before the server answers; lower the two `*_WAIT_MS` values if that matters more to you than riding out a busy period.
+
+The concurrency limit alone does not prevent throttling, since Dataverse also limits combined execution time. The defaults are deliberately conservative choices of this server, not values published by Microsoft. A value that is set but out of range is reported through `dataverse_setup`, like a missing variable.
 
 ### Azure App Registration
 
