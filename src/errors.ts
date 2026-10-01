@@ -3,9 +3,11 @@
 // matching message text, and translate what happened into what it means for
 // their caller ("Entity not found: …").
 //
-// Logging (ADR-0001 §12): `status`, `code`, `method` and the class name are
-// safe to log. `message` and `url` are not: messages carry raw Dataverse and
-// Entra response text, and URLs carry `$filter` literals unmasked.
+// Logging (ADR-0001 §12): `status`, `code`, `method`, `reason`,
+// `retryAfterMs` and the class name are safe to log. `message` and `url` are
+// not: messages carry raw Dataverse and Entra response text, and URLs carry
+// `$filter` literals unmasked. DataverseBusyError is the exception: its
+// message is written here and carries neither.
 
 import type { HttpRequest } from "./http.js";
 
@@ -89,14 +91,17 @@ export type BusyReason = "throttled" | "queue-full" | "queue-timeout";
 /**
  * Dataverse cannot take the request now: it is throttling this application
  * user (service protection limits), or too many requests are already waiting
- * here. The message is ours, so unlike a DataverseApiError it is safe to show
- * and to log, and it says when to try again if Dataverse told us.
+ * here. The message never repeats Dataverse's own 429 text, which is not
+ * meant for users and embeds the environment's limit values.
  */
 export class DataverseBusyError extends DataverseError {
   constructor(
     readonly reason: BusyReason,
     message: string,
-    /** How long Dataverse asked the caller to wait, when it said. */
+    /**
+     * How long to wait before trying again, for "throttled": what Dataverse
+     * asked for, or this server's own backoff when Dataverse named no wait.
+     */
     readonly retryAfterMs?: number,
   ) {
     super(message);

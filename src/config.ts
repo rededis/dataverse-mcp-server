@@ -1,3 +1,5 @@
+import type { ServiceProtectionSettings } from "./service-protection.js";
+
 /** DATAVERSE_REQUEST_TIMEOUT_MS when unset. */
 export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
@@ -24,10 +26,12 @@ export const DEFAULT_MAX_ATTEMPTS = 3;
 export const DEFAULT_MAX_RETRY_WAIT_MS = 30_000;
 
 /**
- * Upper bound for both waits a request can spend before it is sent for the
- * last time: in the queue and on throttling. Together they stay under the 5
- * minutes DataverseAuth keeps before a token expires, so a request built with
- * a fresh token is still valid when it is finally sent.
+ * Upper bound for each of the two waits a request can spend before it is sent
+ * for the last time: in the queue and on throttling. A request carries the
+ * token it was built with, and DataverseAuth hands out tokens with at least 5
+ * minutes left. With the defaults that holds even if every 429 took the whole
+ * request timeout to arrive (30 s + 30 s + 2 × 30 s). At the top of every
+ * range it relies on a 429 arriving quickly, which a throttled request does.
  */
 export const MAX_WAIT_MS = 120_000;
 
@@ -48,8 +52,8 @@ function readWholeNumber(
   range: { min: number; max: number; unit?: string },
 ): NumberSetting {
   if (!raw) return { ok: true, value: undefined };
-  // Digits only: Number() alone would accept " 100", "1e3" and "0x10".
-  if (/^\d+$/.test(raw)) {
+  // Plain digits only: Number() alone would accept " 100", "1e3" and "0x10".
+  if (/^(0|[1-9]\d*)$/.test(raw)) {
     const value = Number(raw);
     if (value >= range.min && value <= range.max) return { ok: true, value };
   }
@@ -71,24 +75,23 @@ export function readRequestTimeoutMs(
   });
 }
 
-/** What the service protection executors take; unset means the default. */
-export interface ServiceProtectionSettings {
-  maxConcurrency?: number;
-  maxQueueLength?: number;
-  maxQueueWaitMs?: number;
-  maxAttempts?: number;
-  maxRetryWaitMs?: number;
-}
-
+// The upper bounds are sanity limits, not Dataverse's: they stop a typo from
+// meaning "unlimited".
 const SERVICE_PROTECTION_VARIABLES = [
+  // Twice the highest degree of parallelism Dataverse has been seen to
+  // recommend (x-ms-dop-hint: 48).
   ["maxConcurrency", "DATAVERSE_MAX_CONCURRENCY", { min: 1, max: 100 }],
+  // 0 turns queueing off: a request that finds no free slot is turned away.
   ["maxQueueLength", "DATAVERSE_MAX_QUEUE_LENGTH", { min: 0, max: 10_000 }],
   [
     "maxQueueWaitMs",
     "DATAVERSE_MAX_QUEUE_WAIT_MS",
     { min: 1, max: MAX_WAIT_MS, unit: "milliseconds" },
   ],
+  // 1 turns retries off. 10 is what Microsoft's ServiceClient defaults to,
+  // the highest first-party value.
   ["maxAttempts", "DATAVERSE_MAX_ATTEMPTS", { min: 1, max: 10 }],
+  // 0 means never wait: the first 429 fails the call.
   [
     "maxRetryWaitMs",
     "DATAVERSE_MAX_RETRY_WAIT_MS",

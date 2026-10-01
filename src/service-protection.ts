@@ -2,6 +2,12 @@
 // does when Dataverse answers 429, and how it avoids sending too much at once.
 // Nothing here counts requests or knows the limit values, which vary between
 // environments; it reacts to 429 and Retry-After.
+//
+// Dataverse counts its limits per web server, and without an affinity cookie
+// (Node's fetch keeps none, as Microsoft recommends for parallel clients)
+// requests spread over several. What follows deliberately ignores that and
+// treats a 429 as true of the whole environment: a retry may reach a server
+// that was never busy, which costs a wait, not correctness.
 
 import {
   DEFAULT_MAX_ATTEMPTS,
@@ -9,10 +15,17 @@ import {
   DEFAULT_MAX_QUEUE_LENGTH,
   DEFAULT_MAX_QUEUE_WAIT_MS,
   DEFAULT_MAX_RETRY_WAIT_MS,
-  type ServiceProtectionSettings,
 } from "./config.js";
 import { DataverseBusyError } from "./errors.js";
 import type { HttpRequest, HttpResponse, RequestExecutor } from "./executor.js";
+
+/**
+ * The longest a 429 holds back requests other than the one it answered: one
+ * window of the limits Dataverse measures over time. After that a request
+ * goes out and asks again, so one absurd Retry-After cannot stop the server
+ * until it is restarted.
+ */
+const MAX_PAUSE_MS = 300_000;
 
 export interface RetryOptions {
   /**
@@ -29,16 +42,16 @@ export interface RetryOptions {
  *
  * One instance stands for one application user, which is what Dataverse
  * throttles: a 429 on any request holds back every request through this
- * instance until the wait is over, because sending more while throttled makes
- * Dataverse extend it.
+ * instance until the wait is over (MAX_PAUSE_MS at most), because sending
+ * more while throttled makes Dataverse extend it.
  *
- * Every 429 is retried, whatever the method and whatever error code its body
- * carries. That includes writes: Microsoft's own clients resend a throttled
- * create the same way, on the understanding that a 429 means the request was
- * turned away, not run.
+ * Every 429 is retried: whatever error code its body carries, as in
+ * Microsoft's Web API sample, and whatever the method. Retrying writes
+ * follows Microsoft's ServiceClient, which resends a throttled create; no
+ * source promises that a request answered with 429 was not run.
  *
- * The request is resent as built, token included. MAX_WAIT_MS in config.ts
- * keeps the waits short enough for that token to still be valid.
+ * The request is resent as built, token included; see MAX_WAIT_MS in
+ * config.ts for why that token is still valid.
  */
 export class RetryExecutor implements RequestExecutor {
   private maxRetryWaitMs: number;
@@ -72,10 +85,18 @@ export class RetryExecutor implements RequestExecutor {
       if (response.status !== 429) return response;
 
       const retryMs =
-        retryAfterMs(response.headers.get("Retry-After")) ??
-        2 ** attempt * 1000;
-      this.pausedUntil = Math.max(this.pausedUntil, Date.now() + retryMs);
-      if (attempt >= this.maxAttempts) throw throttledError(retryMs);
+        parseRetryAfter(response.headers.get("Retry-After")) ??
+        backoffMs(attempt);
+      this.pausedUntil = Math.max(
+        this.pausedUntil,
+        Date.now() + Math.min(retryMs, MAX_PAUSE_MS),
+      );
+      if (
+        attempt >= this.maxAttempts ||
+        waitedMs + retryMs > this.maxRetryWaitMs
+      ) {
+        throw throttledError(retryMs);
+      }
     }
   }
 }
@@ -161,6 +182,8 @@ export class ConcurrencyLimitExecutor implements RequestExecutor {
   }
 }
 
+export type ServiceProtectionSettings = RetryOptions & ConcurrencyLimitOptions;
+
 /**
  * Both protections around an executor, in the order that works: the limit
  * outside, retries inside.
@@ -175,27 +198,41 @@ export function withServiceProtection(
   );
 }
 
+// IMF-fixdate, the one date form RFC 9110 lets a sender generate.
+const HTTP_DATE =
+  /^[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT$/;
+
 /**
- * The wait a Retry-After header asks for, or undefined when it says nothing
- * usable. Dataverse documents whole seconds; RFC 9110 also allows a date.
+ * The wait a Retry-After header asks for, or undefined when it names none:
+ * missing, unreadable, zero or already past. Dataverse documents whole
+ * seconds; RFC 9110 also allows a date.
  */
-function retryAfterMs(header: string | null): number | undefined {
+function parseRetryAfter(header: string | null): number | undefined {
   const value = header?.trim() ?? "";
-  if (/^\d+$/.test(value)) return Number(value) * 1000;
+  let ms: number;
+  if (/^\d+$/.test(value)) ms = Number(value) * 1000;
   // Date.parse alone is too generous: it reads "-5" as a year.
-  if (!value.endsWith(" GMT")) return undefined;
-  const at = Date.parse(value);
-  return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
+  else if (HTTP_DATE.test(value)) ms = Date.parse(value) - Date.now();
+  else return undefined;
+  return ms > 0 ? ms : undefined;
+}
+
+/**
+ * The wait before the next send when Dataverse named none: 2 s, 4 s, 8 s, …
+ * as in Microsoft's Web API sample.
+ */
+function backoffMs(attempt: number): number {
+  return 2 ** attempt * 1000;
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function throttledError(retryAfterMs: number): DataverseBusyError {
+function throttledError(waitMs: number): DataverseBusyError {
   return new DataverseBusyError(
     "throttled",
-    `Dataverse is busy: a service protection limit was reached. Retry in ${Math.ceil(retryAfterMs / 1000)} s.`,
-    retryAfterMs,
+    `Dataverse is busy: a service protection limit was reached. Retry in ${Math.ceil(waitMs / 1000)} s.`,
+    waitMs,
   );
 }

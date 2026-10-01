@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - At most `DATAVERSE_MAX_CONCURRENCY` requests are in flight (default 8). Up to `DATAVERSE_MAX_QUEUE_LENGTH` more (default 100) wait their turn in arrival order for at most `DATAVERSE_MAX_QUEUE_WAIT_MS` (default 30000); beyond either bound the call fails with a "Dataverse is busy … Retry later" error instead of queuing indefinitely.
   - All five variables are optional. An out-of-range value is reported through `dataverse_setup` rather than replaced by the default.
 
-  Behaviour to know about: writes are retried after a 429 like reads, as Microsoft's own clients do. With the defaults, queueing and throttling can add up to 60 s of waiting to a request, on top of `DATAVERSE_REQUEST_TIMEOUT_MS`.
+  Behaviour to know about: writes are retried after a 429 like reads, as Microsoft's own clients do. A 429 holds other requests back for at most 5 minutes, whatever `Retry-After` says.
 
 ### Changed
 

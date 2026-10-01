@@ -56,6 +56,13 @@ function pending() {
   return { execute, open };
 }
 
+// The last character of each URL sent so far, in order: "a", "b", …
+function sentPaths(inner: { execute: ReturnType<typeof vi.fn> }): string[] {
+  return inner.execute.mock.calls.map(([r]) =>
+    (r as HttpRequest).url.slice(-1),
+  );
+}
+
 function get(path: string): HttpRequest {
   return { ...request, url: `https://org.crm.dynamics.com/${path}` };
 }
@@ -142,8 +149,12 @@ describe("RetryExecutor", () => {
     ["missing", undefined],
     ["unreadable", "soon"],
     ["negative", "-5"],
+    ["zero", "0"],
+    ["not quite a date", "5 GMT"],
+    ["a date already past", "Thu, 01 Oct 2026 11:59:00 GMT"],
   ] as const) {
     it(`backs off 2 s, then 4 s, when Retry-After is ${label}`, async () => {
+      vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
       const inner = answering(
         throttled(header),
         throttled(header),
@@ -213,6 +224,24 @@ describe("RetryExecutor", () => {
     expect(inner.execute).toHaveBeenCalledTimes(1);
   });
 
+  // An absurd Retry-After must not shut the server until restart: after one
+  // 5-minute window a request goes out again and asks Dataverse afresh.
+  it("holds other requests back for no longer than 5 minutes", async () => {
+    const inner = answering(throttled("86400"), response(200));
+    const executor = new RetryExecutor(inner);
+    const first = await executor.execute(request).catch((e: unknown) => e);
+    expect((first as DataverseBusyError).retryAfterMs).toBe(86_400_000);
+
+    await vi.advanceTimersByTimeAsync(200_000);
+    const during = await executor.execute(request).catch((e: unknown) => e);
+    expect(during).toBeInstanceOf(DataverseBusyError);
+    expect((during as DataverseBusyError).retryAfterMs).toBe(100_000);
+    expect(inner.execute).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(100_000);
+    expect((await executor.execute(request)).status).toBe(200);
+  });
+
   it("counts the waits of one request together against the longest wait allowed", async () => {
     const inner = answering(throttled("20"), throttled("20"));
     const outcome = new RetryExecutor(inner, { maxRetryWaitMs: 30_000 })
@@ -236,18 +265,11 @@ describe("ConcurrencyLimitExecutor", () => {
 
     const results = ["a", "b", "c", "d"].map((p) => executor.execute(get(p)));
     await vi.advanceTimersByTimeAsync(0);
-    expect(inner.execute.mock.calls.map(([r]) => r.url.at(-1))).toEqual([
-      "a",
-      "b",
-    ]);
+    expect(sentPaths(inner)).toEqual(["a", "b"]);
 
     inner.open[1].answer(response(200, {}, "b"));
     await vi.advanceTimersByTimeAsync(0);
-    expect(inner.execute.mock.calls.map(([r]) => r.url.at(-1))).toEqual([
-      "a",
-      "b",
-      "c",
-    ]);
+    expect(sentPaths(inner)).toEqual(["a", "b", "c"]);
 
     inner.open[0].answer(response(200, {}, "a"));
     await vi.advanceTimersByTimeAsync(0);
@@ -328,10 +350,7 @@ describe("ConcurrencyLimitExecutor", () => {
     // The freed slot goes to the request still waiting, not the one that left.
     inner.open[0].answer();
     await vi.advanceTimersByTimeAsync(0);
-    expect(inner.execute.mock.calls.map(([r]) => r.url.at(-1))).toEqual([
-      "a",
-      "c",
-    ]);
+    expect(sentPaths(inner)).toEqual(["a", "c"]);
     inner.open[1].answer();
     expect((await first).status).toBe(200);
     expect((await third).status).toBe(200);
@@ -352,11 +371,7 @@ describe("withServiceProtection", () => {
     const second = executor.execute(get("b"));
     await vi.advanceTimersByTimeAsync(5_000);
 
-    expect(inner.execute.mock.calls.map(([r]) => r.url.at(-1))).toEqual([
-      "a",
-      "a",
-      "b",
-    ]);
+    expect(sentPaths(inner)).toEqual(["a", "a", "b"]);
     expect((await first).body).toBe("a");
     expect((await second).body).toBe("b");
   });
