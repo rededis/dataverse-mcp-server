@@ -98,7 +98,9 @@ export class RetryExecutor implements RequestExecutor {
         attempt >= this.maxAttempts ||
         waitedMs + retryMs > this.maxRetryWaitMs
       ) {
-        throw throttledError(retryMs);
+        // Another 429 may have set a longer pause than this one asks for;
+        // a retry before that pause ends would be turned away.
+        throw throttledError(Math.max(retryMs, this.pausedUntil - Date.now()));
       }
     }
   }
@@ -169,7 +171,7 @@ export class ConcurrencyLimitExecutor implements RequestExecutor {
         reject(
           new DataverseBusyError(
             "queue-timeout",
-            `Dataverse is busy: the request waited ${Math.round(this.maxQueueWaitMs / 1000)} s for its turn and was not sent. Retry later.`,
+            `Dataverse is busy: the request waited ${this.maxQueueWaitMs / 1000} s for its turn and was not sent. Retry later.`,
           ),
         );
       }, this.maxQueueWaitMs);
@@ -207,8 +209,8 @@ const HTTP_DATE =
 
 /**
  * The wait a Retry-After header asks for, or undefined when it names none:
- * missing, unreadable, zero or already past. Dataverse documents whole
- * seconds; RFC 9110 also allows a date.
+ * missing, unreadable, zero, already past or too large to be a number.
+ * Dataverse documents whole seconds; RFC 9110 also allows a date.
  */
 function parseRetryAfter(header: string | null): number | undefined {
   const value = header?.trim() ?? "";
@@ -217,7 +219,8 @@ function parseRetryAfter(header: string | null): number | undefined {
   // Date.parse alone is too generous: it reads "-5" as a year.
   else if (HTTP_DATE.test(value)) ms = Date.parse(value) - Date.now();
   else return undefined;
-  return ms > 0 ? ms : undefined;
+  // Enough digits make Number() return Infinity.
+  return Number.isFinite(ms) && ms > 0 ? ms : undefined;
 }
 
 /**

@@ -152,6 +152,7 @@ describe("RetryExecutor", () => {
     ["zero", "0"],
     ["not quite a date", "5 GMT"],
     ["a date already past", "Thu, 01 Oct 2026 11:59:00 GMT"],
+    ["too long to be a number", "9".repeat(400)],
   ] as const) {
     it(`backs off 2 s, then 4 s, when Retry-After is ${label}`, async () => {
       vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
@@ -262,6 +263,26 @@ describe("RetryExecutor", () => {
     expect(await result).toMatchObject({ status: 200 });
   });
 
+  // Two requests throttled at once, with different waits: the shorter answer
+  // must not promise a retry the longer pause would turn away.
+  it("tells a caller to wait for the whole pause, not only for its own Retry-After", async () => {
+    const inner = answering(throttled("45"), throttled("5"));
+    const executor = new RetryExecutor(inner, { maxAttempts: 1 });
+
+    const [long, short] = await Promise.all(
+      [executor.execute(request), executor.execute(request)].map((p) =>
+        p.catch((e: unknown) => e),
+      ),
+    );
+
+    expect(inner.execute).toHaveBeenCalledTimes(2);
+    expect((long as DataverseBusyError).retryAfterMs).toBe(45_000);
+    expect((short as DataverseBusyError).retryAfterMs).toBe(45_000);
+    expect((short as Error).message).toBe(
+      "Dataverse is busy: a service protection limit was reached. Retry in 45 s.",
+    );
+  });
+
   it("counts the waits of one request together against the longest wait allowed", async () => {
     const inner = answering(throttled("20"), throttled("20"));
     const outcome = new RetryExecutor(inner, { maxRetryWaitMs: 30_000 })
@@ -346,6 +367,24 @@ describe("ConcurrencyLimitExecutor", () => {
       200, 200, 200,
     ]);
     expect(inner.execute).toHaveBeenCalledTimes(3);
+  });
+
+  it("states a wait that is not a whole number of seconds exactly", async () => {
+    const inner = pending();
+    const executor = new ConcurrencyLimitExecutor(inner, {
+      maxConcurrency: 1,
+      maxQueueWaitMs: 1_500,
+    });
+    const first = executor.execute(get("a"));
+    const second = executor.execute(get("b")).catch((e: unknown) => e);
+
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    expect(((await second) as Error).message).toBe(
+      "Dataverse is busy: the request waited 1.5 s for its turn and was not sent. Retry later.",
+    );
+    inner.open[0].answer();
+    await first;
   });
 
   it("gives up on a request that waited too long for its turn, and never sends it", async () => {
