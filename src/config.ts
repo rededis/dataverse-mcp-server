@@ -16,21 +16,26 @@ export const DEFAULT_MAX_CONCURRENCY = 8;
 /** DATAVERSE_MAX_QUEUE_LENGTH when unset. */
 export const DEFAULT_MAX_QUEUE_LENGTH = 100;
 
-/** DATAVERSE_MAX_QUEUE_WAIT_MS when unset. */
-export const DEFAULT_MAX_QUEUE_WAIT_MS = 30_000;
+/**
+ * DATAVERSE_MAX_QUEUE_WAIT_MS when unset. With DEFAULT_MAX_RETRY_WAIT_MS it
+ * keeps the waiting added to a request to 25 s, so that one request at the
+ * default timeout still ends within the 60 s an MCP TypeScript SDK client
+ * waits for an answer.
+ */
+export const DEFAULT_MAX_QUEUE_WAIT_MS = 10_000;
 
 /** DATAVERSE_MAX_ATTEMPTS when unset: the first try plus two retries. */
 export const DEFAULT_MAX_ATTEMPTS = 3;
 
-/** DATAVERSE_MAX_RETRY_WAIT_MS when unset. */
-export const DEFAULT_MAX_RETRY_WAIT_MS = 30_000;
+/** DATAVERSE_MAX_RETRY_WAIT_MS when unset; see DEFAULT_MAX_QUEUE_WAIT_MS. */
+export const DEFAULT_MAX_RETRY_WAIT_MS = 15_000;
 
 /**
  * Upper bound for each of the two waits a request can spend before it is sent
  * for the last time: in the queue and on throttling. A request carries the
  * token it was built with, and DataverseAuth hands out tokens with at least 5
  * minutes left. With the defaults that holds even if every 429 took the whole
- * request timeout to arrive (30 s + 30 s + 2 × 30 s). At the top of every
+ * request timeout to arrive (10 s + 15 s + 2 × 30 s). At the top of every
  * range it relies on a 429 arriving quickly, which a throttled request does.
  */
 export const MAX_WAIT_MS = 120_000;

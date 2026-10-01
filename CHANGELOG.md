@@ -13,11 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Handling of Dataverse service protection limits (closes #74). A `429 Too Many Requests` used to fail the tool call with the raw Dataverse error. Now:
   - A throttled request is resent after the wait its `Retry-After` header asks for, up to `DATAVERSE_MAX_ATTEMPTS` sends in total (default 3). Without a usable header the server backs off 2 s, then 4 s, and so on. While it waits, no other request is sent, because Dataverse extends the wait for a client that keeps sending.
-  - If the waits of one request would add up to more than `DATAVERSE_MAX_RETRY_WAIT_MS` (default 30000), or the attempts run out, the tool call fails with "Dataverse is busy: a service protection limit was reached. Retry in N s." The raw Dataverse 429 text is no longer shown.
-  - At most `DATAVERSE_MAX_CONCURRENCY` requests are in flight (default 8). Up to `DATAVERSE_MAX_QUEUE_LENGTH` more (default 100) wait their turn in arrival order for at most `DATAVERSE_MAX_QUEUE_WAIT_MS` (default 30000); beyond either bound the call fails with a "Dataverse is busy … Retry later" error instead of queuing indefinitely.
+  - If the waits of one request would add up to more than `DATAVERSE_MAX_RETRY_WAIT_MS` (default 15000), or the attempts run out, the tool call fails with "Dataverse is busy: a service protection limit was reached. Retry in N s." The raw Dataverse 429 text is no longer shown.
+  - At most `DATAVERSE_MAX_CONCURRENCY` requests are in flight (default 8). Up to `DATAVERSE_MAX_QUEUE_LENGTH` more (default 100) wait their turn in arrival order for at most `DATAVERSE_MAX_QUEUE_WAIT_MS` (default 10000); beyond either bound the call fails with a "Dataverse is busy … Retry later" error instead of queuing indefinitely.
   - All five variables are optional. An out-of-range value is reported through `dataverse_setup` rather than replaced by the default.
 
-  Behaviour to know about: writes are retried after a 429 like reads, as Microsoft's own clients do. A 429 holds other requests back for at most 5 minutes, whatever `Retry-After` says.
+  Behaviour to know about: writes are retried after a 429 like reads, as Microsoft's own clients do. A 429 holds other requests back for at most 5 minutes, whatever `Retry-After` says. With the defaults the limits add at most 25 s of waiting to a request, chosen so that one request at the default timeout still fits the 60 s a client built on the MCP TypeScript SDK waits by default; the README gives the full arithmetic.
 
 ### Changed
 
