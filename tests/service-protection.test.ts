@@ -242,6 +242,26 @@ describe("RetryExecutor", () => {
     expect((await executor.execute(request)).status).toBe(200);
   });
 
+  // Node timers can fire a millisecond early. The leftover must not be
+  // counted on top of a wait that used the whole allowance.
+  it("still sends when a wait of exactly the longest allowed ends a moment early", async () => {
+    vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
+    const inner = answering(throttled("15"), response(200));
+    const result = new RetryExecutor(inner, { maxRetryWaitMs: 15_000 })
+      .execute(request)
+      .catch((e: unknown) => e);
+
+    // The timer fires on schedule while the clock reads 1 ms short.
+    await vi.advanceTimersByTimeAsync(14_999);
+    const realNow = Date.now;
+    const now = vi.spyOn(Date, "now").mockImplementation(() => realNow() - 1);
+    await vi.advanceTimersByTimeAsync(1);
+    now.mockRestore();
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(await result).toMatchObject({ status: 200 });
+  });
+
   it("counts the waits of one request together against the longest wait allowed", async () => {
     const inner = answering(throttled("20"), throttled("20"));
     const outcome = new RetryExecutor(inner, { maxRetryWaitMs: 30_000 })

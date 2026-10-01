@@ -77,8 +77,11 @@ export class RetryExecutor implements RequestExecutor {
         if (waitedMs + pauseMs > this.maxRetryWaitMs) {
           throw throttledError(pauseMs);
         }
+        // Time that passed, not time asked for: a timer can fire a moment
+        // early, and the remainder must still fit the allowance.
+        const before = Date.now();
         await sleep(pauseMs);
-        waitedMs += pauseMs;
+        waitedMs += Date.now() - before;
       }
 
       const response = await this.inner.execute(request);
