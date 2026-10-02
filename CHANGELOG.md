@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The server no longer writes a non-protocol line to stdout at startup. When a `.env` file was loaded, dotenv 17 printed a banner (`◇ injected env (7) from .env // tip: …`) with `console.log`, and on stdio stdout is the MCP protocol stream. Clients built on the MCP TypeScript SDK reported a parse error for that line and carried on; a stricter client could refuse the connection. Present in every release since 0.1.0.
 - `get_picklist_options`, `add_attribute` and `create_entity` no longer report "Global OptionSet not found" for a server error whose body happens to contain "404". They matched `404` anywhere in the message; they now check the status (#73).
 
 ## [0.7.1] - 2026-08-17

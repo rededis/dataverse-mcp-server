@@ -20,10 +20,12 @@ const projectRoot = resolve(__dirname, "..");
 const cwdEnvPath = resolve(process.cwd(), ".env");
 const projectEnvPath = resolve(projectRoot, ".env");
 
+// quiet: dotenv 17 announces each file it loads with console.log, and on stdio
+// stdout carries the protocol; only JSON-RPC messages may go there.
 if (existsSync(cwdEnvPath)) {
-  config({ path: cwdEnvPath });
+  config({ path: cwdEnvPath, quiet: true });
 } else if (existsSync(projectEnvPath)) {
-  config({ path: projectEnvPath });
+  config({ path: projectEnvPath, quiet: true });
 } else {
   console.error(
     "Warning: .env file not found. Using environment variables only.",
