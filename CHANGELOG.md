@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The server is built on MCP TypeScript SDK v2 (`@modelcontextprotocol/server` 2.2) instead of `@modelcontextprotocol/sdk` 1.x (closes #75).
+  - **Node 20 or later is required**; the SDK no longer runs on Node 18.
+  - **The stdio server now speaks MCP 2026-07-28** as well as the 2025 revisions. A client that opens with `server/discover` is served on 2026-07-28; one that opens with `initialize` gets the revision it asks for, as before. Claude Code 2.1.287 was observed opening with `server/discover`, so it now runs on the new revision instead of falling back.
+  - **Tool names, descriptions, order and input schemas are the same**, with three differences on every tool, none of which changes what a tool accepts: `$schema` is `https://json-schema.org/draft/2020-12/schema` instead of draft-07; `$schema` is the second key of the schema instead of the first; and the tool member `"execution":{"taskSupport":"forbidden"}` is no longer sent (`forbidden` is the default).
+  - Input that fails a tool's schema is reported with different wording: one line, without the `MCP error -32602:` prefix.
+  - A call to a tool name the server does not have is answered with a JSON-RPC error (`-32602`) instead of a tool result marked `isError`.
+  - On a 2026-07-28 session every result also carries `resultType` and `_meta` with the server's name and version, and `tools/list` carries `ttlMs` and `cacheScope`.
+
+  An error thrown inside a tool still reaches the client as the tool's error text with `isError: true`.
+
 ## [0.8.0] - 2026-10-02
 
 ### Added

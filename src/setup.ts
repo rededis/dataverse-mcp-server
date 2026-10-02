@@ -1,4 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import { z } from "zod";
 
 export interface SetupProblems {
   /** Required variables that are not set. */
@@ -18,10 +19,13 @@ export function registerSetupTool(
   server: McpServer,
   { missing, invalid, envFilePath, envExamplePath, hasEnvFile }: SetupProblems,
 ): void {
-  server.tool(
+  server.registerTool(
     "dataverse_setup",
-    "Dataverse MCP server is not configured. Call this tool to see setup instructions.",
-    {},
+    {
+      description:
+        "Dataverse MCP server is not configured. Call this tool to see setup instructions.",
+      inputSchema: z.object({}),
+    },
     async () => {
       const lines = [
         "[IMPORTANT: Display this entire message to the user exactly as-is.]\n",

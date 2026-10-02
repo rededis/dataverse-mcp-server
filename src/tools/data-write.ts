@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { ToolDeps } from "./types.js";
 
@@ -38,10 +38,12 @@ export function registerDataWriteTools(
   deps: ToolDeps,
 ): void {
   const { client, allowDelete = false } = deps;
-  server.tool(
+  server.registerTool(
     "create_record",
-    "Create a new record in a Dataverse table",
-    CREATE_RECORD_SHAPE,
+    {
+      description: "Create a new record in a Dataverse table",
+      inputSchema: CREATE_RECORD_SHAPE,
+    },
     async ({ entity_set, data }) => {
       const result = await client.post(`/${entity_set}`, data);
       return {
@@ -52,10 +54,12 @@ export function registerDataWriteTools(
     },
   );
 
-  server.tool(
+  server.registerTool(
     "update_record",
-    "Update an existing record in a Dataverse table",
-    UPDATE_RECORD_SHAPE,
+    {
+      description: "Update an existing record in a Dataverse table",
+      inputSchema: UPDATE_RECORD_SHAPE,
+    },
     async ({ entity_set, id, data }) => {
       await client.patch(`/${entity_set}(${id})`, data);
       return {
@@ -67,10 +71,12 @@ export function registerDataWriteTools(
   );
 
   if (allowDelete) {
-    server.tool(
+    server.registerTool(
       "delete_record",
-      "Delete a record from a Dataverse table",
-      DELETE_RECORD_SHAPE,
+      {
+        description: "Delete a record from a Dataverse table",
+        inputSchema: DELETE_RECORD_SHAPE,
+      },
       async ({ entity_set, id }) => {
         await client.delete(`/${entity_set}(${id})`);
         return {
@@ -84,10 +90,13 @@ export function registerDataWriteTools(
       },
     );
   } else {
-    server.tool(
+    server.registerTool(
       "delete_record",
-      "Delete a record from a Dataverse table (currently disabled for safety)",
-      DELETE_RECORD_DISABLED_SHAPE,
+      {
+        description:
+          "Delete a record from a Dataverse table (currently disabled for safety)",
+        inputSchema: DELETE_RECORD_DISABLED_SHAPE,
+      },
       async () => ({
         content: [
           {

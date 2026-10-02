@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { DataverseClient } from "../../client.js";
 import { isNotFound } from "../../errors.js";
@@ -576,10 +576,13 @@ const ADD_ENTITY_KEY_SHAPE = {
 
 export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
   const { client, allowDelete = false } = deps;
-  server.tool(
+  server.registerTool(
     "create_entity",
-    "Create a new Dataverse table (entity) with specified attributes",
-    CREATE_ENTITY_SHAPE,
+    {
+      description:
+        "Create a new Dataverse table (entity) with specified attributes",
+      inputSchema: CREATE_ENTITY_SHAPE,
+    },
     async (params) => {
       const separatorIndex = params.logical_name.indexOf("_");
       if (
@@ -708,10 +711,12 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
     },
   );
 
-  server.tool(
+  server.registerTool(
     "add_attribute",
-    "Add a column (attribute) to an existing Dataverse table",
-    ADD_ATTRIBUTE_SHAPE,
+    {
+      description: "Add a column (attribute) to an existing Dataverse table",
+      inputSchema: ADD_ATTRIBUTE_SHAPE,
+    },
     async ({ entity_logical_name, attribute }) => {
       // Validate before the lookup so a mutually-exclusive pair fails without
       // spending a round trip on a name we are going to reject anyway.
@@ -731,10 +736,12 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
     },
   );
 
-  server.tool(
+  server.registerTool(
     "create_relationship",
-    "Create a relationship between two Dataverse tables",
-    CREATE_RELATIONSHIP_SHAPE,
+    {
+      description: "Create a relationship between two Dataverse tables",
+      inputSchema: CREATE_RELATIONSHIP_SHAPE,
+    },
     async (params) => {
       if (params.type === "OneToMany") {
         const body = {
@@ -796,10 +803,13 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
     },
   );
 
-  server.tool(
+  server.registerTool(
     "update_attribute",
-    "Update metadata of an existing column: display name, description, required level, max length, min/max value, precision. Dataverse fixes a column's type and logical name at creation — to change either, add_attribute a new column, migrate the values with update_record, then delete_attribute the old one.",
-    UPDATE_ATTRIBUTE_SHAPE,
+    {
+      description:
+        "Update metadata of an existing column: display name, description, required level, max length, min/max value, precision. Dataverse fixes a column's type and logical name at creation — to change either, add_attribute a new column, migrate the values with update_record, then delete_attribute the old one.",
+      inputSchema: UPDATE_ATTRIBUTE_SHAPE,
+    },
     async (params) => {
       validateDateTimeFields(params);
 
@@ -901,10 +911,13 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
   );
 
   if (allowDelete) {
-    server.tool(
+    server.registerTool(
       "delete_attribute",
-      "Permanently delete a column (attribute) from a Dataverse table. ⚠️ DESTROYS the data stored in that column across ALL records, recoverable only from a full environment backup. Confirm with the user before calling. To rename a column or change its type, follow the migration recipe in update_attribute instead.",
-      DELETE_ATTRIBUTE_SHAPE,
+      {
+        description:
+          "Permanently delete a column (attribute) from a Dataverse table. ⚠️ DESTROYS the data stored in that column across ALL records, recoverable only from a full environment backup. Confirm with the user before calling. To rename a column or change its type, follow the migration recipe in update_attribute instead.",
+        inputSchema: DELETE_ATTRIBUTE_SHAPE,
+      },
       async ({ entity_logical_name, attribute_logical_name }) => {
         const entityEscaped = escapeODataString(entity_logical_name);
         const attrEscaped = escapeODataString(attribute_logical_name);
@@ -922,10 +935,13 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
       },
     );
   } else {
-    server.tool(
+    server.registerTool(
       "delete_attribute",
-      "Delete a column from a Dataverse table (currently disabled for safety)",
-      DELETE_ATTRIBUTE_DISABLED_SHAPE,
+      {
+        description:
+          "Delete a column from a Dataverse table (currently disabled for safety)",
+        inputSchema: DELETE_ATTRIBUTE_DISABLED_SHAPE,
+      },
       async () => ({
         content: [
           {
@@ -946,10 +962,13 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
     );
   }
 
-  server.tool(
+  server.registerTool(
     "get_attribute_dependencies",
-    "List CRM components that reference a column — forms, views, workflows, business rules, plugins. Call this when delete_attribute fails with 0x8004f01f, or before any destructive change to a column. Component names are best-effort: resolved for common types, null otherwise. Backed by the Dataverse RetrieveDependenciesForDelete function.",
-    GET_ATTRIBUTE_DEPENDENCIES_SHAPE,
+    {
+      description:
+        "List CRM components that reference a column — forms, views, workflows, business rules, plugins. Call this when delete_attribute fails with 0x8004f01f, or before any destructive change to a column. Component names are best-effort: resolved for common types, null otherwise. Backed by the Dataverse RetrieveDependenciesForDelete function.",
+      inputSchema: GET_ATTRIBUTE_DEPENDENCIES_SHAPE,
+    },
     async ({ entity_logical_name, attribute_logical_name }) => {
       const entityEscaped = escapeODataString(entity_logical_name);
       const attrEscaped = escapeODataString(attribute_logical_name);
@@ -1023,10 +1042,13 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
     },
   );
 
-  server.tool(
+  server.registerTool(
     "add_entity_key",
-    "Create an alternate key on a Dataverse table (composite supported via key_attributes). Use for race-safe upserts via keyed-PATCH or to enforce a uniqueness constraint that the primary key doesn't cover. NOTE: Dataverse builds the supporting unique index asynchronously — the key is not usable for keyed lookups until its EntityKeyIndexStatus becomes 'Active'. Poll with list_entity_keys.",
-    ADD_ENTITY_KEY_SHAPE,
+    {
+      description:
+        "Create an alternate key on a Dataverse table (composite supported via key_attributes). Use for race-safe upserts via keyed-PATCH or to enforce a uniqueness constraint that the primary key doesn't cover. NOTE: Dataverse builds the supporting unique index asynchronously — the key is not usable for keyed lookups until its EntityKeyIndexStatus becomes 'Active'. Poll with list_entity_keys.",
+      inputSchema: ADD_ENTITY_KEY_SHAPE,
+    },
     async (params) => {
       const body: Record<string, unknown> = {
         "@odata.type": "Microsoft.Dynamics.CRM.EntityKeyMetadata",
@@ -1055,10 +1077,13 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
   );
 
   if (allowDelete) {
-    server.tool(
+    server.registerTool(
       "delete_entity_key",
-      "Permanently delete an alternate key from a Dataverse table. ⚠️ Drops the supporting unique index; any client code relying on keyed-PATCH upserts against this key will stop working. The underlying attributes and their data are NOT affected — only the key definition and its index are removed.",
-      DELETE_ENTITY_KEY_SHAPE,
+      {
+        description:
+          "Permanently delete an alternate key from a Dataverse table. ⚠️ Drops the supporting unique index; any client code relying on keyed-PATCH upserts against this key will stop working. The underlying attributes and their data are NOT affected — only the key definition and its index are removed.",
+        inputSchema: DELETE_ENTITY_KEY_SHAPE,
+      },
       async ({ entity_logical_name, key_logical_name }) => {
         const entityEscaped = escapeODataString(entity_logical_name);
         const keyEscaped = escapeODataString(key_logical_name);
@@ -1076,10 +1101,13 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
       },
     );
   } else {
-    server.tool(
+    server.registerTool(
       "delete_entity_key",
-      "Delete an alternate key from a Dataverse table (currently disabled for safety)",
-      DELETE_ENTITY_KEY_SHAPE,
+      {
+        description:
+          "Delete an alternate key from a Dataverse table (currently disabled for safety)",
+        inputSchema: DELETE_ENTITY_KEY_SHAPE,
+      },
       async () => ({
         content: [
           {

@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { buildODataQuery } from "./shared/odata.js";
 import type { ToolDeps } from "./types.js";
@@ -40,10 +40,12 @@ const GET_RECORD_SHAPE = {
 
 export function registerDataReadTools(server: McpServer, deps: ToolDeps): void {
   const { client } = deps;
-  server.tool(
+  server.registerTool(
     "query_records",
-    "Query records from a Dataverse table with OData filters",
-    QUERY_RECORDS_SHAPE,
+    {
+      description: "Query records from a Dataverse table with OData filters",
+      inputSchema: QUERY_RECORDS_SHAPE,
+    },
     async ({ entity_set, select, filter, top, orderby, expand }) => {
       const query = buildODataQuery({
         $select: select,
@@ -66,10 +68,12 @@ export function registerDataReadTools(server: McpServer, deps: ToolDeps): void {
     },
   );
 
-  server.tool(
+  server.registerTool(
     "get_record",
-    "Get a single record by ID from a Dataverse table",
-    GET_RECORD_SHAPE,
+    {
+      description: "Get a single record by ID from a Dataverse table",
+      inputSchema: GET_RECORD_SHAPE,
+    },
     async ({ entity_set, id, select, expand }) => {
       const query = buildODataQuery({ $select: select, $expand: expand });
       const result = await client.get(`/${entity_set}(${id})${query}`);

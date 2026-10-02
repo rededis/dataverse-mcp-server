@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { buildODataQuery, fetchAllPages } from "../shared/odata.js";
 import type { ToolDeps } from "../types.js";
@@ -14,10 +14,13 @@ const LIST_SOLUTIONS_SHAPE = {
 
 export function registerSolutionTools(server: McpServer, deps: ToolDeps): void {
   const { client } = deps;
-  server.tool(
+  server.registerTool(
     "list_solutions",
-    "List Dataverse solutions (uniquename is used to filter list_entities)",
-    LIST_SOLUTIONS_SHAPE,
+    {
+      description:
+        "List Dataverse solutions (uniquename is used to filter list_entities)",
+      inputSchema: LIST_SOLUTIONS_SHAPE,
+    },
     async ({ include_managed }) => {
       const filters = ["isvisible eq true"];
       if (!include_managed) filters.push("ismanaged eq false");

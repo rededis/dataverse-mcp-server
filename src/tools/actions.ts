@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   assertValidName,
@@ -35,10 +35,13 @@ const INVOKE_ACTION_SHAPE = {
 
 export function registerActionTools(server: McpServer, deps: ToolDeps): void {
   const { client } = deps;
-  server.tool(
+  server.registerTool(
     "invoke_action",
-    "Invoke a Dataverse Web API action (POST) — bound or unbound. Use for operations that are not plain CRUD, e.g. PublishDuplicateRule (bound to a duplicaterule) or QualifyLead (bound to a lead), or UnpublishDuplicateRule (unbound, takes DuplicateRuleId). Whether an action is bound is defined in the Web API $metadata. Pass entity_set+id for bound actions, neither for unbound. parameters becomes the JSON request body.",
-    INVOKE_ACTION_SHAPE,
+    {
+      description:
+        "Invoke a Dataverse Web API action (POST) — bound or unbound. Use for operations that are not plain CRUD, e.g. PublishDuplicateRule (bound to a duplicaterule) or QualifyLead (bound to a lead), or UnpublishDuplicateRule (unbound, takes DuplicateRuleId). Whether an action is bound is defined in the Web API $metadata. Pass entity_set+id for bound actions, neither for unbound. parameters becomes the JSON request body.",
+      inputSchema: INVOKE_ACTION_SHAPE,
+    },
     async ({ name, entity_set, id, parameters }) => {
       assertValidName(name);
       const bound = resolveBinding(entity_set, id);

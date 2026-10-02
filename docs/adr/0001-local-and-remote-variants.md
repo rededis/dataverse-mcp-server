@@ -108,6 +108,23 @@ working with data does not need them.
   speak 2025-11-25 over stdio; Claude Code 2.1.278 was observed doing so. SDK v2
   `serveStdio` pins such a connection to the legacy era by default ([E1](#e1-mcp-typescript-sdk-v2)).
 
+  _Added 2026-10-02 with #75._ The stdio package serves both revisions, and
+  the 2025 one is no longer the path the main client takes. Claude Code
+  2.1.287, with default settings, was observed opening a stdio session with
+  `server/discover` and staying on 2026-07-28; against a server on SDK v1 it
+  got "Method not found" and fell back to a 2025-11-25 `initialize` in the same
+  process. With `MCP_PROTOCOL_NEGOTIATION=legacy` it sent `initialize` straight
+  away. Its documentation says stdio servers are not probed unless that
+  variable is `auto`, so the default may depend on the account. Which revision
+  Claude Desktop speaks to a local stdio server was not established. A test
+  opens a session each way.
+
+  `serveStdio` builds a server instance per connection, plus one for a
+  `server/discover` probe that it discards if the client falls back, and
+  `createMcpHandler` builds one per HTTP request. Whatever must exist once per
+  process is therefore created outside the factory: the Dataverse client, its
+  token cache, and the throttling state of §10.
+
 *Why reject legacy on HTTP:* 2026-07-28 is stateless by design (no `initialize`,
 no `Mcp-Session-Id`), which is what a horizontally scaled, per-request
 authenticated server wants. Serving 2025-era HTTP as well would double the

@@ -12,8 +12,8 @@ const client = {} as DataverseClient;
 function captureTools(register: RegisterTools, allowDelete = false) {
   const shapes = new Map<string, unknown>();
   const server = {
-    tool: (name: string, _description: string, shape: unknown) => {
-      shapes.set(name, shape);
+    registerTool: (name: string, config: { inputSchema: unknown }) => {
+      shapes.set(name, config.inputSchema);
     },
   };
   register(server as any, { client, allowDelete });
