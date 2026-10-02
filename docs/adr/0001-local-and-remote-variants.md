@@ -212,6 +212,40 @@ with a maximum wait, retry on 429 honouring `Retry-After` (failing fast when the
 wait is long), and per-request timeouts (#73, #74). These also benefit the
 stdio package, where parallel tool calls hit the same limits.
 
+_Added 2026-10-02 with the implementation of #74._ How those mechanisms behave,
+where the choice was not obvious:
+
+- **One instance keeps one throttling state.** An instance authenticates as one
+  application user, and that user is what Dataverse throttles. A 429 on any
+  request therefore holds back every request the instance would send until the
+  wait Dataverse asked for is over, because Dataverse extends the wait for a
+  client that keeps sending
+  ([E3](#e3-microsoft-dataverse-limits-and-licensing)). The pause deliberately
+  ignores that the limits are counted per web server: the server keeps no
+  affinity cookie, so a retry may reach a web server that was never busy, which
+  costs a wait and nothing else. One 429 holds other requests back for at most
+  5 minutes, so that a single absurd `Retry-After` cannot stop the server until
+  it is restarted. The 5 minutes are our choice, not Microsoft's.
+- **A throttled write is retried like a throttled read.** Microsoft's
+  ServiceClient does the same and does not look at the method. No Microsoft
+  source states that a request answered with 429 was not executed
+  ([E3](#e3-microsoft-dataverse-limits-and-licensing)), so this rests on
+  reading throttling as an admission check. If that reading is wrong, the cost
+  is a duplicate record, which no later code change removes.
+- **Failing fast counts the waits of one request together**, not each
+  `Retry-After` on its own, so the number of attempts does not multiply the
+  time a tool call is held.
+- **A retry carries the token the request was built with.** The token is added
+  by `DataverseClient`, before the executor chain (#73). The waits are capped
+  in configuration so that the token is still valid when the request is sent
+  for the last time. ServiceClient instead acquires the token again on every
+  attempt.
+
+**Open for #77.** Acting on behalf of a Dataverse user may change whose limits
+a request counts against. If Dataverse counts it against the user acted for,
+one throttling state per instance is wrong, and the state has to be kept per
+user. How Dataverse counts impersonated requests was not verified.
+
 Adding application users would only spread the 5-minute limits. All
 application users in a tenant **share one tenant-level daily allowance**
 ([E3](#e3-microsoft-dataverse-limits-and-licensing)), so extra users add no daily capacity.
@@ -413,6 +447,35 @@ Default limits per web server: 6,000 requests and 20 minutes (1,200 s) of
 combined execution time within a five-minute sliding window, and "52 or
 higher" concurrent requests. "These limits can change and might vary between
 different environments." A 429 carries a `Retry-After` header in seconds.
+
+Re-checked 2026-10-01 for #74. The same page, on what happens to a client that
+does not stop:
+
+> If the application continues to send such demanding requests, the duration is
+> extended to minimize the impact on shared resources. This extension causes
+> the individual retry-after duration period to be longer, which means your
+> application sees longer periods of inactivity while it's waiting.
+
+Server affinity, "Send parallel requests"
+(https://learn.microsoft.com/en-us/power-apps/developer/data-platform/send-parallel-requests):
+
+> When you send requests in parallel from your client application, you can gain
+> performance benefits by disabling this cookie. Each request you send routes
+> to any of the eligible servers. This change not only increases total
+> throughput, but it also helps reduce the impact of service protection limits
+> because each limit applies per server.
+
+Node's `fetch` stores no cookies (undici 7.16.0, `lib/web/fetch/index.js`: both
+cookie steps of the Fetch algorithm are stubs), so the server sends none.
+
+Whether a request answered with 429 was executed: no Microsoft page says. The
+service protection page calls `Retry-After` "the duration before any new
+requests from the user can be processed", which suggests an admission check
+without promising one. ServiceClient retries a throttled request without
+looking at its method, and acquires the token again inside the retry loop
+(https://github.com/microsoft/PowerPlatform-DataverseServiceClient/blob/03fa4d1132c90af9f6c08e581119e7407ca61fa7/src/GeneralTools/DataverseClient/Client/ConnectionService.cs,
+L2343-L2345 and L2436-L2500). A real 429 was not provoked against the dev org,
+so the shape of a throttled response is known from the documentation only.
 
 Request limits and allocations
 (https://learn.microsoft.com/en-us/power-platform/admin/api-request-limits-allocations):

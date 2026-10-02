@@ -7,8 +7,12 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { config } from "dotenv";
 import { DataverseAuth } from "./auth.js";
 import { DataverseClient } from "./client.js";
-import { readRequestTimeoutMs } from "./config.js";
+import {
+  readRequestTimeoutMs,
+  readServiceProtectionSettings,
+} from "./config.js";
 import { FetchExecutor } from "./executor.js";
+import { withServiceProtection } from "./service-protection.js";
 import { registerSetupTool } from "./setup.js";
 import { registerAllTools } from "./tools/all.js";
 
@@ -41,6 +45,8 @@ const requestTimeout = readRequestTimeoutMs(
 );
 if (!requestTimeout.ok) invalid.push(requestTimeout.problem);
 const requestTimeoutMs = requestTimeout.ok ? requestTimeout.value : undefined;
+const serviceProtection = readServiceProtectionSettings(process.env);
+invalid.push(...serviceProtection.problems);
 
 // Read version from package.json so it stays in sync with the npm release —
 // avoids reporting a stale MCP server version on every bump.
@@ -84,7 +90,10 @@ if (missing.length > 0 || invalid.length > 0) {
     },
   );
   const client = new DataverseClient(auth, resourceUrl, {
-    executor: new FetchExecutor(requestTimeoutMs),
+    executor: withServiceProtection(
+      new FetchExecutor(requestTimeoutMs),
+      serviceProtection.settings,
+    ),
   });
 
   registerAllTools(server, { client, entityPrefix, solutionName, allowDelete });
