@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Tool names, descriptions, order and input schemas are the same**, with three differences on every tool, none of which changes what a tool accepts: `$schema` is `https://json-schema.org/draft/2020-12/schema` instead of draft-07; `$schema` is the second key of the schema instead of the first; and the tool member `"execution":{"taskSupport":"forbidden"}` is no longer sent (`forbidden` is the default).
   - Input that fails a tool's schema is reported with different wording: one line, without the `MCP error -32602:` prefix.
   - A call to a tool name the server does not have is answered with a JSON-RPC error (`-32602`) instead of a tool result marked `isError`.
+  - When stdin closes, the server stops at once: a request still in progress is not answered. Before, it was allowed to finish and its result was written. Clients that keep stdin open for the session, as MCP clients do, are unaffected. A one-shot pipe (`printf '…' | dataverse-mcp-server`) gets no answer to a call that had not finished, and a write sent that way may still reach Dataverse.
   - On a 2026-07-28 session every result also carries `resultType` and `_meta` with the server's name and version, and `tools/list` carries `ttlMs` and `cacheScope`.
 
   An error thrown inside a tool still reaches the client as the tool's error text with `isError: true`.
