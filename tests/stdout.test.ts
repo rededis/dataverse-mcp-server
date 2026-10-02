@@ -22,8 +22,8 @@ function request(id: number, method: string, params: object = {}) {
 }
 
 // Starts the real entry point in a directory with a .env file, sends the
-// given requests, and returns every line it wrote to stdout up to the response
-// to the last of them.
+// given requests, and returns every line it wrote to stdout until all of them
+// were answered.
 function stdoutOf(requests: Array<{ id: number }>): Promise<string[]> {
   writeFileSync(
     join(cwd, ".env"),
@@ -34,9 +34,9 @@ function stdoutOf(requests: Array<{ id: number }>): Promise<string[]> {
       "DATAVERSE_RESOURCE_URL=https://org.crm.dynamics.com",
     ].join("\n"),
   );
-  const lastId = requests[requests.length - 1].id;
-  // The id as a whole number, so that 2 does not match 20.
-  const answered = new RegExp(`"id":${lastId}[,}]`);
+  // Responses may arrive in any order, so every id has to be seen. Each as a
+  // whole number, so that 2 does not match 20.
+  const answers = requests.map(({ id }) => new RegExp(`"id":${id}[,}]`));
   return new Promise((resolvePromise, reject) => {
     const child = spawn(
       process.execPath,
@@ -48,7 +48,7 @@ function stdoutOf(requests: Array<{ id: number }>): Promise<string[]> {
       out += chunk;
       // A chunk can end mid-message: wait for the newline that closes the
       // response before reading the lines.
-      if (answered.test(out) && out.endsWith("\n")) {
+      if (answers.every((answer) => answer.test(out)) && out.endsWith("\n")) {
         child.kill();
         resolvePromise(out.split("\n").filter((line) => line.trim() !== ""));
       }
@@ -56,7 +56,7 @@ function stdoutOf(requests: Array<{ id: number }>): Promise<string[]> {
     child.on("error", reject);
     // Settling twice is harmless: after a normal answer this is a no-op.
     child.on("exit", () =>
-      reject(new Error(`the server exited before answering ${lastId}`)),
+      reject(new Error("the server exited before answering every request")),
     );
     for (const message of requests) {
       child.stdin.write(`${JSON.stringify(message)}\n`);
