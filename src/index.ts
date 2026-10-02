@@ -56,26 +56,25 @@ const pkg = JSON.parse(
   readFileSync(resolve(projectRoot, "package.json"), "utf-8"),
 ) as { version: string };
 
-// What a server instance is given. Decided once: serveStdio builds an instance
-// per connection, and one more for a `server/discover` probe that it discards
-// if the client falls back to `initialize`. The Dataverse client, with its
+// Decides once which tools a server gets. serveStdio builds an McpServer more
+// than once per process (ADR-0001 §5), and the Dataverse client, with its
 // token cache and its throttling state, must not be rebuilt each time.
-let registerTools: (server: McpServer) => void;
+function chooseTools(): (server: McpServer) => void {
+  if (missing.length > 0 || invalid.length > 0) {
+    const envExamplePath = resolve(projectRoot, ".env.example");
+    const envFilePath = resolve(projectRoot, ".env");
+    const hasEnvFile = existsSync(envFilePath);
 
-if (missing.length > 0 || invalid.length > 0) {
-  const envExamplePath = resolve(projectRoot, ".env.example");
-  const envFilePath = resolve(projectRoot, ".env");
-  const hasEnvFile = existsSync(envFilePath);
+    return (server) =>
+      registerSetupTool(server, {
+        missing,
+        invalid,
+        envFilePath,
+        envExamplePath,
+        hasEnvFile,
+      });
+  }
 
-  registerTools = (server) =>
-    registerSetupTool(server, {
-      missing,
-      invalid,
-      envFilePath,
-      envExamplePath,
-      hasEnvFile,
-    });
-} else {
   const tenantId = process.env.DATAVERSE_TENANT_ID as string;
   const clientId = process.env.DATAVERSE_CLIENT_ID as string;
   const clientSecret = process.env.DATAVERSE_CLIENT_SECRET as string;
@@ -100,7 +99,7 @@ if (missing.length > 0 || invalid.length > 0) {
     ),
   });
 
-  registerTools = (server) =>
+  return (server) =>
     registerAllTools(server, {
       client,
       entityPrefix,
@@ -109,16 +108,17 @@ if (missing.length > 0 || invalid.length > 0) {
     });
 }
 
-// serveStdio answers both protocol revisions: a client that opens with
-// `server/discover` gets 2026-07-28, one that opens with `initialize` gets the
-// 2025 revision it asks for.
+const addTools = chooseTools();
+
+// Serves both protocol revisions, whichever the client opens with
+// (ADR-0001 §5).
 serveStdio(
   () => {
     const server = new McpServer({
       name: "dataverse-mcp-server",
       version: pkg.version,
     });
-    registerTools(server);
+    addTools(server);
     return server;
   },
   { onerror: (error) => console.error("MCP stdio error:", error) },
