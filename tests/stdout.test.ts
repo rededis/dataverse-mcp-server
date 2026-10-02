@@ -32,7 +32,9 @@ function stdoutUntilInitialized(): Promise<string[]> {
     let out = "";
     child.stdout.on("data", (chunk: Buffer) => {
       out += chunk;
-      if (out.includes('"serverInfo"')) {
+      // A chunk can end mid-message: wait for the newline that closes the
+      // response before reading the lines.
+      if (out.includes('"serverInfo"') && out.endsWith("\n")) {
         child.kill();
         resolvePromise(out.split("\n").filter((line) => line.trim() !== ""));
       }
