@@ -441,9 +441,12 @@ Experiments:
   with 0.8.0 on a raw 2025-11-25 client, two things differ, both as recorded
   in the CHANGELOG: an unknown tool is a JSON-RPC `-32602` error instead of an
   `isError` result, and the input-validation text lost its
-  `MCP error -32602:` prefix. Not covered: the protocol revision the runs
-  used, whether the `legacy` setting took effect, Claude Desktop, and writes
-  (`create_record`, `update_record`) against a live org.
+  `MCP error -32602:` prefix. Writes were checked separately against the dev
+  org with a raw client on the published package: `create_record` and
+  `update_record` on a 2026-07-28 session, then `get_record` on a 2025-11-25
+  session read the record back with both sets of fields. Not covered: the
+  protocol revision the Claude Code runs used, whether the `legacy` setting
+  took effect, and Claude Desktop.
 - **2025-era request against `legacy: 'reject'`:**
   `400 {"error":{"code":-32022,"message":"Unsupported protocol version: 2025-11-25","data":{"supported":["2026-07-28"],"requested":"2025-11-25"}}}`
 - **2026-07-28 request without the `Mcp-Method` header:**
