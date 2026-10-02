@@ -120,6 +120,13 @@ working with data does not need them.
   Claude Desktop speaks to a local stdio server was not established. A test
   opens a session each way.
 
+  _Added 2026-10-02 after the 0.9.0 release._ The published package was
+  checked by hand from another project with Claude Code 2.1.287, in default
+  mode and with `MCP_PROTOCOL_NEGOTIATION=legacy`: it connected, listed 23
+  tools, and read data, metadata and a function result in both
+  ([E1](#e1-mcp-typescript-sdk-v2)). No wire log was taken, so which revision
+  those runs used is not known, and Claude Desktop was not checked.
+
   `serveStdio` builds an `McpServer` object per connection, plus one for a
   `server/discover` probe that it discards if the client falls back, and
   `createMcpHandler` builds one per HTTP request. Whatever must exist once per
@@ -422,6 +429,24 @@ Experiments:
   A raw client that opens with `server/discover` gets
   `{"supportedVersions":["2026-07-28"],…}` from `serveStdio` and
   `Method not found` from a hand-wired `StdioServerTransport` on the same SDK.
+
+  Manual check of the published 0.9.0 (2026-10-02, Claude Code 2.1.287, Node
+  24.9.0, from another project; recorded in full on #75). Default mode:
+  connected, 23 tools; `query_records`, `get_record`, `list_entities`,
+  `get_entity_schema`, `invoke_function` (`WhoAmI`), `get_picklist_options`
+  and `list_solutions` returned data; a request to a missing table returned the
+  Dataverse 404 text and the session carried on; seven calls in one message
+  all answered. With `MCP_PROTOCOL_NEGOTIATION=legacy`, run headless:
+  connected, 23 tools, `WhoAmI` and `query_records` returned data. Compared
+  with 0.8.0 on a raw 2025-11-25 client, two things differ, both as recorded
+  in the CHANGELOG: an unknown tool is a JSON-RPC `-32602` error instead of an
+  `isError` result, and the input-validation text lost its
+  `MCP error -32602:` prefix. Writes were checked separately against the dev
+  org with a raw client on the published package: `create_record` and
+  `update_record` on a 2026-07-28 session, then `get_record` on a 2025-11-25
+  session read the record back with both sets of fields. Not covered: the
+  protocol revision the Claude Code runs used, whether the `legacy` setting
+  took effect, and Claude Desktop.
 - **2025-era request against `legacy: 'reject'`:**
   `400 {"error":{"code":-32022,"message":"Unsupported protocol version: 2025-11-25","data":{"supported":["2026-07-28"],"requested":"2025-11-25"}}}`
 - **2026-07-28 request without the `Mcp-Method` header:**
