@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - At most `DATAVERSE_MAX_CONCURRENCY` requests are in flight (default 8). Up to `DATAVERSE_MAX_QUEUE_LENGTH` more (default 100) wait their turn in arrival order for at most `DATAVERSE_MAX_QUEUE_WAIT_MS` (default 10000); beyond either bound the call fails with a "Dataverse is busy … Retry later" error instead of queuing indefinitely.
   - All five variables are optional. An out-of-range value is reported through `dataverse_setup` rather than replaced by the default.
 
-  Behaviour to know about: writes are retried after a 429 like reads, as Microsoft's own clients do. A 429 holds other requests back for at most 5 minutes, whatever `Retry-After` says. With the defaults the limits add at most 25 s of waiting to a request, chosen so that one request at the default timeout still fits the 60 s a client built on the MCP TypeScript SDK waits by default; the README gives the full arithmetic.
+  Behaviour to know about: writes are retried after a 429 like reads, as Microsoft's own clients do. A 429 holds other requests back for the wait Dataverse asked for, but no longer than `DATAVERSE_MAX_RETRY_WAIT_MS` (closes #88): in a live test Dataverse answered light requests straight after a 429 with `Retry-After: 300`, so a longer pause would only have been downtime of our own making. With the defaults the limits add at most 25 s of waiting to a request, chosen so that one request at the default timeout still fits the 60 s a client built on the MCP TypeScript SDK waits by default; the README gives the full arithmetic.
 
 ### Changed
 

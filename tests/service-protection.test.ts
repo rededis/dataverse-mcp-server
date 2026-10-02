@@ -212,34 +212,33 @@ describe("RetryExecutor", () => {
     expect((await second).status).toBe(200);
   });
 
-  it("turns away new requests, unsent, while a long wait is in force", async () => {
-    const inner = answering(throttled("45"));
-    const executor = new RetryExecutor(inner, { maxRetryWaitMs: 30_000 });
-    await executor.execute(request).catch(() => {});
+  // Dataverse was seen to answer light requests straight after a 429 with a
+  // Retry-After of minutes (#88): it turns a request away when the allowance
+  // is used up at that moment, not for the whole Retry-After. So a long
+  // Retry-After fails the request that got it, and holds the others back only
+  // as long as a request may wait anyway.
+  it("holds other requests back for no longer than a request may wait, however long Retry-After is", async () => {
+    const inner = answering(throttled("300"), response(200));
+    const executor = new RetryExecutor(inner, { maxRetryWaitMs: 15_000 });
+    const first = await executor.execute(request).catch((e: unknown) => e);
+    expect(first).toBeInstanceOf(DataverseBusyError);
+    expect((first as DataverseBusyError).retryAfterMs).toBe(300_000);
+
     await vi.advanceTimersByTimeAsync(5_000);
-
-    const error = await executor.execute(request).catch((e: unknown) => e);
-
-    expect(error).toBeInstanceOf(DataverseBusyError);
-    expect((error as DataverseBusyError).retryAfterMs).toBe(40_000);
+    const second = executor.execute(request);
+    await vi.advanceTimersByTimeAsync(9_999);
     expect(inner.execute).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect((await second).status).toBe(200);
+    expect(inner.execute).toHaveBeenCalledTimes(2);
   });
 
-  // An absurd Retry-After must not shut the server until restart: after one
-  // 5-minute window a request goes out again and asks Dataverse afresh.
-  it("holds other requests back for no longer than 5 minutes", async () => {
-    const inner = answering(throttled("86400"), response(200));
-    const executor = new RetryExecutor(inner);
-    const first = await executor.execute(request).catch((e: unknown) => e);
-    expect((first as DataverseBusyError).retryAfterMs).toBe(86_400_000);
+  it("holds nothing back when requests may not wait at all", async () => {
+    const inner = answering(throttled("300"), response(200));
+    const executor = new RetryExecutor(inner, { maxRetryWaitMs: 0 });
+    await executor.execute(request).catch(() => {});
 
-    await vi.advanceTimersByTimeAsync(200_000);
-    const during = await executor.execute(request).catch((e: unknown) => e);
-    expect(during).toBeInstanceOf(DataverseBusyError);
-    expect((during as DataverseBusyError).retryAfterMs).toBe(100_000);
-    expect(inner.execute).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(100_000);
     expect((await executor.execute(request)).status).toBe(200);
   });
 
@@ -267,7 +266,10 @@ describe("RetryExecutor", () => {
   // must not promise a retry the longer pause would turn away.
   it("tells a caller to wait for the whole pause, not only for its own Retry-After", async () => {
     const inner = answering(throttled("45"), throttled("5"));
-    const executor = new RetryExecutor(inner, { maxAttempts: 1 });
+    const executor = new RetryExecutor(inner, {
+      maxAttempts: 1,
+      maxRetryWaitMs: 60_000,
+    });
 
     const [long, short] = await Promise.all(
       [executor.execute(request), executor.execute(request)].map((p) =>

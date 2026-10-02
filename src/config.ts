@@ -35,8 +35,10 @@ export const DEFAULT_MAX_RETRY_WAIT_MS = 15_000;
  * for the last time: in the queue and on throttling. A request carries the
  * token it was built with, and DataverseAuth hands out tokens with at least 5
  * minutes left. With the defaults that holds even if every 429 took the whole
- * request timeout to arrive (10 s + 15 s + 2 × 30 s). At the top of every
- * range it relies on a 429 arriving quickly, which a throttled request does.
+ * request timeout to arrive (10 s + 15 s + 2 × 30 s), and a 429 can take
+ * that long: live ones came back after 28 to 75 s (#88). At the top of every
+ * range the bound does not hold: a resent request may carry an expired token,
+ * and the call then fails with a 401.
  */
 export const MAX_WAIT_MS = 120_000;
 

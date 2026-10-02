@@ -223,15 +223,27 @@ where the choice was not obvious:
   ([E3](#e3-microsoft-dataverse-limits-and-licensing)). The pause deliberately
   ignores that the limits are counted per web server: the server keeps no
   affinity cookie, so a retry may reach a web server that was never busy, which
-  costs a wait and nothing else. One 429 holds other requests back for at most
-  5 minutes, so that a single absurd `Retry-After` cannot stop the server until
-  it is restarted. The 5 minutes are our choice, not Microsoft's.
+  costs a wait and nothing else.
+
+  _Revised 2026-10-02 (#88)._ Other requests are held back for the wait
+  Dataverse asked for, but no longer than one request is allowed to wait
+  (`DATAVERSE_MAX_RETRY_WAIT_MS`, 15 s by default). The first version held them
+  for up to 5 minutes. A live 429 then carried `Retry-After: 300` while light
+  requests sent straight after it were answered
+  ([E3](#e3-microsoft-dataverse-limits-and-licensing)): Dataverse turns a
+  request away when the allowance is used up at that moment, not for the whole
+  `Retry-After`. A long pause would have been downtime of our own making. The
+  evidence is four probes and one of the three limits, so this is the cheaper
+  mistake to make, not a settled fact.
 - **A throttled write is retried like a throttled read.** Microsoft's
   ServiceClient does the same and does not look at the method. No Microsoft
   source states that a request answered with 429 was not executed
   ([E3](#e3-microsoft-dataverse-limits-and-licensing)), so this rests on
   reading throttling as an admission check. If that reading is wrong, the cost
-  is a duplicate record, which no later code change removes.
+  is a duplicate record, which no later code change removes. The live 429s of
+  2026-10-02 took 28 to 75 s to arrive, which does not look like a check made
+  on arrival; they were reads, so nothing shows whether a write answered that
+  way had run. Watch for duplicates once the server is deployed.
 - **Failing fast counts the waits of one request together**, not each
   `Retry-After` on its own, so the number of attempts does not multiply the
   time a tool call is held.
@@ -474,8 +486,37 @@ requests from the user can be processed", which suggests an admission check
 without promising one. ServiceClient retries a throttled request without
 looking at its method, and acquires the token again inside the retry loop
 (https://github.com/microsoft/PowerPlatform-DataverseServiceClient/blob/03fa4d1132c90af9f6c08e581119e7407ca61fa7/src/GeneralTools/DataverseClient/Client/ConnectionService.cs,
-L2343-L2345 and L2436-L2500). A real 429 was not provoked against the dev org,
-so the shape of a throttled response is known from the documentation only.
+L2343-L2345 and L2436-L2500).
+
+A live 429, provoked on the dev org on 2026-10-02 with read-only requests
+(#88). A filter of 40 `contains()` conditions forces a table scan and costs
+about 16 s of execution time per request; sent 16 at a time, it exhausted the
+execution-time limit in about five minutes, twice. Eight requests were
+answered:
+
+```
+status: 429
+retry-after: 300
+body: {"error":{"code":"0x80072321","message":"Combined execution time of
+incoming requests exceeded limit of 1200000 milliseconds over time window of
+300 seconds. Decrease number of concurrent requests or reduce the duration of
+requests and try again later."}}
+```
+
+- `error.code` is a hex string and `Retry-After` is whole seconds. Values
+  recorded: 300, 0, 23, 7, 27, 27. There are no `x-ms-ratelimit-*` headers on
+  a 429.
+- The throttled requests took 28 to 75 s to come back.
+- Light `WhoAmI` requests sent straight after were answered 200: four after
+  the `Retry-After: 300` response, and in the second run two probes 9 and 14 s
+  after a `Retry-After: 27` response, on the web server that reported 24 s and
+  84 s of execution time remaining. Pinning to one web server with the
+  `ARRAffinity` cookie did not hold reliably, so only those probes are known to
+  have reached the throttled server.
+- The other two limits were not reached: 150 requests at once and 9,514
+  `WhoAmI` requests in nine minutes produced slow responses and network-level
+  failures on the client side, and no 429.
+- The server's own retry chain has not run against a live 429.
 
 Request limits and allocations
 (https://learn.microsoft.com/en-us/power-platform/admin/api-request-limits-allocations):

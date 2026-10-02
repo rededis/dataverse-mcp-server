@@ -19,14 +19,6 @@ import {
 import { DataverseBusyError } from "./errors.js";
 import type { HttpRequest, HttpResponse, RequestExecutor } from "./executor.js";
 
-/**
- * The longest a 429 holds back requests other than the one it answered: one
- * window of the limits Dataverse measures over time. After that a request
- * goes out and asks again, so one absurd Retry-After cannot stop the server
- * until it is restarted.
- */
-const MAX_PAUSE_MS = 300_000;
-
 export interface RetryOptions {
   /**
    * The longest one request waits on throttling, all its waits together. A
@@ -42,16 +34,23 @@ export interface RetryOptions {
  *
  * One instance stands for one application user, which is what Dataverse
  * throttles: a 429 on any request holds back every request through this
- * instance until the wait is over (MAX_PAUSE_MS at most), because sending
- * more while throttled makes Dataverse extend it.
+ * instance, because sending more while throttled makes Dataverse extend the
+ * wait. They are held for the wait Dataverse asked for, but no longer than
+ * maxRetryWaitMs. A live 429 (#88) carried a Retry-After of 300 s while light
+ * requests sent straight after it were answered. That suggests Dataverse
+ * turns a request away when the allowance is used up at that moment, not for
+ * the whole Retry-After; the evidence is a handful of probes on one of the
+ * three limits. So a long Retry-After fails the request that got it, and the
+ * others wait only as long as a request may wait anyway, then ask again.
  *
  * Every 429 is retried: whatever error code its body carries, as in
  * Microsoft's Web API sample, and whatever the method. Retrying writes
  * follows Microsoft's ServiceClient, which resends a throttled create; no
  * source promises that a request answered with 429 was not run.
  *
- * The request is resent as built, token included; see MAX_WAIT_MS in
- * config.ts for why that token is still valid.
+ * The request is resent as built, token included. With the default settings
+ * that token is still valid; with the largest ones it may have expired, and
+ * the call then fails with a 401. MAX_WAIT_MS in config.ts has the arithmetic.
  */
 export class RetryExecutor implements RequestExecutor {
   private maxRetryWaitMs: number;
@@ -92,7 +91,7 @@ export class RetryExecutor implements RequestExecutor {
         backoffMs(attempt);
       this.pausedUntil = Math.max(
         this.pausedUntil,
-        Date.now() + Math.min(retryMs, MAX_PAUSE_MS),
+        Date.now() + Math.min(retryMs, this.maxRetryWaitMs),
       );
       if (
         attempt >= this.maxAttempts ||
