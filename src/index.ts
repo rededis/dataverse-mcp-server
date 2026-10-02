@@ -2,8 +2,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { config } from "dotenv";
 import { DataverseAuth } from "./auth.js";
 import { DataverseClient } from "./client.js";
@@ -56,24 +56,25 @@ const pkg = JSON.parse(
   readFileSync(resolve(projectRoot, "package.json"), "utf-8"),
 ) as { version: string };
 
-const server = new McpServer({
-  name: "dataverse-mcp-server",
-  version: pkg.version,
-});
+// Decides once which tools a server gets. serveStdio builds an McpServer more
+// than once per process (ADR-0001 §5), and the Dataverse client, with its
+// token cache and its throttling state, must not be rebuilt each time.
+function chooseTools(): (server: McpServer) => void {
+  if (missing.length > 0 || invalid.length > 0) {
+    const envExamplePath = resolve(projectRoot, ".env.example");
+    const envFilePath = resolve(projectRoot, ".env");
+    const hasEnvFile = existsSync(envFilePath);
 
-if (missing.length > 0 || invalid.length > 0) {
-  const envExamplePath = resolve(projectRoot, ".env.example");
-  const envFilePath = resolve(projectRoot, ".env");
-  const hasEnvFile = existsSync(envFilePath);
+    return (server) =>
+      registerSetupTool(server, {
+        missing,
+        invalid,
+        envFilePath,
+        envExamplePath,
+        hasEnvFile,
+      });
+  }
 
-  registerSetupTool(server, {
-    missing,
-    invalid,
-    envFilePath,
-    envExamplePath,
-    hasEnvFile,
-  });
-} else {
   const tenantId = process.env.DATAVERSE_TENANT_ID as string;
   const clientId = process.env.DATAVERSE_CLIENT_ID as string;
   const clientSecret = process.env.DATAVERSE_CLIENT_SECRET as string;
@@ -98,11 +99,27 @@ if (missing.length > 0 || invalid.length > 0) {
     ),
   });
 
-  registerAllTools(server, { client, entityPrefix, solutionName, allowDelete });
+  return (server) =>
+    registerAllTools(server, {
+      client,
+      entityPrefix,
+      solutionName,
+      allowDelete,
+    });
 }
 
-const transport = new StdioServerTransport();
-server.connect(transport).catch((error) => {
-  console.error("Failed to start MCP server:", error);
-  process.exit(1);
-});
+const addTools = chooseTools();
+
+// Serves both protocol revisions, whichever the client opens with
+// (ADR-0001 §5).
+serveStdio(
+  () => {
+    const server = new McpServer({
+      name: "dataverse-mcp-server",
+      version: pkg.version,
+    });
+    addTools(server);
+    return server;
+  },
+  { onerror: (error) => console.error("MCP stdio error:", error) },
+);

@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   assertValidName,
@@ -8,7 +8,7 @@ import {
 } from "./shared/operations.js";
 import type { ToolDeps } from "./types.js";
 
-const INVOKE_FUNCTION_SHAPE = {
+const INVOKE_FUNCTION_INPUT = z.object({
   name: z
     .string()
     .describe(
@@ -32,14 +32,17 @@ const INVOKE_FUNCTION_SHAPE = {
     .describe(
       "Function parameters, inlined as OData arguments. Strings are quoted, GUIDs/numbers/booleans passed as-is.",
     ),
-};
+});
 
 export function registerFunctionTools(server: McpServer, deps: ToolDeps): void {
   const { client } = deps;
-  server.tool(
+  server.registerTool(
     "invoke_function",
-    "Invoke a Dataverse Web API function (GET) — bound or unbound. Use for read-only operations exposed as functions, e.g. WhoAmI (unbound) or RetrieveDuplicates. Pass entity_set+id for bound functions, neither for unbound. parameters are inlined into the URL as OData function arguments.",
-    INVOKE_FUNCTION_SHAPE,
+    {
+      description:
+        "Invoke a Dataverse Web API function (GET) — bound or unbound. Use for read-only operations exposed as functions, e.g. WhoAmI (unbound) or RetrieveDuplicates. Pass entity_set+id for bound functions, neither for unbound. parameters are inlined into the URL as OData function arguments.",
+      inputSchema: INVOKE_FUNCTION_INPUT,
+    },
     async ({ name, entity_set, id, parameters }) => {
       assertValidName(name);
       const bound = resolveBinding(entity_set, id);

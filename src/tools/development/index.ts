@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { ToolDeps } from "../types.js";
 import { registerPicklistWriteTools } from "./picklist.js";
 import { registerSchemaTools } from "./schema.js";

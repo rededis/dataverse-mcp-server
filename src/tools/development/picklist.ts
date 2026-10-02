@@ -1,4 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   LOCATION_SHAPE,
@@ -34,16 +34,16 @@ function addLocationToBody(
 
 // Shared between the enabled tool and the disabled stub so that the MCP
 // tool schema the model sees is identical regardless of DATAVERSE_ALLOW_DELETE.
-const DELETE_PICKLIST_OPTION_SHAPE = {
+const DELETE_PICKLIST_OPTION_INPUT = z.object({
   ...LOCATION_SHAPE,
   value: z.number().int().describe("Numeric value of the option to remove"),
   solution_unique_name: z
     .string()
     .optional()
     .describe("Solution unique name (defaults to the Default Solution)"),
-} as const;
+});
 
-const ADD_PICKLIST_OPTION_SHAPE = {
+const ADD_PICKLIST_OPTION_INPUT = z.object({
   ...LOCATION_SHAPE,
   value: z
     .number()
@@ -63,9 +63,9 @@ const ADD_PICKLIST_OPTION_SHAPE = {
     .string()
     .optional()
     .describe("Solution unique name (defaults to the Default Solution)"),
-};
+});
 
-const UPDATE_PICKLIST_OPTION_SHAPE = {
+const UPDATE_PICKLIST_OPTION_INPUT = z.object({
   ...LOCATION_SHAPE,
   value: z.number().int().describe("Numeric value of the option to update"),
   label: z.string().describe("New UI label"),
@@ -85,17 +85,20 @@ const UPDATE_PICKLIST_OPTION_SHAPE = {
     .string()
     .optional()
     .describe("Solution unique name (defaults to the Default Solution)"),
-};
+});
 
 export function registerPicklistWriteTools(
   server: McpServer,
   deps: ToolDeps,
 ): void {
   const { client, allowDelete = false } = deps;
-  server.tool(
+  server.registerTool(
     "add_picklist_option",
-    "Add an option to an existing Local or Global OptionSet (Dataverse InsertOptionValue action). Requires Customizer or System Administrator role; HTTP 403 otherwise.",
-    ADD_PICKLIST_OPTION_SHAPE,
+    {
+      description:
+        "Add an option to an existing Local or Global OptionSet (Dataverse InsertOptionValue action). Requires Customizer or System Administrator role; HTTP 403 otherwise.",
+      inputSchema: ADD_PICKLIST_OPTION_INPUT,
+    },
     async (params) => {
       validatePicklistLocation(params);
       const lang = params.language_code ?? 1033;
@@ -119,10 +122,13 @@ export function registerPicklistWriteTools(
     },
   );
 
-  server.tool(
+  server.registerTool(
     "update_picklist_option",
-    "Update an existing option's label/description on a Local or Global OptionSet (Dataverse UpdateOptionValue action). Requires Customizer or System Administrator role.",
-    UPDATE_PICKLIST_OPTION_SHAPE,
+    {
+      description:
+        "Update an existing option's label/description on a Local or Global OptionSet (Dataverse UpdateOptionValue action). Requires Customizer or System Administrator role.",
+      inputSchema: UPDATE_PICKLIST_OPTION_INPUT,
+    },
     async (params) => {
       validatePicklistLocation(params);
       const lang = params.language_code ?? 1033;
@@ -151,10 +157,13 @@ export function registerPicklistWriteTools(
   );
 
   if (allowDelete) {
-    server.tool(
+    server.registerTool(
       "delete_picklist_option",
-      "Remove an option from a Local or Global OptionSet (Dataverse DeleteOptionValue action). WARNING: existing records that hold this integer value are NOT updated and will retain the now-orphan number — warn the user before deleting.",
-      DELETE_PICKLIST_OPTION_SHAPE,
+      {
+        description:
+          "Remove an option from a Local or Global OptionSet (Dataverse DeleteOptionValue action). WARNING: existing records that hold this integer value are NOT updated and will retain the now-orphan number — warn the user before deleting.",
+        inputSchema: DELETE_PICKLIST_OPTION_INPUT,
+      },
       async (params) => {
         validatePicklistLocation(params);
         const body: Record<string, unknown> = { Value: params.value };
@@ -174,10 +183,13 @@ export function registerPicklistWriteTools(
       },
     );
   } else {
-    server.tool(
+    server.registerTool(
       "delete_picklist_option",
-      "Remove an option from a Local or Global OptionSet (currently disabled for safety)",
-      DELETE_PICKLIST_OPTION_SHAPE,
+      {
+        description:
+          "Remove an option from a Local or Global OptionSet (currently disabled for safety)",
+        inputSchema: DELETE_PICKLIST_OPTION_INPUT,
+      },
       async () => ({
         content: [
           {

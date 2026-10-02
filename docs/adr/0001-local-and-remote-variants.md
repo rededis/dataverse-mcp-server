@@ -108,6 +108,24 @@ working with data does not need them.
   speak 2025-11-25 over stdio; Claude Code 2.1.278 was observed doing so. SDK v2
   `serveStdio` pins such a connection to the legacy era by default ([E1](#e1-mcp-typescript-sdk-v2)).
 
+  _Added 2026-10-02 with #75._ The stdio package serves both revisions, and
+  the 2025 one is no longer the path the main client takes
+  ([E1](#e1-mcp-typescript-sdk-v2)). Claude Code
+  2.1.287, with default settings, was observed opening a stdio session with
+  `server/discover` and staying on 2026-07-28; against a server on SDK v1 it
+  got "Method not found" and fell back to a 2025-11-25 `initialize` in the same
+  process. With `MCP_PROTOCOL_NEGOTIATION=legacy` it sent `initialize` straight
+  away. Its documentation says stdio servers are not probed unless that
+  variable is `auto`, so the default may depend on the account. Which revision
+  Claude Desktop speaks to a local stdio server was not established. A test
+  opens a session each way.
+
+  `serveStdio` builds an `McpServer` object per connection, plus one for a
+  `server/discover` probe that it discards if the client falls back, and
+  `createMcpHandler` builds one per HTTP request. Whatever must exist once per
+  process is therefore created outside the factory: the Dataverse client, its
+  token cache, and the throttling state of §10.
+
 *Why reject legacy on HTTP:* 2026-07-28 is stateless by design (no `initialize`,
 no `Mcp-Session-Id`), which is what a horizontally scaled, per-request
 authenticated server wants. Serving 2025-era HTTP as well would double the
@@ -386,6 +404,24 @@ Experiments:
   2025-11-25 JSON-RPC client, the v1 SDK 1.30.0 client, and Claude Code 2.1.278
   (`initialize`, `tools/list`, `tools/call`). The factory saw `era=legacy`.
   Claude Code sends a 2025-11-25 `initialize` over stdio.
+
+  Re-checked 2026-10-02 for #75, on `@modelcontextprotocol/server` 2.2.0 and
+  Claude Code 2.1.287. The package findings above hold on 2.2.0, and
+  `tools/list` is byte-identical across 2.0.0, 2.1.0 and 2.2.0. The last
+  sentence no longer does: with default settings Claude Code 2.1.287 opened
+  the stdio session with `server/discover`
+  (`"io.modelcontextprotocol/protocolVersion":"2026-07-28"` in `_meta`), the
+  `serveStdio` factory saw `era=modern`, and the whole session (`tools/list`,
+  `tools/call`) ran on 2026-07-28. Against a server on SDK 1.29.0 the same
+  probe was answered `-32601 Method not found`, and Claude Code then sent a
+  2025-11-25 `initialize` in the same process. With
+  `MCP_PROTOCOL_NEGOTIATION=legacy` it sent `initialize` first. One run per
+  configuration, on one account, plus one repeat with a clean environment.
+  Claude Code's documentation (https://code.claude.com/docs/en/mcp, "MCP client
+  runtimes") says stdio servers are probed only when that variable is `auto`.
+  A raw client that opens with `server/discover` gets
+  `{"supportedVersions":["2026-07-28"],…}` from `serveStdio` and
+  `Method not found` from a hand-wired `StdioServerTransport` on the same SDK.
 - **2025-era request against `legacy: 'reject'`:**
   `400 {"error":{"code":-32022,"message":"Unsupported protocol version: 2025-11-25","data":{"supported":["2026-07-28"],"requested":"2025-11-25"}}}`
 - **2026-07-28 request without the `Mcp-Method` header:**
