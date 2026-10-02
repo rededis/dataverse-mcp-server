@@ -10,14 +10,14 @@ import type { RegisterTools } from "../src/tools/types.js";
 const client = {} as DataverseClient;
 
 function captureTools(register: RegisterTools, allowDelete = false) {
-  const shapes = new Map<string, unknown>();
+  const schemas = new Map<string, unknown>();
   const server = {
     registerTool: (name: string, config: { inputSchema: unknown }) => {
-      shapes.set(name, config.inputSchema);
+      schemas.set(name, config.inputSchema);
     },
   };
   register(server as any, { client, allowDelete });
-  return shapes;
+  return schemas;
 }
 
 // ADR-0001 §4. The group names are the vocabulary of role configuration, so
@@ -80,15 +80,15 @@ describe("tool groups", () => {
 
   // SDK v2 builds a server instance per HTTP request. Input schemas built
   // inside the register functions would be rebuilt every time; module-level
-  // shapes are built once and shared.
+  // schemas are built once and shared.
   // Both modes: the enabled delete tools and their disabled stubs use
-  // different shapes.
+  // different schemas.
   for (const allowDelete of [false, true]) {
-    it(`input shapes are shared between registrations, not rebuilt (allowDelete: ${allowDelete})`, () => {
+    it(`input schemas are shared between registrations, not rebuilt (allowDelete: ${allowDelete})`, () => {
       const first = captureTools(registerAllTools, allowDelete);
       const second = captureTools(registerAllTools, allowDelete);
-      for (const [name, shape] of first) {
-        expect(second.get(name), name).toBe(shape);
+      for (const [name, schema] of first) {
+        expect(second.get(name), name).toBe(schema);
       }
     });
   }

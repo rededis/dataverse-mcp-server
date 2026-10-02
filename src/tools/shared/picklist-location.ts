@@ -47,3 +47,6 @@ export const LOCATION_SHAPE = {
       "Global OptionSet name. Mutually exclusive with entity_logical_name/attribute_logical_name.",
     ),
 } as const;
+
+/** The location on its own, as a tool's whole input. */
+export const LOCATION_INPUT = z.object(LOCATION_SHAPE);

@@ -7,7 +7,7 @@ import {
 } from "./shared/operations.js";
 import type { ToolDeps } from "./types.js";
 
-const INVOKE_ACTION_SHAPE = {
+const INVOKE_ACTION_INPUT = z.object({
   name: z
     .string()
     .describe(
@@ -31,7 +31,7 @@ const INVOKE_ACTION_SHAPE = {
     .describe(
       "Action parameters sent as the JSON request body (e.g. { DuplicateRuleId } for PublishDuplicateRule, { CreateAccount, CreateContact, Status } for QualifyLead).",
     ),
-};
+});
 
 export function registerActionTools(server: McpServer, deps: ToolDeps): void {
   const { client } = deps;
@@ -40,7 +40,7 @@ export function registerActionTools(server: McpServer, deps: ToolDeps): void {
     {
       description:
         "Invoke a Dataverse Web API action (POST) — bound or unbound. Use for operations that are not plain CRUD, e.g. PublishDuplicateRule (bound to a duplicaterule) or QualifyLead (bound to a lead), or UnpublishDuplicateRule (unbound, takes DuplicateRuleId). Whether an action is bound is defined in the Web API $metadata. Pass entity_set+id for bound actions, neither for unbound. parameters becomes the JSON request body.",
-      inputSchema: INVOKE_ACTION_SHAPE,
+      inputSchema: INVOKE_ACTION_INPUT,
     },
     async ({ name, entity_set, id, parameters }) => {
       assertValidName(name);

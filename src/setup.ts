@@ -11,6 +11,8 @@ export interface SetupProblems {
   hasEnvFile: boolean;
 }
 
+const SETUP_INPUT = z.object({});
+
 /**
  * Registered instead of every other tool when the configuration is unusable,
  * so the client shows the user what to fix rather than failing on first use.
@@ -24,7 +26,7 @@ export function registerSetupTool(
     {
       description:
         "Dataverse MCP server is not configured. Call this tool to see setup instructions.",
-      inputSchema: z.object({}),
+      inputSchema: SETUP_INPUT,
     },
     async () => {
       const lines = [

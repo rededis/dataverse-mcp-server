@@ -21,7 +21,7 @@ import {
   summarizeOptionSet,
 } from "./shared/optionset.js";
 import {
-  LOCATION_SHAPE,
+  LOCATION_INPUT,
   validatePicklistLocation,
 } from "./shared/picklist-location.js";
 import type { ToolDeps } from "./types.js";
@@ -65,7 +65,7 @@ async function getEntityIdsInSolution(
   return components.map((c) => c.objectid);
 }
 
-const LIST_ENTITIES_SHAPE = {
+const LIST_ENTITIES_INPUT = z.object({
   prefix: z
     .string()
     .optional()
@@ -78,19 +78,19 @@ const LIST_ENTITIES_SHAPE = {
     .describe(
       "Filter entities by solution unique name (e.g. 'MySolution'). Uses DATAVERSE_SOLUTION_NAME env if not specified. Pass an empty string to disable the default filter.",
     ),
-};
+});
 
-const GET_ENTITY_SCHEMA_SHAPE = {
+const GET_ENTITY_SCHEMA_INPUT = z.object({
   entity_logical_name: z
     .string()
     .describe(
       "Logical name of the entity (e.g. 'account', 'contact', 'contoso_bankaccount')",
     ),
-};
+});
 
-const LIST_ENTITY_KEYS_SHAPE = {
+const LIST_ENTITY_KEYS_INPUT = z.object({
   entity_logical_name: z.string().describe("Logical name of the entity"),
-};
+});
 
 export function registerMetadataReadTools(
   server: McpServer,
@@ -106,7 +106,7 @@ export function registerMetadataReadTools(
     {
       description:
         "List Dataverse tables (entities) with optional prefix and solution filters",
-      inputSchema: LIST_ENTITIES_SHAPE,
+      inputSchema: LIST_ENTITIES_INPUT,
     },
     async ({ prefix, solution }) => {
       const effectivePrefix = prefix ?? defaultPrefix;
@@ -180,7 +180,7 @@ export function registerMetadataReadTools(
     {
       description:
         "Get attributes (columns) of a specific Dataverse table. Choice-style columns (Choice, Status, State, MultiSelect) carry an option_set summary with is_global and option_count, so one dump shows which choice lists are shared org-wide. Read the option values per column with get_picklist_options.",
-      inputSchema: GET_ENTITY_SCHEMA_SHAPE,
+      inputSchema: GET_ENTITY_SCHEMA_INPUT,
     },
     async ({ entity_logical_name }) => {
       const escaped = escapeODataString(entity_logical_name);
@@ -275,7 +275,7 @@ export function registerMetadataReadTools(
     {
       description:
         "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns.",
-      inputSchema: LOCATION_SHAPE,
+      inputSchema: LOCATION_INPUT,
     },
     async (params) => {
       validatePicklistLocation(params);
@@ -346,7 +346,7 @@ export function registerMetadataReadTools(
     {
       description:
         "List alternate keys defined on a Dataverse table. Returns a flat array of { logical_name, schema_name, display_name, key_attributes, entity_key_index_status, metadata_id }. entity_key_index_status reflects the background index build (Pending → Active, or Failed) — alt keys are not usable for keyed-PATCH upserts until Active.",
-      inputSchema: LIST_ENTITY_KEYS_SHAPE,
+      inputSchema: LIST_ENTITY_KEYS_INPUT,
     },
     async ({ entity_logical_name }) => {
       const entityEscaped = escapeODataString(entity_logical_name);

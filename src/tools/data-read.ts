@@ -3,7 +3,7 @@ import { z } from "zod";
 import { buildODataQuery } from "./shared/odata.js";
 import type { ToolDeps } from "./types.js";
 
-const QUERY_RECORDS_SHAPE = {
+const QUERY_RECORDS_INPUT = z.object({
   entity_set: z
     .string()
     .describe("Entity set name (plural, e.g. 'accounts', 'contacts')"),
@@ -21,9 +21,9 @@ const QUERY_RECORDS_SHAPE = {
     .string()
     .optional()
     .describe("Related entities to expand ($expand)"),
-};
+});
 
-const GET_RECORD_SHAPE = {
+const GET_RECORD_INPUT = z.object({
   entity_set: z
     .string()
     .describe("Entity set name (plural, e.g. 'accounts', 'contacts')"),
@@ -36,7 +36,7 @@ const GET_RECORD_SHAPE = {
     .string()
     .optional()
     .describe("Related entities to expand ($expand)"),
-};
+});
 
 export function registerDataReadTools(server: McpServer, deps: ToolDeps): void {
   const { client } = deps;
@@ -44,7 +44,7 @@ export function registerDataReadTools(server: McpServer, deps: ToolDeps): void {
     "query_records",
     {
       description: "Query records from a Dataverse table with OData filters",
-      inputSchema: QUERY_RECORDS_SHAPE,
+      inputSchema: QUERY_RECORDS_INPUT,
     },
     async ({ entity_set, select, filter, top, orderby, expand }) => {
       const query = buildODataQuery({
@@ -72,7 +72,7 @@ export function registerDataReadTools(server: McpServer, deps: ToolDeps): void {
     "get_record",
     {
       description: "Get a single record by ID from a Dataverse table",
-      inputSchema: GET_RECORD_SHAPE,
+      inputSchema: GET_RECORD_INPUT,
     },
     async ({ entity_set, id, select, expand }) => {
       const query = buildODataQuery({ $select: select, $expand: expand });

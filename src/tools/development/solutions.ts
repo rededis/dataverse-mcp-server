@@ -3,14 +3,14 @@ import { z } from "zod";
 import { buildODataQuery, fetchAllPages } from "../shared/odata.js";
 import type { ToolDeps } from "../types.js";
 
-const LIST_SOLUTIONS_SHAPE = {
+const LIST_SOLUTIONS_INPUT = z.object({
   include_managed: z
     .boolean()
     .optional()
     .describe(
       "Include managed solutions (default: false — only unmanaged are returned)",
     ),
-};
+});
 
 export function registerSolutionTools(server: McpServer, deps: ToolDeps): void {
   const { client } = deps;
@@ -19,7 +19,7 @@ export function registerSolutionTools(server: McpServer, deps: ToolDeps): void {
     {
       description:
         "List Dataverse solutions (uniquename is used to filter list_entities)",
-      inputSchema: LIST_SOLUTIONS_SHAPE,
+      inputSchema: LIST_SOLUTIONS_INPUT,
     },
     async ({ include_managed }) => {
       const filters = ["isvisible eq true"];

@@ -2,16 +2,16 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { ToolDeps } from "./types.js";
 
-const CREATE_RECORD_SHAPE = {
+const CREATE_RECORD_INPUT = z.object({
   entity_set: z
     .string()
     .describe("Entity set name (plural, e.g. 'accounts', 'contacts')"),
   data: z
     .record(z.string(), z.unknown())
     .describe("Record fields as key-value pairs"),
-};
+});
 
-const UPDATE_RECORD_SHAPE = {
+const UPDATE_RECORD_INPUT = z.object({
   entity_set: z
     .string()
     .describe("Entity set name (plural, e.g. 'accounts', 'contacts')"),
@@ -19,19 +19,19 @@ const UPDATE_RECORD_SHAPE = {
   data: z
     .record(z.string(), z.unknown())
     .describe("Fields to update as key-value pairs"),
-};
+});
 
-const DELETE_RECORD_SHAPE = {
+const DELETE_RECORD_INPUT = z.object({
   entity_set: z
     .string()
     .describe("Entity set name (plural, e.g. 'accounts', 'contacts')"),
   id: z.string().describe("Record GUID"),
-};
+});
 
-const DELETE_RECORD_DISABLED_SHAPE = {
+const DELETE_RECORD_DISABLED_INPUT = z.object({
   entity_set: z.string().describe("Entity set name"),
   id: z.string().describe("Record GUID"),
-};
+});
 
 export function registerDataWriteTools(
   server: McpServer,
@@ -42,7 +42,7 @@ export function registerDataWriteTools(
     "create_record",
     {
       description: "Create a new record in a Dataverse table",
-      inputSchema: CREATE_RECORD_SHAPE,
+      inputSchema: CREATE_RECORD_INPUT,
     },
     async ({ entity_set, data }) => {
       const result = await client.post(`/${entity_set}`, data);
@@ -58,7 +58,7 @@ export function registerDataWriteTools(
     "update_record",
     {
       description: "Update an existing record in a Dataverse table",
-      inputSchema: UPDATE_RECORD_SHAPE,
+      inputSchema: UPDATE_RECORD_INPUT,
     },
     async ({ entity_set, id, data }) => {
       await client.patch(`/${entity_set}(${id})`, data);
@@ -75,7 +75,7 @@ export function registerDataWriteTools(
       "delete_record",
       {
         description: "Delete a record from a Dataverse table",
-        inputSchema: DELETE_RECORD_SHAPE,
+        inputSchema: DELETE_RECORD_INPUT,
       },
       async ({ entity_set, id }) => {
         await client.delete(`/${entity_set}(${id})`);
@@ -95,7 +95,7 @@ export function registerDataWriteTools(
       {
         description:
           "Delete a record from a Dataverse table (currently disabled for safety)",
-        inputSchema: DELETE_RECORD_DISABLED_SHAPE,
+        inputSchema: DELETE_RECORD_DISABLED_INPUT,
       },
       async () => ({
         content: [

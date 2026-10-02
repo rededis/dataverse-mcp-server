@@ -411,14 +411,14 @@ async function resolveDependencyNames(
   return map;
 }
 
-const DELETE_ENTITY_KEY_SHAPE = {
+const DELETE_ENTITY_KEY_INPUT = z.object({
   entity_logical_name: z.string().describe("Logical name of the entity"),
   key_logical_name: z
     .string()
     .describe("Logical name of the alternate key to delete"),
-} as const;
+});
 
-const CREATE_ENTITY_SHAPE = {
+const CREATE_ENTITY_INPUT = z.object({
   logical_name: z
     .string()
     .describe("Logical name with publisher prefix (e.g. 'contoso_newtable')"),
@@ -443,14 +443,14 @@ const CREATE_ENTITY_SHAPE = {
     .array(AttributeSchema)
     .optional()
     .describe("Additional attributes to create with the entity"),
-};
+});
 
-const ADD_ATTRIBUTE_SHAPE = {
+const ADD_ATTRIBUTE_INPUT = z.object({
   entity_logical_name: z.string().describe("Logical name of the entity"),
   attribute: AttributeSchema,
-};
+});
 
-const CREATE_RELATIONSHIP_SHAPE = {
+const CREATE_RELATIONSHIP_INPUT = z.object({
   type: z.enum(["OneToMany", "ManyToMany"]).describe("Relationship type"),
   primary_entity: z
     .string()
@@ -467,9 +467,9 @@ const CREATE_RELATIONSHIP_SHAPE = {
     .string()
     .optional()
     .describe("Display name for lookup attribute (OneToMany only)"),
-};
+});
 
-const UPDATE_ATTRIBUTE_SHAPE = {
+const UPDATE_ATTRIBUTE_INPUT = z.object({
   entity_logical_name: z.string().describe("Logical name of the entity"),
   attribute_logical_name: z
     .string()
@@ -535,26 +535,26 @@ const UPDATE_ATTRIBUTE_SHAPE = {
     .describe(
       "If true, preserve existing localized labels in other languages; if false (default), replace all localized labels with just the new one.",
     ),
-};
+});
 
-const DELETE_ATTRIBUTE_SHAPE = {
+const DELETE_ATTRIBUTE_INPUT = z.object({
   entity_logical_name: z.string().describe("Logical name of the entity"),
   attribute_logical_name: z
     .string()
     .describe("Logical name of the column to delete"),
-};
+});
 
-const DELETE_ATTRIBUTE_DISABLED_SHAPE = {
+const DELETE_ATTRIBUTE_DISABLED_INPUT = z.object({
   entity_logical_name: z.string().describe("Logical name of the entity"),
   attribute_logical_name: z.string().describe("Logical name of the column"),
-};
+});
 
-const GET_ATTRIBUTE_DEPENDENCIES_SHAPE = {
+const GET_ATTRIBUTE_DEPENDENCIES_INPUT = z.object({
   entity_logical_name: z.string().describe("Logical name of the entity"),
   attribute_logical_name: z.string().describe("Logical name of the column"),
-};
+});
 
-const ADD_ENTITY_KEY_SHAPE = {
+const ADD_ENTITY_KEY_INPUT = z.object({
   entity_logical_name: z.string().describe("Logical name of the entity"),
   logical_name: z
     .string()
@@ -572,7 +572,7 @@ const ADD_ENTITY_KEY_SHAPE = {
     .string()
     .optional()
     .describe("Solution unique name (defaults to the Default Solution)"),
-};
+});
 
 export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
   const { client, allowDelete = false } = deps;
@@ -581,7 +581,7 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
     {
       description:
         "Create a new Dataverse table (entity) with specified attributes",
-      inputSchema: CREATE_ENTITY_SHAPE,
+      inputSchema: CREATE_ENTITY_INPUT,
     },
     async (params) => {
       const separatorIndex = params.logical_name.indexOf("_");
@@ -715,7 +715,7 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
     "add_attribute",
     {
       description: "Add a column (attribute) to an existing Dataverse table",
-      inputSchema: ADD_ATTRIBUTE_SHAPE,
+      inputSchema: ADD_ATTRIBUTE_INPUT,
     },
     async ({ entity_logical_name, attribute }) => {
       // Validate before the lookup so a mutually-exclusive pair fails without
@@ -740,7 +740,7 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
     "create_relationship",
     {
       description: "Create a relationship between two Dataverse tables",
-      inputSchema: CREATE_RELATIONSHIP_SHAPE,
+      inputSchema: CREATE_RELATIONSHIP_INPUT,
     },
     async (params) => {
       if (params.type === "OneToMany") {
@@ -808,7 +808,7 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
     {
       description:
         "Update metadata of an existing column: display name, description, required level, max length, min/max value, precision. Dataverse fixes a column's type and logical name at creation — to change either, add_attribute a new column, migrate the values with update_record, then delete_attribute the old one.",
-      inputSchema: UPDATE_ATTRIBUTE_SHAPE,
+      inputSchema: UPDATE_ATTRIBUTE_INPUT,
     },
     async (params) => {
       validateDateTimeFields(params);
@@ -916,7 +916,7 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
       {
         description:
           "Permanently delete a column (attribute) from a Dataverse table. ⚠️ DESTROYS the data stored in that column across ALL records, recoverable only from a full environment backup. Confirm with the user before calling. To rename a column or change its type, follow the migration recipe in update_attribute instead.",
-        inputSchema: DELETE_ATTRIBUTE_SHAPE,
+        inputSchema: DELETE_ATTRIBUTE_INPUT,
       },
       async ({ entity_logical_name, attribute_logical_name }) => {
         const entityEscaped = escapeODataString(entity_logical_name);
@@ -940,7 +940,7 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
       {
         description:
           "Delete a column from a Dataverse table (currently disabled for safety)",
-        inputSchema: DELETE_ATTRIBUTE_DISABLED_SHAPE,
+        inputSchema: DELETE_ATTRIBUTE_DISABLED_INPUT,
       },
       async () => ({
         content: [
@@ -967,7 +967,7 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
     {
       description:
         "List CRM components that reference a column — forms, views, workflows, business rules, plugins. Call this when delete_attribute fails with 0x8004f01f, or before any destructive change to a column. Component names are best-effort: resolved for common types, null otherwise. Backed by the Dataverse RetrieveDependenciesForDelete function.",
-      inputSchema: GET_ATTRIBUTE_DEPENDENCIES_SHAPE,
+      inputSchema: GET_ATTRIBUTE_DEPENDENCIES_INPUT,
     },
     async ({ entity_logical_name, attribute_logical_name }) => {
       const entityEscaped = escapeODataString(entity_logical_name);
@@ -1047,7 +1047,7 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
     {
       description:
         "Create an alternate key on a Dataverse table (composite supported via key_attributes). Use for race-safe upserts via keyed-PATCH or to enforce a uniqueness constraint that the primary key doesn't cover. NOTE: Dataverse builds the supporting unique index asynchronously — the key is not usable for keyed lookups until its EntityKeyIndexStatus becomes 'Active'. Poll with list_entity_keys.",
-      inputSchema: ADD_ENTITY_KEY_SHAPE,
+      inputSchema: ADD_ENTITY_KEY_INPUT,
     },
     async (params) => {
       const body: Record<string, unknown> = {
@@ -1082,7 +1082,7 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
       {
         description:
           "Permanently delete an alternate key from a Dataverse table. ⚠️ Drops the supporting unique index; any client code relying on keyed-PATCH upserts against this key will stop working. The underlying attributes and their data are NOT affected — only the key definition and its index are removed.",
-        inputSchema: DELETE_ENTITY_KEY_SHAPE,
+        inputSchema: DELETE_ENTITY_KEY_INPUT,
       },
       async ({ entity_logical_name, key_logical_name }) => {
         const entityEscaped = escapeODataString(entity_logical_name);
@@ -1106,7 +1106,7 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
       {
         description:
           "Delete an alternate key from a Dataverse table (currently disabled for safety)",
-        inputSchema: DELETE_ENTITY_KEY_SHAPE,
+        inputSchema: DELETE_ENTITY_KEY_INPUT,
       },
       async () => ({
         content: [
