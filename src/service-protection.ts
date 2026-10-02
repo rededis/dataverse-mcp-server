@@ -37,9 +37,10 @@ export interface RetryOptions {
  * instance, because sending more while throttled makes Dataverse extend the
  * wait. They are held for the wait Dataverse asked for, but no longer than
  * maxRetryWaitMs. A live 429 (#88) carried a Retry-After of 300 s while light
- * requests sent straight after it were answered: Dataverse turns a request
- * away when the allowance is used up at that moment, not for the whole
- * Retry-After. So a long Retry-After fails the request that got it, and the
+ * requests sent straight after it were answered. That suggests Dataverse
+ * turns a request away when the allowance is used up at that moment, not for
+ * the whole Retry-After; the evidence is a handful of probes on one of the
+ * three limits. So a long Retry-After fails the request that got it, and the
  * others wait only as long as a request may wait anyway, then ask again.
  *
  * Every 429 is retried: whatever error code its body carries, as in
@@ -47,8 +48,9 @@ export interface RetryOptions {
  * follows Microsoft's ServiceClient, which resends a throttled create; no
  * source promises that a request answered with 429 was not run.
  *
- * The request is resent as built, token included; see MAX_WAIT_MS in
- * config.ts for why that token is still valid.
+ * The request is resent as built, token included. With the default settings
+ * that token is still valid; with the largest ones it may have expired, and
+ * the call then fails with a 401. MAX_WAIT_MS in config.ts has the arithmetic.
  */
 export class RetryExecutor implements RequestExecutor {
   private maxRetryWaitMs: number;
