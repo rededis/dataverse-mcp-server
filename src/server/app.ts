@@ -3,6 +3,7 @@ import {
   bearerAuthChallengeResponse,
   createMcpHandler,
   type McpServerFactory,
+  OAuthError,
   verifyBearerToken,
 } from "@modelcontextprotocol/server";
 import type { TokenVerifier } from "./tokens.js";
@@ -76,6 +77,9 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
           { verifier },
         );
       } catch (error) {
+        // A refused token is the client's business; anything else is a fault
+        // in the verifier, answered with 500, and the operator must see it.
+        if (!(error instanceof OAuthError)) onerror?.(error as Error);
         return bearerAuthChallengeResponse(error);
       }
 

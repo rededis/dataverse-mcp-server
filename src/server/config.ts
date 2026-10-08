@@ -93,9 +93,13 @@ export interface ListenSettings {
 }
 
 /**
- * Where the server listens and where its config file is. HOST defaults to the
+ * Where the server listens and where its config file is. The host defaults to the
  * loopback interface, so a server started by hand is not reachable from the
- * network until that is asked for; a container sets HOST=0.0.0.0.
+ * network until that is asked for; a container sets
+ * DATAVERSE_SERVER_HOST=0.0.0.0. Not plain HOST: tcsh and some CI images
+ * export HOST as the machine's name, which would bind the server to a
+ * network interface without anyone asking. PORT stays plain, because
+ * platforms such as Railway set it for the process to use.
  */
 export function readListenSettings(
   env: Record<string, string | undefined>,
@@ -114,9 +118,23 @@ export function readListenSettings(
   return {
     ok: true,
     settings: {
-      host: env.HOST || "127.0.0.1",
+      host: env.DATAVERSE_SERVER_HOST || "127.0.0.1",
       port: port.value ?? 3000,
       configPath,
     },
   };
+}
+
+/**
+ * Tokens whose expiry has passed. They are not a config error, since an
+ * expired token is a normal stage of rotation, but the operator should hear
+ * about them at startup rather than from a client's 401.
+ */
+export function expiredTokens(
+  tokens: readonly TokenEntry[],
+  now: number = Date.now(),
+): string[] {
+  return tokens
+    .filter((t) => t.expiresAt !== undefined && Date.parse(t.expiresAt) <= now)
+    .map((t) => t.name);
 }

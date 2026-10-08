@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { createDataverseClient, readDataverseSettings } from "../dataverse.js";
 import { createServerApp, MCP_PATH } from "./app.js";
-import { readListenSettings, readServerConfig } from "./config.js";
+import {
+  expiredTokens,
+  readListenSettings,
+  readServerConfig,
+} from "./config.js";
 import { listen as startListening } from "./listener.js";
 import { createReadServerFactory } from "./mcp.js";
 import { ConfigTokenVerifier } from "./tokens.js";
@@ -39,6 +43,13 @@ if (!serverConfig.ok) {
   fail(serverConfig.problems.map((p) => `${listen.settings.configPath}: ${p}`));
 }
 
+const expired = expiredTokens(serverConfig.config.tokens);
+if (expired.length > 0) {
+  console.error(
+    `Warning: these tokens have expired and are refused: ${expired.join(", ")}`,
+  );
+}
+
 // The same relative path from src/server/ and dist/server/. A bundle (#79)
 // inlines the file at build time.
 const { version } = require("../../package.json") as { version: string };
@@ -59,15 +70,23 @@ const app = createServerApp({
 });
 
 const { host, port } = listen.settings;
+// An IPv6 address goes in brackets in a URL: http://[::1]:3000/mcp.
+const urlHost = host.includes(":") ? `[${host}]` : host;
 startListening(app, { host, port, onerror: logError }).then(
   (listener) => {
     console.log(
-      `Dataverse MCP server ${version} listening on http://${host}:${listener.port}${MCP_PATH}`,
+      `Dataverse MCP server ${version} listening on http://${urlHost}:${listener.port}${MCP_PATH}`,
     );
     for (const signal of ["SIGTERM", "SIGINT"] as const) {
       process.once(signal, () => {
         console.log(`${signal} received, shutting down`);
-        void listener.stop().then(() => process.exit(0));
+        listener.stop().then(
+          () => process.exit(0),
+          (error: Error) => {
+            console.error(`Shutdown failed: ${error.message}`);
+            process.exit(1);
+          },
+        );
       });
     }
   },

@@ -55,6 +55,9 @@ export function listen(
     server.once("error", reject);
     server.listen(options.port, options.host, () => {
       server.off("error", reject);
+      // Without a listener a later error, such as accept failing when file
+      // descriptors run out, would end the process.
+      server.on("error", (error) => options.onerror?.(error));
       resolve({ port: (server.address() as AddressInfo).port, stop });
     });
   });

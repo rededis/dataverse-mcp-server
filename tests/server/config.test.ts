@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  expiredTokens,
   readListenSettings,
   readServerConfig,
 } from "../../src/server/config.js";
@@ -17,17 +18,26 @@ describe("readListenSettings", () => {
     });
   });
 
-  it("reads HOST and PORT", () => {
+  it("reads DATAVERSE_SERVER_HOST and PORT", () => {
     expect(
       readListenSettings({
         DATAVERSE_SERVER_CONFIG: "/c.json",
-        HOST: "0.0.0.0",
+        DATAVERSE_SERVER_HOST: "0.0.0.0",
         PORT: "8080",
       }),
     ).toEqual({
       ok: true,
       settings: { host: "0.0.0.0", port: 8080, configPath: "/c.json" },
     });
+  });
+
+  // tcsh exports HOST as the machine's name.
+  it("ignores HOST", () => {
+    const result = readListenSettings({
+      DATAVERSE_SERVER_CONFIG: "/c.json",
+      HOST: "build-agent-7",
+    });
+    expect(result.ok && result.settings.host).toBe("127.0.0.1");
   });
 
   it("names a missing config path and a bad port", () => {
@@ -136,5 +146,34 @@ describe("readServerConfig", () => {
     const result = readServerConfig(text);
     expect(result.ok).toBe(false);
     expect(result.ok || result.problems.join("\n")).toMatch(problem);
+  });
+});
+
+describe("expiredTokens", () => {
+  it("names the tokens whose expiry has passed", () => {
+    const now = Date.parse("2026-10-08T12:00:00Z");
+    expect(
+      expiredTokens(
+        [
+          { name: "forever", sha256: sha256("a") },
+          {
+            name: "old",
+            sha256: sha256("b"),
+            expiresAt: "2026-10-08T11:59:59Z",
+          },
+          {
+            name: "later",
+            sha256: sha256("c"),
+            expiresAt: "2026-10-08T15:00:00+03:00",
+          },
+          {
+            name: "soon",
+            sha256: sha256("d"),
+            expiresAt: "2026-10-08T12:00:01Z",
+          },
+        ],
+        now,
+      ),
+    ).toEqual(["old", "later"]);
   });
 });

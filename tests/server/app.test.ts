@@ -157,6 +157,48 @@ describe("the auth gate on /mcp", () => {
     expect(requests).toEqual([]);
   });
 
+  // A verifier that fails, as a JWT verifier could on a network error, is a
+  // server fault: 500 for the client, the error for the operator.
+  it("reports a verifier fault through onerror and answers 500", async () => {
+    const errors: Error[] = [];
+    const faulty = createServerApp({
+      verifier: {
+        verifyAccessToken: async () => {
+          throw new TypeError("keys unavailable");
+        },
+      },
+      createServer: createReadServerFactory({
+        client: dataverse,
+        version: "0.0.0-test",
+      }),
+      onerror: (error) => errors.push(error),
+    });
+    const res = await faulty.fetch(
+      new Request(`${BASE}/mcp`, { method: "POST", headers: AUTH }),
+    );
+    await faulty.close();
+    expect(res.status).toBe(500);
+    expect(errors.map((e) => e.message)).toEqual(["keys unavailable"]);
+  });
+
+  it("does not report a refused token as a fault", async () => {
+    const errors: Error[] = [];
+    const quiet = createServerApp({
+      verifier: new ConfigTokenVerifier([]),
+      createServer: createReadServerFactory({
+        client: dataverse,
+        version: "0.0.0-test",
+      }),
+      onerror: (error) => errors.push(error),
+    });
+    const res = await quiet.fetch(
+      new Request(`${BASE}/mcp`, { method: "POST", headers: AUTH }),
+    );
+    await quiet.close();
+    expect(res.status).toBe(401);
+    expect(errors).toEqual([]);
+  });
+
   it("checks the token on every request, not once per client", async () => {
     expect((await mcp("tools/list", {}, AUTH)).status).toBe(200);
     expect((await mcp("tools/list", {})).status).toBe(401);
