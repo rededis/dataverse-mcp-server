@@ -18,24 +18,7 @@ export interface TokenEntry {
 /** The server's JSON config file. Changes apply on restart. */
 export interface ServerConfig {
   tokens: TokenEntry[];
-  /**
-   * Origins (`scheme://host[:port]`) whose browser requests are served. A
-   * request without `Origin` is always served: the clients in scope are not
-   * browsers and send none.
-   */
-  allowedOrigins: string[];
 }
-
-const ORIGIN = z.string().refine(
-  (value) => {
-    try {
-      return new URL(value).origin === value;
-    } catch {
-      return false;
-    }
-  },
-  { message: "expected an origin such as https://app.example, without a path" },
-);
 
 const TOKEN = z.strictObject({
   name: z.string().min(1),
@@ -53,7 +36,6 @@ const TOKEN = z.strictObject({
 
 const CONFIG = z.strictObject({
   tokens: z.array(TOKEN).min(1, "at least one token is required"),
-  allowedOrigins: z.array(ORIGIN).default([]),
 });
 
 function duplicates(values: string[]): string[] {

@@ -51,19 +51,16 @@ describe("readListenSettings", () => {
 });
 
 describe("readServerConfig", () => {
-  it("reads tokens and allowed origins", () => {
+  it("reads tokens", () => {
     const result = readServerConfig(
-      config(
-        [
-          { name: "alice", sha256: sha256("a") },
-          {
-            name: "bob",
-            sha256: sha256("b").toUpperCase(),
-            expiresAt: "2030-01-01T00:00:00Z",
-          },
-        ],
-        { allowedOrigins: ["https://app.example"] },
-      ),
+      config([
+        { name: "alice", sha256: sha256("a") },
+        {
+          name: "bob",
+          sha256: sha256("b").toUpperCase(),
+          expiresAt: "2030-01-01T00:00:00Z",
+        },
+      ]),
     );
     expect(result).toEqual({
       ok: true,
@@ -76,16 +73,8 @@ describe("readServerConfig", () => {
             expiresAt: "2030-01-01T00:00:00Z",
           },
         ],
-        allowedOrigins: ["https://app.example"],
       },
     });
-  });
-
-  it("defaults allowedOrigins to none", () => {
-    const result = readServerConfig(
-      config([{ name: "alice", sha256: sha256("a") }]),
-    );
-    expect(result.ok && result.config.allowedOrigins).toEqual([]);
   });
 
   it.each([
@@ -134,12 +123,14 @@ describe("readServerConfig", () => {
       ]),
       /same sha256/,
     ],
+    // A config written for an earlier version, or a typo, is refused rather
+    // than ignored.
     [
-      "an origin with a path",
+      "an unknown top-level key",
       config([{ name: "a", sha256: sha256("a") }], {
-        allowedOrigins: ["https://app.example/x"],
+        allowedOrigins: ["https://app.example"],
       }),
-      /allowedOrigins/,
+      /Unrecognized key: "allowedOrigins"/,
     ],
   ])("rejects %s", (_, text, problem) => {
     const result = readServerConfig(text);

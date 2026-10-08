@@ -49,7 +49,6 @@ const logError = (error: Error) =>
 const { entityPrefix, solutionName } = dataverse.settings;
 const app = createServerApp({
   verifier: new ConfigTokenVerifier(serverConfig.config.tokens),
-  allowedOrigins: serverConfig.config.allowedOrigins,
   createServer: createReadServerFactory({
     client: createDataverseClient(dataverse.settings),
     entityPrefix,

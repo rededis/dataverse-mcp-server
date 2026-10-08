@@ -182,9 +182,15 @@ _Added 2026-10-08 with #76._ How the server does this:
   it into an OAuth flow. The 401 and the 404s are this server's choice; the
   specification defines no static-token mode.
 - `Origin` is validated in front of the token check, as the specification
-  requires: a request without it is served (the clients in scope send none), a
-  present one must be listed in the config file's `allowedOrigins`, otherwise
-  403.
+  requires ("Servers MUST validate the `Origin` header … If the `Origin` header
+  is present and invalid, servers MUST respond with HTTP 403"). A request
+  without it is served: none of the clients in scope (Claude Code, `mcp-remote`,
+  SDK clients) sends one. A request with any `Origin` gets 403, so there is no
+  list of allowed origins. A browser client would need that list and CORS
+  besides (a preflight `OPTIONS`, which carries no token, answered before the
+  token check); none is in scope. With a bearer token required, the check adds
+  little on its own: a browser does not attach the token the way it attaches a
+  cookie. See Deferred.
 - HTTP is served through the SDK's Node adapter (`@modelcontextprotocol/node`),
   which bounds the request body while reading it and handles backpressure and
   client disconnects. It requires `@modelcontextprotocol/server` 2.3 or later.
@@ -374,6 +380,7 @@ Not planned now. Each item names what would make it worth revisiting.
 | Extensions (custom module, derived image, upstream proxy, server as a library) | The first concrete request for custom behaviour. |
 | Shared limiter across instances (e.g. Redis) | More than one instance runs against the same Dataverse budget. |
 | Pool of Dataverse application users | One application user's limits are the bottleneck. Extra users only spread the 5-minute limits and share the tenant's daily allowance. Microsoft's Product Terms forbid working "around any technical limitations"; whether a pool counts is unresolved ([E3](#e3-microsoft-dataverse-limits-and-licensing)), so check it first. |
+| Browser clients (`Origin` allowlist and CORS on the HTTP server) | A web app must call the server directly from the user's browser (§7). |
 | `structuredContent` / `outputSchema` | Programmatic consumers need a typed response contract. |
 | Excluding field-secured columns (`IsSecured`) from logs | Field value logging is enabled for an installation. |
 

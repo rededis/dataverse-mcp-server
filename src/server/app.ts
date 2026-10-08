@@ -9,8 +9,6 @@ import type { TokenVerifier } from "./tokens.js";
 
 export interface ServerAppOptions {
   verifier: TokenVerifier;
-  /** See ServerConfig.allowedOrigins. */
-  allowedOrigins: readonly string[];
   createServer: McpServerFactory;
   /** Requests the MCP handler refused or failed, for the operator's log. */
   onerror?: (error: Error) => void;
@@ -35,10 +33,9 @@ const notFound = () => Response.json({ error: "not_found" }, { status: 404 });
  * no URL and checks no origin or token, so all of that happens here.
  */
 export function createServerApp(options: ServerAppOptions): ServerApp {
-  const { verifier, allowedOrigins, createServer, onerror } = options;
+  const { verifier, createServer, onerror } = options;
   // 2026-07-28 only: a 2025-era request is refused with -32022 (ADR-0001 §5).
   const handler = createMcpHandler(createServer, { legacy: "reject", onerror });
-  const origins = new Set(allowedOrigins);
 
   return {
     async fetch(request) {
@@ -53,15 +50,18 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       if (pathname !== MCP_PATH) return notFound();
 
       // The specification requires validating Origin against DNS rebinding.
-      // Clients that are not browsers send none, and are served.
-      const origin = request.headers.get("origin");
-      if (origin !== null && !origins.has(origin)) {
+      // No origin is allowed: browser clients are not supported (ADR-0001
+      // §7). Clients that are not browsers send none, and are served.
+      if (request.headers.has("origin")) {
         return Response.json(
           {
             jsonrpc: "2.0",
             id: null,
             // -32000, as the SDK's Node adapter answers an origin it refuses.
-            error: { code: -32000, message: "Forbidden: origin not allowed" },
+            error: {
+              code: -32000,
+              message: "Forbidden: browser requests are not served",
+            },
           },
           { status: 403 },
         );

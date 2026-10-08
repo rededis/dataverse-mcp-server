@@ -30,7 +30,6 @@ function createApp() {
         expiresAt: "2020-01-01T00:00:00Z",
       },
     ]),
-    allowedOrigins: ["https://app.example"],
     createServer: createReadServerFactory({
       client: dataverse,
       version: "0.0.0-test",
@@ -163,28 +162,18 @@ describe("the auth gate on /mcp", () => {
     expect((await mcp("tools/list", {})).status).toBe(401);
   });
 
-  it("refuses a browser request from an origin not listed, before the token", async () => {
-    const res = await mcp(
-      "tools/list",
-      {},
-      {
-        ...AUTH,
-        Origin: "https://evil.example",
-      },
-    );
-    expect(res.status).toBe(403);
-  });
-
-  it("serves a listed origin", async () => {
-    const res = await mcp(
-      "tools/list",
-      {},
-      {
-        ...AUTH,
-        Origin: "https://app.example",
-      },
-    );
-    expect(res.status).toBe(200);
+  // Any Origin means a browser, and no browser origin is allowed: a page
+  // holding a valid token is refused all the same.
+  it.each([
+    "https://evil.example",
+    "http://127.0.0.1:8080",
+    "null",
+  ])("refuses a request with Origin: %s, token or not", async (origin) => {
+    for (const headers of [{ ...AUTH, Origin: origin }, { Origin: origin }]) {
+      const res = await mcp("tools/list", {}, headers);
+      expect(res.status).toBe(403);
+      expect(res.headers.get("WWW-Authenticate")).toBeNull();
+    }
   });
 
   it("refuses a 2025-era request (2026-07-28 only)", async () => {

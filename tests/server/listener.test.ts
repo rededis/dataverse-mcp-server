@@ -17,7 +17,6 @@ async function start() {
     verifier: new ConfigTokenVerifier([
       { name: "alice", sha256: sha256("alice-token") },
     ]),
-    allowedOrigins: [],
     createServer: createReadServerFactory({
       client: {} as DataverseClient,
       version: "0.0.0-test",
