@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `@modelcontextprotocol/server` 2.3 instead of 2.2. The package now also depends on `@modelcontextprotocol/node` (which brings in `hono` and `@hono/node-server`) and contains the not yet released HTTP server under `dist/server/` (#76). The stdio server and its tools are unchanged.
+
 ## [0.9.0] - 2026-10-02
 
 ### Changed

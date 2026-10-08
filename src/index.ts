@@ -5,14 +5,7 @@ import { resolve } from "node:path";
 import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { config } from "dotenv";
-import { DataverseAuth } from "./auth.js";
-import { DataverseClient } from "./client.js";
-import {
-  readRequestTimeoutMs,
-  readServiceProtectionSettings,
-} from "./config.js";
-import { FetchExecutor } from "./executor.js";
-import { withServiceProtection } from "./service-protection.js";
+import { createDataverseClient, readDataverseSettings } from "./dataverse.js";
 import { registerSetupTool } from "./setup.js";
 import { registerAllTools } from "./tools/all.js";
 
@@ -32,23 +25,7 @@ if (existsSync(cwdEnvPath)) {
   );
 }
 
-const REQUIRED_VARS = [
-  "DATAVERSE_TENANT_ID",
-  "DATAVERSE_CLIENT_ID",
-  "DATAVERSE_CLIENT_SECRET",
-  "DATAVERSE_RESOURCE_URL",
-] as const;
-
-const missing = REQUIRED_VARS.filter((name) => !process.env[name]);
-
-const invalid: string[] = [];
-const requestTimeout = readRequestTimeoutMs(
-  process.env.DATAVERSE_REQUEST_TIMEOUT_MS,
-);
-if (!requestTimeout.ok) invalid.push(requestTimeout.problem);
-const requestTimeoutMs = requestTimeout.ok ? requestTimeout.value : undefined;
-const serviceProtection = readServiceProtectionSettings(process.env);
-invalid.push(...serviceProtection.problems);
+const { settings, missing, invalid } = readDataverseSettings(process.env);
 
 // Read version from package.json so it stays in sync with the npm release —
 // avoids reporting a stale MCP server version on every bump.
@@ -60,7 +37,7 @@ const pkg = JSON.parse(
 // than once per process (ADR-0001 §5), and the Dataverse client, with its
 // token cache and its throttling state, must not be rebuilt each time.
 function chooseTools(): (server: McpServer) => void {
-  if (missing.length > 0 || invalid.length > 0) {
+  if (!settings) {
     const envExamplePath = resolve(projectRoot, ".env.example");
     const envFilePath = resolve(projectRoot, ".env");
     const hasEnvFile = existsSync(envFilePath);
@@ -75,29 +52,8 @@ function chooseTools(): (server: McpServer) => void {
       });
   }
 
-  const tenantId = process.env.DATAVERSE_TENANT_ID as string;
-  const clientId = process.env.DATAVERSE_CLIENT_ID as string;
-  const clientSecret = process.env.DATAVERSE_CLIENT_SECRET as string;
-  const resourceUrl = process.env.DATAVERSE_RESOURCE_URL as string;
-  const entityPrefix = process.env.DATAVERSE_ENTITY_PREFIX || undefined;
-  const solutionName = process.env.DATAVERSE_SOLUTION_NAME || undefined;
-  const allowDelete = process.env.DATAVERSE_ALLOW_DELETE === "true";
-
-  const auth = new DataverseAuth(
-    tenantId,
-    clientId,
-    clientSecret,
-    resourceUrl,
-    {
-      timeoutMs: requestTimeoutMs,
-    },
-  );
-  const client = new DataverseClient(auth, resourceUrl, {
-    executor: withServiceProtection(
-      new FetchExecutor(requestTimeoutMs),
-      serviceProtection.settings,
-    ),
-  });
+  const client = createDataverseClient(settings);
+  const { entityPrefix, solutionName, allowDelete } = settings;
 
   return (server) =>
     registerAllTools(server, {

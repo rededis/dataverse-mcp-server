@@ -1,0 +1,85 @@
+import {
+  bearerAuthChallengeResponse,
+  createMcpHandler,
+  type McpServerFactory,
+  verifyBearerToken,
+} from "@modelcontextprotocol/server";
+import type { TokenVerifier } from "./tokens.js";
+
+export interface ServerAppOptions {
+  verifier: TokenVerifier;
+  /** See ServerConfig.allowedOrigins. */
+  allowedOrigins: readonly string[];
+  createServer: McpServerFactory;
+  /** Requests the MCP handler refused or failed, for the operator's log. */
+  onerror?: (error: Error) => void;
+}
+
+/** The server as a fetch function: routing, the auth gate, and MCP behind it. */
+export interface ServerApp {
+  fetch(request: Request): Promise<Response>;
+  /** Ends open `subscriptions/listen` streams; later requests get a 500. */
+  close(): Promise<void>;
+}
+
+export const MCP_PATH = "/mcp";
+
+const notFound = () => Response.json({ error: "not_found" }, { status: 404 });
+
+/**
+ * Only `/mcp` is behind the token check. Everything else is answered without
+ * one, because `mcp-remote` probes the OAuth discovery paths and `/register`
+ * without `Authorization`: a 404 there tells it this server does not do OAuth,
+ * where a 401 would start an OAuth flow (ADR-0001 §7). The MCP handler reads
+ * no URL and checks no origin or token, so all of that happens here.
+ */
+export function createServerApp(options: ServerAppOptions): ServerApp {
+  const { verifier, allowedOrigins, createServer, onerror } = options;
+  // 2026-07-28 only: a 2025-era request is refused with -32022 (ADR-0001 §5).
+  const handler = createMcpHandler(createServer, { legacy: "reject", onerror });
+  const origins = new Set(allowedOrigins);
+
+  return {
+    async fetch(request) {
+      const { pathname } = new URL(request.url);
+
+      if (pathname === "/health") {
+        // Liveness only: it does not call Dataverse, which would spend the
+        // application user's limits and fail whenever Entra or Dataverse is
+        // down.
+        return Response.json({ status: "ok" });
+      }
+      if (pathname !== MCP_PATH) return notFound();
+
+      // The specification requires validating Origin against DNS rebinding.
+      // Clients that are not browsers send none, and are served.
+      const origin = request.headers.get("origin");
+      if (origin !== null && !origins.has(origin)) {
+        return Response.json(
+          {
+            jsonrpc: "2.0",
+            id: null,
+            error: { code: -32000, message: "Forbidden: origin not allowed" },
+          },
+          { status: 403 },
+        );
+      }
+
+      let authInfo: Awaited<ReturnType<typeof verifyBearerToken>>;
+      try {
+        // Every request: the protocol is stateless and there is no session to
+        // keep a verdict in.
+        authInfo = await verifyBearerToken(
+          request.headers.get("authorization"),
+          { verifier },
+        );
+      } catch (error) {
+        return bearerAuthChallengeResponse(error);
+      }
+
+      return handler.fetch(request, { authInfo });
+    },
+
+    close: () => handler.close(),
+  };
+}

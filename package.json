@@ -19,7 +19,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
+    "start:server": "node dist/server/index.js",
     "dev": "tsx src/index.ts",
+    "dev:server": "tsx src/server/index.ts",
     "lint": "biome check src/",
     "lint:fix": "biome check --write src/",
     "test": "vitest run",

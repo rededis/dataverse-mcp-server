@@ -152,6 +152,10 @@ installation puts a reverse proxy, gateway or WAF in front of the server, it
 must pass these headers through unchanged. The server documentation says so
 (#80).
 
+_Added 2026-10-08 with #76._ There is a third: `tools/call` (and
+`resources/read`, `prompts/get`) also needs `Mcp-Name`, and its absence is the
+same `400 -32020`. A proxy must pass all three.
+
 ### 7. Access: bearer tokens from a config file
 
 - Tokens are stored as SHA-256 hashes in a JSON config file, compared in
@@ -164,6 +168,26 @@ must pass these headers through unchanged. The server documentation says so
   `/.well-known/openid-configuration`) answer 404, so clients do not assume
   OAuth.
 - Config changes apply on restart.
+
+_Added 2026-10-08 with #76._ How the server does this:
+
+- `TokenVerifier` is the SDK's `OAuthTokenVerifier`, and the server uses the
+  SDK's `verifyBearerToken` and `bearerAuthChallengeResponse` for parsing the
+  header and for the 401. They refuse a token whose `expiresAt` is unset, so a
+  token without expiry is reported with `expiresAt: Infinity` (in seconds, as
+  `AuthInfo` counts). A JWT verifier (Deferred) plugs into the same call.
+- Only `/mcp` is behind the check. `/health`, every other path, and
+  `/register` answer without a token: `mcp-remote` probes the discovery paths
+  and posts to `/register` without `Authorization`, and a 401 there would send
+  it into an OAuth flow. The 401 and the 404s are this server's choice; the
+  specification defines no static-token mode.
+- `Origin` is validated in front of the token check, as the specification
+  requires: a request without it is served (the clients in scope send none), a
+  present one must be listed in the config file's `allowedOrigins`, otherwise
+  403.
+- HTTP is served through the SDK's Node adapter (`@modelcontextprotocol/node`),
+  which bounds the request body while reading it and handles backpressure and
+  client disconnects. It requires `@modelcontextprotocol/server` 2.3 or later.
 
 *Why not OAuth now:* the clients in scope (Claude Code, `mcp-remote`, other
 programmatic clients) all send a static header. OAuth pays off only when people
