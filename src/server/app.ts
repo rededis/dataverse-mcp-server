@@ -1,4 +1,5 @@
 import {
+  type AuthInfo,
   bearerAuthChallengeResponse,
   createMcpHandler,
   type McpServerFactory,
@@ -59,13 +60,14 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
           {
             jsonrpc: "2.0",
             id: null,
+            // -32000, as the SDK's Node adapter answers an origin it refuses.
             error: { code: -32000, message: "Forbidden: origin not allowed" },
           },
           { status: 403 },
         );
       }
 
-      let authInfo: Awaited<ReturnType<typeof verifyBearerToken>>;
+      let authInfo: AuthInfo;
       try {
         // Every request: the protocol is stateless and there is no session to
         // keep a verdict in.

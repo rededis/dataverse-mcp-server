@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   Client,
   StreamableHTTPClientTransport,
@@ -8,8 +7,7 @@ import type { DataverseClient } from "../../src/client.js";
 import { createServerApp } from "../../src/server/app.js";
 import { createReadServerFactory } from "../../src/server/mcp.js";
 import { ConfigTokenVerifier } from "../../src/server/tokens.js";
-
-const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+import { sha256 } from "./helpers.js";
 
 const BASE = "http://127.0.0.1:8080";
 const AUTH = { Authorization: "Bearer alice-token" };
@@ -134,11 +132,7 @@ describe("routes outside the auth gate", () => {
 describe("the auth gate on /mcp", () => {
   it.each([
     ["no Authorization header", {}, "Missing Authorization header"],
-    [
-      "an unknown token",
-      { Authorization: "Bearer nobody" },
-      "Invalid token",
-    ],
+    ["an unknown token", { Authorization: "Bearer nobody" }, "Invalid token"],
     [
       "an expired token",
       { Authorization: "Bearer carol-token" },
@@ -170,18 +164,26 @@ describe("the auth gate on /mcp", () => {
   });
 
   it("refuses a browser request from an origin not listed, before the token", async () => {
-    const res = await mcp("tools/list", {}, {
-      ...AUTH,
-      Origin: "https://evil.example",
-    });
+    const res = await mcp(
+      "tools/list",
+      {},
+      {
+        ...AUTH,
+        Origin: "https://evil.example",
+      },
+    );
     expect(res.status).toBe(403);
   });
 
   it("serves a listed origin", async () => {
-    const res = await mcp("tools/list", {}, {
-      ...AUTH,
-      Origin: "https://app.example",
-    });
+    const res = await mcp(
+      "tools/list",
+      {},
+      {
+        ...AUTH,
+        Origin: "https://app.example",
+      },
+    );
     expect(res.status).toBe(200);
   });
 

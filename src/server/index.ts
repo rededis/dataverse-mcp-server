@@ -1,9 +1,8 @@
 import { readFileSync } from "node:fs";
-import { createServer } from "node:http";
-import { toNodeHandler } from "@modelcontextprotocol/node";
 import { createDataverseClient, readDataverseSettings } from "../dataverse.js";
 import { createServerApp, MCP_PATH } from "./app.js";
 import { readListenSettings, readServerConfig } from "./config.js";
+import { listen as startListening } from "./listener.js";
 import { createReadServerFactory } from "./mcp.js";
 import { ConfigTokenVerifier } from "./tokens.js";
 
@@ -35,9 +34,9 @@ try {
     `cannot read DATAVERSE_SERVER_CONFIG=${listen.settings.configPath}: ${(err as Error).message}`,
   ]);
 }
-const config = readServerConfig(configText);
-if (!config.ok) {
-  fail(config.problems.map((p) => `${listen.settings.configPath}: ${p}`));
+const serverConfig = readServerConfig(configText);
+if (!serverConfig.ok) {
+  fail(serverConfig.problems.map((p) => `${listen.settings.configPath}: ${p}`));
 }
 
 // The same relative path from src/server/ and dist/server/. A bundle (#79)
@@ -49,8 +48,8 @@ const logError = (error: Error) =>
 
 const { entityPrefix, solutionName } = dataverse.settings;
 const app = createServerApp({
-  verifier: new ConfigTokenVerifier(config.config.tokens),
-  allowedOrigins: config.config.allowedOrigins,
+  verifier: new ConfigTokenVerifier(serverConfig.config.tokens),
+  allowedOrigins: serverConfig.config.allowedOrigins,
   createServer: createReadServerFactory({
     client: createDataverseClient(dataverse.settings),
     entityPrefix,
@@ -61,23 +60,18 @@ const app = createServerApp({
 });
 
 const { host, port } = listen.settings;
-const server = createServer(toNodeHandler(app, { onerror: logError }));
-server.listen(port, host, () => {
-  console.log(
-    `Dataverse MCP server ${version} listening on http://${host}:${port}${MCP_PATH}`,
-  );
-});
-
-// Stop accepting connections first, then close the handler: that ends open
-// subscriptions/listen streams with a final result. In the other order, a
-// request arriving in between would get a 500.
-let stopping = false;
-function stop(signal: string) {
-  if (stopping) return;
-  stopping = true;
-  console.log(`${signal} received, shutting down`);
-  server.close(() => process.exit(0));
-  void app.close().then(() => server.closeIdleConnections());
-}
-process.on("SIGTERM", () => stop("SIGTERM"));
-process.on("SIGINT", () => stop("SIGINT"));
+startListening(app, { host, port, onerror: logError }).then(
+  (listener) => {
+    console.log(
+      `Dataverse MCP server ${version} listening on http://${host}:${listener.port}${MCP_PATH}`,
+    );
+    for (const signal of ["SIGTERM", "SIGINT"] as const) {
+      process.once(signal, () => {
+        console.log(`${signal} received, shutting down`);
+        void listener.stop().then(() => process.exit(0));
+      });
+    }
+  },
+  (error: Error) =>
+    fail([`cannot listen on ${host}:${port}: ${error.message}`]),
+);

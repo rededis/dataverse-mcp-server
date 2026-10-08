@@ -5,15 +5,19 @@ import {
 } from "../tools/server-groups.js";
 import type { ToolDeps } from "../tools/types.js";
 
-/**
- * What every caller gets until roles exist (#77): reading metadata and data.
- * In `SERVER_TOOL_GROUPS` order, which fixes the order of `tools/list`
- * (ADR-0001 §9).
- */
-export const READ_GROUPS: readonly ServerToolGroup[] = [
+const READ_GROUP_NAMES: readonly ServerToolGroup[] = [
   "metadata-read",
   "data-read",
 ];
+
+/**
+ * What every caller gets until roles exist (#77): reading metadata and data,
+ * taken in `SERVER_TOOL_GROUPS` order, which fixes the order of `tools/list`
+ * (ADR-0001 §9).
+ */
+export const READ_GROUPS = (
+  Object.keys(SERVER_TOOL_GROUPS) as ServerToolGroup[]
+).filter((group) => READ_GROUP_NAMES.includes(group));
 
 /**
  * Builds the MCP server for one HTTP request. `createMcpHandler` calls it per
