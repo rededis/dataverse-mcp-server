@@ -88,6 +88,25 @@ describe("listen", () => {
     await expect(fetch(`${base}/health`)).rejects.toThrow();
   });
 
+  it("lets a second stop wait for the shutdown already running", async () => {
+    const base = await start();
+    const res = await openListenStream(base);
+    const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+    await readUntil(reader, (t) => t.includes("acknowledged"));
+
+    const current = listener as Listener;
+    listener = undefined;
+    let firstDone = false;
+    const first = current.stop().then(() => {
+      firstDone = true;
+    });
+    // As a second signal handler would: it must not resolve before the first.
+    await current.stop();
+    expect(firstDone).toBe(true);
+    await first;
+    expect(await readUntil(reader, () => false)).toMatch(/"id":7,"result"/);
+  });
+
   it("answers over a real socket, token check included", async () => {
     const base = await start();
     expect((await fetch(`${base}/health`)).status).toBe(200);

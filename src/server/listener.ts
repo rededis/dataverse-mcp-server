@@ -24,22 +24,27 @@ export function listen(
   options: { host: string; port: number; onerror?: (error: Error) => void },
 ): Promise<Listener> {
   const handle = toNodeHandler(app, { onerror: options.onerror });
-  let stopping = false;
+  // The shutdown in progress. A second stop() (SIGINT after SIGTERM) gets
+  // the same promise, so its caller cannot exit before the first finishes.
+  let stopped: Promise<void> | undefined;
 
   const server = createServer((req, res) => {
     // A keep-alive connection can still carry a request after the listener
     // has stopped accepting connections. The closed MCP handler would answer
     // it with a 500; this says what is happening instead.
-    if (stopping) {
+    if (stopped) {
       res.writeHead(503, { Connection: "close" }).end();
       return;
     }
     void handle(req, res);
   });
 
-  const stop = async () => {
-    if (stopping) return;
-    stopping = true;
+  const stop = () => {
+    stopped ??= shutDown();
+    return stopped;
+  };
+
+  const shutDown = async () => {
     const closed = new Promise<void>((resolve) =>
       server.close(() => resolve()),
     );

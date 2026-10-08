@@ -154,7 +154,9 @@ describe("import boundary", () => {
     // must not read a .env file.
     for (const file of reached) {
       expect(readFileSync(resolve(root, file), "utf-8"), file).not.toMatch(
-        /from "dotenv"|require\("dotenv"\)/,
+        // `from`, side-effect `import`, dynamic `import()` and `require()`,
+        // subpaths such as dotenv/config included.
+        /(?:\bfrom|\bimport|\brequire)\s*\(?\s*["']dotenv(?:\/[^"']*)?["']/,
       );
     }
   });

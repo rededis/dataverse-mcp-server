@@ -218,6 +218,18 @@ describe("the auth gate on /mcp", () => {
     }
   });
 
+  // ADR-0001 §6: a proxy that drops Mcp-Name breaks every tool call.
+  it("refuses tools/call without Mcp-Name", async () => {
+    const res = await mcp(
+      "tools/call",
+      { name: "get_record", arguments: {} },
+      AUTH,
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe(-32020);
+    expect(requests).toEqual([]);
+  });
+
   it("refuses a 2025-era request (2026-07-28 only)", async () => {
     const res = await send("/mcp", {
       method: "POST",
