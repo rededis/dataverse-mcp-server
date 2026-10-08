@@ -53,7 +53,7 @@ export type RequestTimeoutSetting = NumberSetting;
  * and wrong is reported rather than replaced by the default, so a typo cannot
  * quietly change how the server behaves.
  */
-function readWholeNumber(
+export function readWholeNumber(
   name: string,
   raw: string | undefined,
   range: { min: number; max: number; unit?: string },

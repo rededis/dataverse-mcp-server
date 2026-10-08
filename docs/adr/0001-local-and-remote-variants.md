@@ -152,6 +152,10 @@ installation puts a reverse proxy, gateway or WAF in front of the server, it
 must pass these headers through unchanged. The server documentation says so
 (#80).
 
+_Added 2026-10-08 with #76._ There is a third: `tools/call` (and
+`resources/read`, `prompts/get`) also needs `Mcp-Name`, and its absence is the
+same `400 -32020`. A proxy must pass all three.
+
 ### 7. Access: bearer tokens from a config file
 
 - Tokens are stored as SHA-256 hashes in a JSON config file, compared in
@@ -164,6 +168,46 @@ must pass these headers through unchanged. The server documentation says so
   `/.well-known/openid-configuration`) answer 404, so clients do not assume
   OAuth.
 - Config changes apply on restart.
+
+_Added 2026-10-08 with #76._ How the server does this:
+
+- `TokenVerifier` is the SDK's `OAuthTokenVerifier`, and the server uses the
+  SDK's `verifyBearerToken` and `bearerAuthChallengeResponse` for parsing the
+  header and for the 401. They refuse a token whose `expiresAt` is unset, so a
+  token without expiry is reported with `expiresAt: Infinity` (in seconds, as
+  `AuthInfo` counts). A JWT verifier (Deferred) plugs into the same call.
+- Only `/mcp` is behind the check. `/health`, every other path, and
+  `/register` answer without a token: `mcp-remote` probes the discovery paths
+  and posts to `/register` without `Authorization`, and a 401 there would send
+  it into an OAuth flow. The 401 and the 404s are this server's choice; the
+  specification defines no static-token mode.
+- `Origin` is validated in front of the token check, as the specification
+  requires ("Servers MUST validate the `Origin` header … If the `Origin` header
+  is present and invalid, servers MUST respond with HTTP 403"). A request
+  without it is served: none of the clients in scope (Claude Code, `mcp-remote`,
+  SDK clients) sends one. A request with any `Origin` gets 403, so there is no
+  list of allowed origins. With a bearer token required, the check adds little
+  on its own: a browser does not attach the token the way it attaches a
+  cookie.
+
+  A web UI run next to the server works without browser access if its
+  backend calls the server: the model loop runs there, the request is server
+  to server and carries no `Origin`, and the UI's LLM key and this server's
+  token stay off the user's machine. The same holds when the Anthropic API's
+  MCP connector calls the server.
+
+  A UI whose page calls `/mcp` from the browser is not supported. Browsers
+  send `Origin` on a POST even to their own origin, so a UI served from the
+  same origin as the server (one reverse proxy, `app.example/` and
+  `app.example/mcp`) would need an allowlist; a UI on another origin would
+  also need CORS (a preflight `OPTIONS`, which carries no token, answered
+  before the token check). Either way the page would hold a token from the
+  config file, readable by every user of the UI and by any script injected
+  into it. Browser access is therefore decided together with per-user
+  tokens (OAuth), not on its own. See Deferred.
+- HTTP is served through the SDK's Node adapter (`@modelcontextprotocol/node`),
+  which bounds the request body while reading it and handles backpressure and
+  client disconnects. It requires `@modelcontextprotocol/server` 2.3 or later.
 
 *Why not OAuth now:* the clients in scope (Claude Code, `mcp-remote`, other
 programmatic clients) all send a static header. OAuth pays off only when people
@@ -350,6 +394,7 @@ Not planned now. Each item names what would make it worth revisiting.
 | Extensions (custom module, derived image, upstream proxy, server as a library) | The first concrete request for custom behaviour. |
 | Shared limiter across instances (e.g. Redis) | More than one instance runs against the same Dataverse budget. |
 | Pool of Dataverse application users | One application user's limits are the bottleneck. Extra users only spread the 5-minute limits and share the tenant's daily allowance. Microsoft's Product Terms forbid working "around any technical limitations"; whether a pool counts is unresolved ([E3](#e3-microsoft-dataverse-limits-and-licensing)), so check it first. |
+| Browser clients (`Origin` allowlist; CORS too for another origin) | A web page must call the server from the user's browser rather than through its backend (§7). Decide together with OAuth: a token from the config file would sit in the page. |
 | `structuredContent` / `outputSchema` | Programmatic consumers need a typed response contract. |
 | Excluding field-secured columns (`IsSecured`) from logs | Field value logging is enabled for an installation. |
 

@@ -115,18 +115,50 @@ describe("import boundary", () => {
     });
   }
 
-  it("nothing reachable from src/tools/server-groups.ts imports development/", () => {
+  function reachableFrom(entry: string): string[] {
     const seen = new Set<string>();
-    const queue = [resolve(root, "src/tools/server-groups.ts")];
+    const queue = [resolve(root, entry)];
     while (queue.length > 0) {
       const file = queue.pop() as string;
       if (seen.has(file)) continue;
       seen.add(file);
       queue.push(...localImports(file));
     }
-    const reached = [...seen].map((f) => relative(root, f));
+    return [...seen].map((f) => relative(root, f));
+  }
+
+  it("nothing reachable from src/tools/server-groups.ts imports development/", () => {
+    const reached = reachableFrom("src/tools/server-groups.ts");
     expect(reached).toContain("src/tools/metadata-read.ts");
     expect(reached.filter((f) => f.includes("/development/"))).toEqual([]);
+  });
+
+  // The server entry point is a root of its own: it also imports modules
+  // outside src/tools/, and none of them may bring in the stdio package's
+  // setup tool or every group.
+  it("the server entry point reaches neither development/ nor the stdio-only modules", () => {
+    const reached = reachableFrom("src/server/index.ts");
+    expect(reached).toContain("src/tools/server-groups.ts");
+    expect(reached).toContain("src/dataverse.ts");
+    expect(
+      reached.filter(
+        (f) =>
+          f.includes("/development/") ||
+          f === "src/tools/all.ts" ||
+          f === "src/setup.ts" ||
+          f === "src/index.ts",
+      ),
+    ).toEqual([]);
+    // Packages are invisible to the walk; the bundle check (#79) covers them.
+    // dotenv is named here because the stdio entry uses it and the server
+    // must not read a .env file.
+    for (const file of reached) {
+      expect(readFileSync(resolve(root, file), "utf-8"), file).not.toMatch(
+        // `from`, side-effect `import`, dynamic `import()` and `require()`,
+        // subpaths such as dotenv/config included.
+        /(?:\bfrom|\bimport|\brequire)\s*\(?\s*["']dotenv(?:\/[^"']*)?["']/,
+      );
+    }
   });
 
   function importersOf(): Map<string, string[]> {
