@@ -236,12 +236,9 @@ _Settled in #77._ `actAs` is the user's Microsoft Entra object id, sent as
 Dataverse allows a call only when both the application user and the mapped
 user hold the privilege, and the application user needs
 `prvActOnBehalfOfAnotherUser` in a role assigned to it directly. An allowlist
-is only as good as the path it guards, so `entity_set` must be a plain name and
-`id` a GUID before either is checked, and on the server the entity set must
-exist in the metadata, so that `/WhoAmI` cannot be reached as a table. A
-restricted create or update refuses nested records (deep insert), except
-activity parties, which can only be written nested in their activity.
-Allowlists match case-sensitively, as Dataverse does.
+protects only if the request goes where the checked name says and does only
+what its tool claims: [ADR-0002](0002-tool-arguments-do-not-choose-the-target.md)
+records how the tools make sure of that.
 
 ### 9. Per-caller tool lists
 
