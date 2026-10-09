@@ -6,12 +6,14 @@
 import type { DataverseClient } from "../../client.js";
 import { escapeODataString } from "./odata.js";
 
-const ENTITY_SET = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/** A plain entity set name; the server config holds its allowlists to it too. */
+export const ENTITY_SET_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/** A record id, braces allowed. */
 export const GUID =
   /^\{?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\}?$/;
 
 export function assertEntitySetName(name: string): void {
-  if (!ENTITY_SET.test(name)) {
+  if (!ENTITY_SET_NAME.test(name)) {
     throw new Error(
       `Invalid entity set name: '${name}'. Use the plural entity set name, e.g. 'accounts'.`,
     );

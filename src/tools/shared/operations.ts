@@ -5,7 +5,7 @@ import { assertEntitySetName, assertRecordId, GUID } from "./paths.js";
 
 // Operation names are restricted to identifiers so a caller can never smuggle
 // a path segment, query string, or quote into the request URL.
-const OPERATION_NAME = /^[A-Za-z][A-Za-z0-9_]*$/;
+export const OPERATION_NAME = /^[A-Za-z][A-Za-z0-9_]*$/;
 // Function parameter names are interpolated into the URL (`Fn(P=@P)?@P=...`),
 // so they are held to the same identifier restriction to prevent URL injection.
 const PARAM_NAME = /^[A-Za-z][A-Za-z0-9_]*$/;

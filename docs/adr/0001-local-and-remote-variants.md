@@ -332,6 +332,10 @@ a request counts against. If Dataverse counts it against the user acted for,
 one throttling state per instance is wrong, and the state has to be kept per
 user. How Dataverse counts impersonated requests was not verified.
 
+_Still open after #77._ The server keeps one throttling state per instance:
+a client acting on behalf of a user shares the application user's executor.
+Dev-org check O8 in #77 decides whether it has to become one per `actAs`.
+
 Adding application users would only spread the 5-minute limits. All
 application users in a tenant **share one tenant-level daily allowance**
 ([E3](#e3-microsoft-dataverse-limits-and-licensing)), so extra users add no daily capacity.

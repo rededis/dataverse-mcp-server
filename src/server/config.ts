@@ -2,6 +2,8 @@ import { z } from "zod";
 import { readWholeNumber } from "../config.js";
 import type { Allowlist, Permissions } from "../tools/permissions.js";
 import type { ServerToolGroup } from "../tools/server-groups.js";
+import { OPERATION_NAME } from "../tools/shared/operations.js";
+import { ENTITY_SET_NAME } from "../tools/shared/paths.js";
 
 /**
  * One bearer token the server accepts. The token itself is never stored, only
@@ -46,11 +48,10 @@ export const ROLE_GROUPS = [
   "functions",
 ] as const satisfies readonly ServerToolGroup[];
 
-// Matched exactly as Dataverse matches them (case-sensitively); the same
-// shapes the tools accept, so a name that can never match is a config error.
-const ENTITY_SET = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const OPERATION = /^[A-Za-z][A-Za-z0-9_]*$/;
-const GUID = /^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+// Allowlist entries have the shapes the tools accept, so a name that could
+// never match is a config error. They match exactly, as Dataverse does.
+// An Entra object id goes in a header as written: no braces.
+const ENTRA_OBJECT_ID = /^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
 const allowlist = (name: RegExp, what: string) =>
   z
@@ -64,9 +65,12 @@ const allowlist = (name: RegExp, what: string) =>
       message: '"*" allows everything, so it must be the only entry',
     });
 
-const ENTITY_SETS = allowlist(ENTITY_SET, "an entity set name, e.g. emails");
+const ENTITY_SETS = allowlist(
+  ENTITY_SET_NAME,
+  "an entity set name, e.g. emails",
+);
 const OPERATIONS = allowlist(
-  OPERATION,
+  OPERATION_NAME,
   "an operation name without a namespace, e.g. SendEmail",
 );
 
@@ -98,7 +102,10 @@ const TOKEN = z.strictObject({
   role: z.string().min(1),
   actAs: z
     .string()
-    .regex(GUID, "expected the user's Microsoft Entra object id (a GUID)")
+    .regex(
+      ENTRA_OBJECT_ID,
+      "expected the user's Microsoft Entra object id (a GUID)",
+    )
     .optional(),
 });
 

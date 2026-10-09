@@ -285,6 +285,24 @@ describe("DataverseClient on behalf of a user", () => {
     expect(error.message).toContain("not through a team");
   });
 
+  // A disabled or unlicensed user is refused with other codes; the message
+  // must not blame a privilege it does not know is missing.
+  it("passes any other 403 on without naming a privilege", async () => {
+    const body = JSON.stringify({
+      error: { code: "0x8004d24b", message: "The user is disabled." },
+    });
+    const { base } = setup(403, body);
+    const error = (await base
+      .onBehalfOf(caller)
+      .get("/WhoAmI")
+      .catch((e: unknown) => e)) as Error;
+
+    expect(error).toBeInstanceOf(DataverseCallerDeniedError);
+    expect(error.message).toBe(
+      `Dataverse refused this call made for user ${USER}, on whose behalf token "support-agent" acts. Dataverse said: The user is disabled.`,
+    );
+  });
+
   it("leaves a 403 to the application user itself as it was", async () => {
     const { base } = setup(403, '{"error":{"code":"0x80040220"}}');
     const error = await base.get("/contacts").catch((e: unknown) => e);

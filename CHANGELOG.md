@@ -11,11 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `@modelcontextprotocol/server` 2.3 instead of 2.2. The package now also depends on `@modelcontextprotocol/node` (which brings in `hono` and `@hono/node-server`) and contains the not yet released HTTP server under `dist/server/` (#76).
 - The not yet released HTTP server gets roles, set in its config file: which tool groups a token may use, which entity sets it may create, update or delete in, and which actions and functions it may call. A token may also act on behalf of a Dataverse user (#77).
+- **BREAKING** — `invoke_action` and `invoke_function` accept an operation name with the `Microsoft.Dynamics.CRM.` namespace or without it, and refuse any other namespace. Before, a name with any dot was sent as given. An unbound call now goes to the bare name even when the namespace was given (#77).
 
 ### Fixed
 
 - `entity_set` and `id` are checked before they go into the request URL, in `query_records`, `get_record`, `create_record`, `update_record`, `delete_record` and the bound forms of `invoke_action` and `invoke_function`. An entity set must be a plain name and an id a GUID. Before, an `id` such as `<guid>)/../accounts(<guid>` reached a different table than the one named (#77).
-- **BREAKING** — `invoke_action` and `invoke_function` accept an operation name with the `Microsoft.Dynamics.CRM.` namespace or without it, and refuse any other namespace. Before, a name with any dot was sent as given. An unbound call now goes to the bare name even when the namespace was given (#77).
 
 ## [0.9.0] - 2026-10-02
 
