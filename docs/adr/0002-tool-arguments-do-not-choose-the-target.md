@@ -1,6 +1,6 @@
 # ADR-0002: Tool arguments do not choose what a request reaches
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-09
 - **Issue:** #77
 - **Relates to:** [ADR-0001](0001-local-and-remote-variants.md) §8 (permissions), §9 (per-caller tool lists)
@@ -30,6 +30,7 @@ was implemented, each in a review round after the previous fix:
 | Security review | A collection-valued `@odata.bind` on a one-to-many relationship writes the lookup of each existing record listed | `create: ["accounts"]` re-parents existing tasks or contacts |
 | Security review | Metadata tools put logical names into a quoted key in the path; escaping the quote does not stop `..` and `#` | a role with only `metadata-read` reads any table through `get_entity_schema` |
 | Blind security review | An unbound operation name is sent as `/<name>`, and nothing checked it named an operation; the server config accepted `"*"` for actions and functions | `actions: "*"` creates in any table (`invoke_action {name:"accounts"}` → `POST /accounts`, confirmed on the dev org) or a table (`EntityDefinitions`); `functions: "*"` reads any table |
+| External review of PR #97 | `options.headers` were spread after `CallerObjectId` and `Authorization` | a header passed to `request()` could replace the user acted for or the token; no tool passed one, so not reachable yet |
 | Copilot on PR #97 | The body check was skipped when the tool's **own** list was `*` | `create: "*"` with a restricted update re-parents existing records; `update: "*"` with a restricted create creates records by deep insert |
 
 The rule about collection-valued `@odata.bind` changed twice in the branch
@@ -45,7 +46,8 @@ that saw only the code found it.
 ## Decision
 
 **A tool argument may choose a value inside the request, never which resource
-the request reaches or what kind of write it performs.** Every tool that builds
+the request reaches, what kind of write it performs, or on whose behalf it is
+made.** Every tool that builds
 a request, now and in future, follows the rules below. They apply to the stdio
 package as well as to the server, except where noted.
 
@@ -54,7 +56,8 @@ package as well as to the server, except where noted.
 Before any allowlist check, and before any request:
 
 - `entity_set` matches `^[A-Za-z_][A-Za-z0-9_]*$`;
-- a record `id` is a GUID;
+- a record `id` is a GUID without braces (Dataverse answers `accounts({…})`
+  with 400);
 - a logical name (table, column, key, global choice) matches the same
   identifier pattern. Quote-escaping is not a substitute: it protects an OData
   literal, not the path around it.
@@ -156,7 +159,8 @@ and no role has needed more. `"*"` stays in the code for the stdio package.
 - Two changes are visible to stdio users and marked **BREAKING** in the
   changelog: `update_record` no longer creates a missing record, and operation
   names in any namespace other than `Microsoft.Dynamics.CRM.` are refused. A
-  logical name with a quote, which used to be escaped and sent, is refused.
+  logical name with a quote, which used to be escaped and sent, is refused, and
+  so is a record id in braces.
 - On the server, no role can link several records in one call, many-to-many
   included, nor create related records in one call: both are done by separate
   calls, or wait for an explicit rule (see Not decided).
@@ -190,6 +194,12 @@ and no role has needed more. `"*"` stays in the code for the stdio package.
   Web API, "Associate table rows on create"](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/create-entity-web-api),
   where `"Account_Tasks@odata.bind": ["/tasks(…)", "/tasks(…)"]` on a new
   account attaches two existing tasks.
+- Checked on the dev org on 2026-10-09: `invoke_action {name:"accounts",
+  parameters:{name:"…"}}` created an account and `invoke_function
+  {name:"accounts"}` returned every account (§3); a single-valued
+  `"Account_Tasks@odata.bind": "/tasks(…)"` is refused by Dataverse with 400
+  ("can only have … an array value"), so rule 5 need not handle it;
+  `GET /accounts({…})` with braces is 400 "Error in query syntax".
 - Upsert on PATCH: Microsoft Learn, [Update and delete table rows using the
   Web API, "Basic update"](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/update-delete-entities-using-web-api):
   "The `If-Match: *` header ensures you don't create a new record by
