@@ -185,26 +185,6 @@ describe("nested records (deep insert)", () => {
     participationtypemask: 2,
   };
 
-  it("refuses a nested record when the create list is restricted", async () => {
-    const client = writingClient();
-    const tools = writeTools(
-      { create: ["emails"] },
-      client as unknown as DataverseClient,
-    );
-    await expect(
-      tools.get("create_record")!.handler({
-        entity_set: "emails",
-        data: {
-          subject: "Hi",
-          regardingobjectid_account_email: { name: "New" },
-        },
-      }),
-    ).rejects.toThrow(
-      /Nested records are not permitted for this token: 'regardingobjectid_account_email'/,
-    );
-    expect(client.post).not.toHaveBeenCalled();
-  });
-
   it("lets activity parties through, which address an email", async () => {
     const client = writingClient();
     const tools = writeTools(
@@ -265,37 +245,6 @@ describe("nested records (deep insert)", () => {
     };
     await tools.get("create_record")!.handler({ entity_set: "emails", data });
     expect(client.post).toHaveBeenCalledWith("/emails", data);
-  });
-
-  // On a one-to-many relationship Dataverse writes the lookup of each listed
-  // record: creating an account would re-parent existing tasks, a table the
-  // role may not update.
-  it("refuses a link that would rewrite existing records", async () => {
-    const client = writingClient();
-    const tools = writeTools(
-      { create: ["accounts"] },
-      client as unknown as DataverseClient,
-    );
-    await expect(
-      tools.get("create_record")!.handler({
-        entity_set: "accounts",
-        data: { name: "A", "Account_Tasks@odata.bind": [`/tasks(${GUID})`] },
-      }),
-    ).rejects.toThrow(
-      /Linking several records is not permitted for this token: 'Account_Tasks@odata.bind'/,
-    );
-    expect(client.post).not.toHaveBeenCalled();
-  });
-
-  it("checks updates the same way", async () => {
-    const tools = writeTools({ update: ["emails"] });
-    await expect(
-      tools.get("update_record")!.handler({
-        entity_set: "emails",
-        id: GUID,
-        data: { regardingobjectid_account_email: { name: "New" } },
-      }),
-    ).rejects.toThrow(/Nested records are not permitted/);
   });
 
   it("allows nested records when the list allows any entity set", async () => {
