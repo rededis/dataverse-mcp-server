@@ -6,6 +6,7 @@ import { registerAllTools } from "../src/tools/all.js";
 import { registerDevelopmentTools } from "../src/tools/development/index.js";
 import { SERVER_TOOL_GROUPS } from "../src/tools/server-groups.js";
 import type { RegisterTools } from "../src/tools/types.js";
+import { stdio } from "./helpers.js";
 
 const client = {} as DataverseClient;
 
@@ -16,7 +17,7 @@ function captureTools(register: RegisterTools, allowDelete = false) {
       schemas.set(name, config.inputSchema);
     },
   };
-  register(server as any, { client, allowDelete });
+  register(server as any, { client, ...stdio(allowDelete) });
   return schemas;
 }
 

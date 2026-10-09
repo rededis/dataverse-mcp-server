@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bareOperationName,
   buildFunctionCall,
   formatODataLiteral,
   qualifyOperationName,
@@ -14,11 +15,26 @@ describe("helpers", () => {
     );
   });
 
-  it("leaves unbound names and already-qualified names untouched", () => {
+  it("leaves unbound names plain", () => {
     expect(qualifyOperationName("WhoAmI", false)).toBe("WhoAmI");
-    expect(qualifyOperationName("Microsoft.Dynamics.CRM.X", true)).toBe(
-      "Microsoft.Dynamics.CRM.X",
+  });
+
+  it("strips exactly the CRM namespace to get the bare name", () => {
+    expect(bareOperationName("SendEmail")).toBe("SendEmail");
+    expect(bareOperationName("Microsoft.Dynamics.CRM.SendEmail")).toBe(
+      "SendEmail",
     );
+    for (const name of [
+      "Other.SendEmail",
+      "Microsoft.Dynamics.CRM.Microsoft.Dynamics.CRM.SendEmail",
+      "microsoft.dynamics.crm.SendEmail",
+      "../accounts",
+      "",
+    ]) {
+      expect(() => bareOperationName(name), name).toThrow(
+        /Invalid operation name/,
+      );
+    }
   });
 
   it("resolveBinding returns true for bound, false for unbound", () => {
@@ -33,6 +49,12 @@ describe("helpers", () => {
     );
     expect(() => resolveBinding(undefined, GUID)).toThrow(
       /Inconsistent binding/,
+    );
+  });
+
+  it("resolveBinding rejects an entity set that is not a plain name", () => {
+    expect(() => resolveBinding("leads/../accounts", GUID)).toThrow(
+      /Invalid entity set name/,
     );
   });
 

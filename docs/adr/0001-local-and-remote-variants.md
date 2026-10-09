@@ -231,6 +231,18 @@ and send messages to customers. Depending on the org, sending is either
 queued state that a flow or plugin picks up". Only per-entity-set and per-action
 allowlists can express both (#77).
 
+_Settled in #77._ `actAs` is the user's Microsoft Entra object id, sent as
+`CallerObjectId` (Microsoft's preferred header; `MSCRMCallerID` is legacy).
+Dataverse allows a call only when both the application user and the mapped
+user hold the privilege, and the application user needs
+`prvActOnBehalfOfAnotherUser` in a role assigned to it directly. An allowlist
+is only as good as the path it guards, so `entity_set` must be a plain name and
+`id` a GUID before either is checked, and on the server the entity set must
+exist in the metadata, so that `/WhoAmI` cannot be reached as a table. A
+restricted create or update refuses nested records (deep insert), except
+activity parties, which can only be written nested in their activity.
+Allowlists match case-sensitively, as Dataverse does.
+
 ### 9. Per-caller tool lists
 
 `tools/list` returns only what the caller's role allows. The 2026-07-28 tools

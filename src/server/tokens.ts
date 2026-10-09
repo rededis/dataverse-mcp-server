@@ -5,7 +5,7 @@ import {
   OAuthErrorCode,
   type OAuthTokenVerifier,
 } from "@modelcontextprotocol/server";
-import type { TokenEntry } from "./config.js";
+import type { Role, ServerConfig } from "./config.js";
 
 /**
  * How the server decides who a bearer token belongs to. It is the SDK's
@@ -13,6 +13,27 @@ import type { TokenEntry } from "./config.js";
  * and a JWT verifier can later replace the config file (ADR-0001 Deferred).
  */
 export type TokenVerifier = OAuthTokenVerifier;
+
+/** Who is calling, as the token's config entry says: its name, role and user. */
+export interface Caller {
+  name: string;
+  role: Role;
+  /** The Microsoft Entra object id of the Dataverse user to act as. */
+  actAs?: string;
+}
+
+const CALLER = "dataverse-mcp-server/caller";
+
+/**
+ * The caller a verified request carries. Only a ConfigTokenVerifier puts one
+ * there; a request without one is a wiring fault, refused rather than served
+ * with some default.
+ */
+export function callerOf(authInfo: AuthInfo | undefined): Caller {
+  const caller = authInfo?.extra?.[CALLER] as Caller | undefined;
+  if (!caller) throw new Error("The request carries no verified caller");
+  return caller;
+}
 
 /**
  * Accepts the tokens listed in the config file, by their SHA-256.
@@ -22,11 +43,11 @@ export type TokenVerifier = OAuthTokenVerifier;
  * is reported as expiring never (`Infinity`).
  */
 export class ConfigTokenVerifier implements TokenVerifier {
-  private entries: { name: string; hash: Buffer; expiresAt: number }[];
+  private entries: { hash: Buffer; expiresAt: number; caller: Caller }[];
 
-  constructor(tokens: readonly TokenEntry[]) {
-    this.entries = tokens.map((t) => ({
-      name: t.name,
+  constructor(config: ServerConfig) {
+    this.entries = config.tokens.map((t) => ({
+      caller: { name: t.name, role: config.roles[t.role], actAs: t.actAs },
       hash: Buffer.from(t.sha256, "hex"),
       // AuthInfo.expiresAt is in seconds since the epoch.
       expiresAt:
@@ -48,9 +69,10 @@ export class ConfigTokenVerifier implements TokenVerifier {
       throw new OAuthError(OAuthErrorCode.InvalidToken, "Invalid token");
     return {
       token,
-      clientId: match.name,
+      clientId: match.caller.name,
       scopes: [],
       expiresAt: match.expiresAt,
+      extra: { [CALLER]: match.caller },
     };
   }
 }

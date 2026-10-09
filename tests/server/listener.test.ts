@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { DataverseClient } from "../../src/client.js";
 import { createServerApp } from "../../src/server/app.js";
 import { type Listener, listen } from "../../src/server/listener.js";
-import { createReadServerFactory } from "../../src/server/mcp.js";
+import { createServerFactory } from "../../src/server/mcp.js";
 import { ConfigTokenVerifier } from "../../src/server/tokens.js";
-import { sha256 } from "./helpers.js";
+import { serverConfig, sha256 } from "./helpers.js";
 
 let listener: Listener | undefined;
 afterEach(async () => {
@@ -14,10 +14,10 @@ afterEach(async () => {
 
 async function start() {
   const app = createServerApp({
-    verifier: new ConfigTokenVerifier([
-      { name: "alice", sha256: sha256("alice-token") },
-    ]),
-    createServer: createReadServerFactory({
+    verifier: new ConfigTokenVerifier(
+      serverConfig([{ name: "alice", sha256: sha256("alice-token") }]),
+    ),
+    createServer: createServerFactory({
       client: {} as DataverseClient,
       version: "0.0.0-test",
     }),

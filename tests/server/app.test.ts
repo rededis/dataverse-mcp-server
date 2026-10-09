@@ -4,34 +4,114 @@ import {
 } from "@modelcontextprotocol/client";
 import { afterEach, describe, expect, it } from "vitest";
 import type { DataverseClient } from "../../src/client.js";
+import { DataverseCallerDeniedError } from "../../src/errors.js";
 import { createServerApp } from "../../src/server/app.js";
-import { createReadServerFactory } from "../../src/server/mcp.js";
+import type { Role } from "../../src/server/config.js";
+import { createServerFactory } from "../../src/server/mcp.js";
 import { ConfigTokenVerifier } from "../../src/server/tokens.js";
-import { sha256 } from "./helpers.js";
+import { NO_PERMISSIONS } from "../../src/tools/permissions.js";
+import { READER, serverConfig, sha256 } from "./helpers.js";
 
 const BASE = "http://127.0.0.1:8080";
 const AUTH = { Authorization: "Bearer alice-token" };
+const GUID = "11111111-1111-1111-1111-111111111111";
+const DAVE = "22222222-2222-2222-2222-222222222222";
 
-const requests: { method: string; path: string }[] = [];
-const dataverse = {
-  get: async (path: string) => {
-    requests.push({ method: "GET", path });
-    return { accountid: "1", name: "Contoso" };
+// The support role from #77: reads everything, may create emails and tasks,
+// and send an email.
+const SUPPORT: Role = {
+  groups: ["metadata-read", "data-read", "data-write", "actions"],
+  permissions: {
+    ...NO_PERMISSIONS,
+    create: ["emails", "tasks"],
+    actions: ["SendEmail"],
   },
-} as unknown as DataverseClient;
+};
+
+// Every group, listed in reverse to show the role's order does not matter.
+const EVERYTHING: Role = {
+  groups: ["functions", "actions", "data-write", "data-read", "metadata-read"],
+  permissions: {
+    create: "*",
+    update: "*",
+    delete: ["tasks"],
+    actions: "*",
+    functions: "*",
+  },
+};
+
+/** What reached Dataverse, and on whose behalf (`as`: an Entra object id). */
+const requests: { method: string; path: string; as?: string }[] = [];
+const ENTITY_SETS = ["accounts", "contacts", "emails", "tasks"];
+
+// A Dataverse that knows four entity sets. Metadata lookups by the entity set
+// catalog are answered but not recorded, so `requests` shows the tool calls.
+function fakeDataverse(as?: string): DataverseClient {
+  const record = (method: string, path: string) => {
+    requests.push({ method, path, ...(as && { as }) });
+  };
+  return {
+    get: async (path: string) => {
+      if (path.startsWith("/EntityDefinitions?")) {
+        const name = /EntitySetName eq '(\w+)'/.exec(decodeURIComponent(path));
+        return {
+          value: ENTITY_SETS.filter((n) => n === name?.[1]).map((n) => ({
+            EntitySetName: n,
+          })),
+        };
+      }
+      record("GET", path);
+      return { accountid: "1", name: "Contoso" };
+    },
+    post: async (path: string) => {
+      record("POST", path);
+      if (as === DAVE && path === "/tasks") {
+        throw new DataverseCallerDeniedError(
+          { method: "POST", url: path },
+          JSON.stringify({
+            error: {
+              code: "0x80040220",
+              message: "Principal user is missing prvCreateTask privilege",
+            },
+          }),
+          { name: "dave", objectId: DAVE },
+        );
+      }
+      return {};
+    },
+    delete: async (path: string) => {
+      record("DELETE", path);
+      return {};
+    },
+    onBehalfOf: ({ objectId }: { objectId: string }) => fakeDataverse(objectId),
+  } as unknown as DataverseClient;
+}
 
 function createApp() {
   return createServerApp({
-    verifier: new ConfigTokenVerifier([
-      { name: "alice", sha256: sha256("alice-token") },
-      {
-        name: "carol",
-        sha256: sha256("carol-token"),
-        expiresAt: "2020-01-01T00:00:00Z",
-      },
-    ]),
-    createServer: createReadServerFactory({
-      client: dataverse,
+    verifier: new ConfigTokenVerifier(
+      serverConfig(
+        [
+          { name: "alice", sha256: sha256("alice-token") },
+          {
+            name: "carol",
+            sha256: sha256("carol-token"),
+            expiresAt: "2020-01-01T00:00:00Z",
+          },
+          { name: "sam", sha256: sha256("sam-token"), role: "support" },
+          { name: "erin", sha256: sha256("erin-token"), role: "everything" },
+          {
+            name: "dave",
+            sha256: sha256("dave-token"),
+            role: "support",
+            actAs: DAVE,
+          },
+        ],
+        { reader: READER, support: SUPPORT, everything: EVERYTHING },
+      ),
+    ),
+    createServer: createServerFactory({
+      client: fakeDataverse(),
       version: "0.0.0-test",
     }),
   });
@@ -167,8 +247,8 @@ describe("the auth gate on /mcp", () => {
           throw new TypeError("keys unavailable");
         },
       },
-      createServer: createReadServerFactory({
-        client: dataverse,
+      createServer: createServerFactory({
+        client: fakeDataverse(),
         version: "0.0.0-test",
       }),
       onerror: (error) => errors.push(error),
@@ -184,9 +264,9 @@ describe("the auth gate on /mcp", () => {
   it("does not report a refused token as a fault", async () => {
     const errors: Error[] = [];
     const quiet = createServerApp({
-      verifier: new ConfigTokenVerifier([]),
-      createServer: createReadServerFactory({
-        client: dataverse,
+      verifier: new ConfigTokenVerifier(serverConfig([])),
+      createServer: createServerFactory({
+        client: fakeDataverse(),
         version: "0.0.0-test",
       }),
       onerror: (error) => errors.push(error),
@@ -306,5 +386,158 @@ describe("an authenticated client", () => {
 
   it("cannot connect with a rejected token", async () => {
     await expect(connect("nobody")).rejects.toThrow();
+  });
+});
+
+describe("roles", () => {
+  async function toolNames(token: string) {
+    const client = await connect(token);
+    const { tools } = await client.listTools();
+    await client.close();
+    return tools.map((t) => t.name);
+  }
+
+  async function call(token: string, name: string, args: object) {
+    const client = await connect(token);
+    const result = await client.callTool({ name, arguments: args });
+    await client.close();
+    return {
+      isError: Boolean(result.isError),
+      text: (result.content as { text: string }[])[0]?.text ?? "",
+    };
+  }
+
+  it("lists the support role's tools: create, and the action, but no update or delete", async () => {
+    expect(await toolNames("sam-token")).toEqual([
+      "list_entities",
+      "get_entity_schema",
+      "get_picklist_options",
+      "list_entity_keys",
+      "query_records",
+      "get_record",
+      "create_record",
+      "invoke_action",
+    ]);
+  });
+
+  it("orders the tools by group, whatever order the role lists them in", async () => {
+    expect(await toolNames("erin-token")).toEqual([
+      "list_entities",
+      "get_entity_schema",
+      "get_picklist_options",
+      "list_entity_keys",
+      "query_records",
+      "get_record",
+      "create_record",
+      "update_record",
+      "delete_record",
+      "invoke_action",
+      "invoke_function",
+    ]);
+  });
+
+  it("returns the tool list as private to the caller", async () => {
+    const res = await mcp("tools/list", {}, AUTH);
+    const text = await res.text();
+    expect(text).toContain('"cacheScope":"private"');
+    expect(text).not.toContain('"cacheScope":"public"');
+  });
+
+  it("lets the support role create an email but not a contact", async () => {
+    const email = await call("sam-token", "create_record", {
+      entity_set: "emails",
+      data: { subject: "Your ticket" },
+    });
+    expect(email.isError).toBe(false);
+
+    const contact = await call("sam-token", "create_record", {
+      entity_set: "contacts",
+      data: { lastname: "A" },
+    });
+    expect(contact).toEqual({
+      isError: true,
+      text: expect.stringContaining(
+        "Not permitted: create in 'contacts'. This token is allowed: emails, tasks.",
+      ),
+    });
+    expect(requests).toEqual([{ method: "POST", path: "/emails" }]);
+  });
+
+  it("lets the support role send an email, and no other action", async () => {
+    const send = await call("sam-token", "invoke_action", {
+      name: "SendEmail",
+      entity_set: "emails",
+      id: GUID,
+      parameters: { IssueSend: true },
+    });
+    expect(send.isError).toBe(false);
+
+    const other = await call("sam-token", "invoke_action", {
+      name: "CreateAndSendNewEmail",
+    });
+    expect(other.isError).toBe(true);
+    expect(other.text).toContain("Not permitted: call action");
+    expect(requests).toEqual([
+      {
+        method: "POST",
+        path: `/emails(${GUID})/Microsoft.Dynamics.CRM.SendEmail`,
+      },
+    ]);
+  });
+
+  it("rejects a delete unless the entity set is listed, path tricks included", async () => {
+    const results = [
+      await call("erin-token", "delete_record", {
+        entity_set: "accounts",
+        id: GUID,
+      }),
+      await call("erin-token", "delete_record", {
+        entity_set: "tasks",
+        id: `${GUID})/../accounts(${GUID}`,
+      }),
+      await call("erin-token", "delete_record", {
+        entity_set: "tasks",
+        id: GUID,
+      }),
+    ];
+    expect(results.map((r) => r.isError)).toEqual([true, true, false]);
+    expect(requests).toEqual([{ method: "DELETE", path: `/tasks(${GUID})` }]);
+  });
+
+  it("keeps query_records from calling a function, even with every group", async () => {
+    const result = await call("erin-token", "query_records", {
+      entity_set: "WhoAmI",
+    });
+    expect(result).toEqual({
+      isError: true,
+      text: expect.stringContaining("Unknown entity set: 'WhoAmI'"),
+    });
+    expect(requests).toEqual([]);
+  });
+
+  it("makes a mapped token's calls on its user's behalf", async () => {
+    await call("dave-token", "create_record", {
+      entity_set: "emails",
+      data: { subject: "Hi" },
+    });
+    await call("sam-token", "create_record", {
+      entity_set: "emails",
+      data: { subject: "Hi" },
+    });
+    expect(requests).toEqual([
+      { method: "POST", path: "/emails", as: DAVE },
+      { method: "POST", path: "/emails" },
+    ]);
+  });
+
+  it("reports a Dataverse privilege error with the token and its user", async () => {
+    const result = await call("dave-token", "create_record", {
+      entity_set: "tasks",
+      data: { subject: "Call back" },
+    });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain(`user ${DAVE}`);
+    expect(result.text).toContain('token "dave"');
+    expect(result.text).toContain("missing prvCreateTask privilege");
   });
 });

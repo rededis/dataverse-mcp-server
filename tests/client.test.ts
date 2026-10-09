@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DataverseAuth } from "../src/auth.js";
 import { DataverseClient } from "../src/client.js";
-import { DataverseApiError, DataverseError } from "../src/errors.js";
+import {
+  DataverseApiError,
+  DataverseCallerDeniedError,
+  DataverseError,
+} from "../src/errors.js";
 import type { HttpRequest, RequestExecutor } from "../src/executor.js";
 
 describe("DataverseClient", () => {
@@ -168,7 +172,8 @@ describe("DataverseClient with an injected executor", () => {
   it("passes absolute URLs (e.g. @odata.nextLink) through unchanged", async () => {
     const { executor, requests } = recordingExecutor();
     const client = makeClient(executor);
-    const next = "https://org.crm.dynamics.com/api/data/v9.2/accounts?$skiptoken=x";
+    const next =
+      "https://org.crm.dynamics.com/api/data/v9.2/accounts?$skiptoken=x";
 
     await client.get(next);
 
@@ -193,5 +198,97 @@ describe("DataverseClient with an injected executor", () => {
     const client = makeClient({ execute: () => Promise.reject(failure) });
 
     await expect(client.get("/accounts")).rejects.toBe(failure);
+  });
+});
+
+describe("DataverseClient on behalf of a user", () => {
+  const USER = "22222222-2222-2222-2222-222222222222";
+  const caller = { name: "support-agent", objectId: USER };
+
+  function setup(status = 200, body = "{}") {
+    const requests: HttpRequest[] = [];
+    const executor: RequestExecutor = {
+      execute: async (request) => {
+        requests.push(request);
+        return { status, headers: new Headers(), body };
+      },
+    };
+    const auth = new DataverseAuth(
+      "tenant",
+      "client",
+      "secret",
+      "https://org.crm.dynamics.com",
+    );
+    const getToken = vi.spyOn(auth, "getToken").mockResolvedValue("t");
+    const base = new DataverseClient(auth, "https://org.crm.dynamics.com", {
+      executor,
+    });
+    return { base, requests, getToken };
+  }
+
+  it("sends CallerObjectId on every request, and the base client does not", async () => {
+    const { base, requests } = setup();
+    const user = base.onBehalfOf(caller);
+
+    await user.post("/emails", { subject: "Hi" });
+    await base.get("/WhoAmI");
+
+    expect(requests[0].headers.CallerObjectId).toBe(USER);
+    expect(requests[0].url).toBe(
+      "https://org.crm.dynamics.com/api/data/v9.2/emails",
+    );
+    expect(requests[1].headers).not.toHaveProperty("CallerObjectId");
+  });
+
+  it("shares the token source and executor with the base client", async () => {
+    const { base, requests, getToken } = setup();
+    await base.onBehalfOf(caller).get("/WhoAmI");
+    expect(getToken).toHaveBeenCalledOnce();
+    expect(requests).toHaveLength(1);
+  });
+
+  it("names the token and user when Dataverse denies a privilege", async () => {
+    const body = JSON.stringify({
+      error: {
+        code: "0x80040220",
+        message:
+          "Principal user (Id=9f0c…, type=8, roleCount=1) is missing prvCreateContact privilege (Id=…) on OTC=2 for entity 'contact'.",
+      },
+    });
+    const { base } = setup(403, body);
+    const error = await base
+      .onBehalfOf(caller)
+      .post("/contacts", {})
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(DataverseCallerDeniedError);
+    expect(error).toBeInstanceOf(DataverseApiError);
+    const denied = error as DataverseCallerDeniedError;
+    expect(denied.status).toBe(403);
+    expect(denied.code).toBe("0x80040220");
+    expect(denied.message).toContain(`user ${USER}`);
+    expect(denied.message).toContain('token "support-agent"');
+    expect(denied.message).toContain("missing prvCreateContact privilege");
+  });
+
+  it("says what to fix when the application user may not act on behalf of others", async () => {
+    const body = JSON.stringify({
+      error: { code: "0x8004A110", message: "Caller does not have privilege" },
+    });
+    const { base } = setup(403, body);
+    const error = (await base
+      .onBehalfOf(caller)
+      .get("/WhoAmI")
+      .catch((e: unknown) => e)) as Error;
+
+    expect(error.message).toContain("prvActOnBehalfOfAnotherUser");
+    expect(error.message).toContain("not through a team");
+  });
+
+  it("leaves a 403 to the application user itself as it was", async () => {
+    const { base } = setup(403, '{"error":{"code":"0x80040220"}}');
+    const error = await base.get("/contacts").catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(DataverseCallerDeniedError);
+    expect(error).toBeInstanceOf(DataverseApiError);
   });
 });

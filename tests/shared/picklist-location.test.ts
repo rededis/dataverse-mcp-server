@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { registerAllTools } from "../../src/tools/all.js";
-import { createMockServer } from "../helpers.js";
+import { createMockServer, stdio } from "../helpers.js";
 
 describe("picklist location XOR validation", () => {
   const toolNames = [
@@ -15,7 +15,7 @@ describe("picklist location XOR validation", () => {
       const server = createMockServer();
       const client = { post: vi.fn(), get: vi.fn() } as any;
       // allowDelete=true so the delete_picklist_option real handler (not the stub) is registered
-      registerAllTools(server as any, { client, allowDelete: true });
+      registerAllTools(server as any, { client, ...stdio(true) });
 
       await expect(
         server.tools.get(name)!.handler({
@@ -31,7 +31,7 @@ describe("picklist location XOR validation", () => {
     it(`${name}: throws when neither Local pair nor Global is provided`, async () => {
       const server = createMockServer();
       const client = { post: vi.fn(), get: vi.fn() } as any;
-      registerAllTools(server as any, { client, allowDelete: true });
+      registerAllTools(server as any, { client, ...stdio(true) });
 
       await expect(
         server.tools.get(name)!.handler({ label: "L", value: 1 }),
@@ -41,7 +41,7 @@ describe("picklist location XOR validation", () => {
     it(`${name}: throws when Local pair is incomplete (entity only)`, async () => {
       const server = createMockServer();
       const client = { post: vi.fn(), get: vi.fn() } as any;
-      registerAllTools(server as any, { client, allowDelete: true });
+      registerAllTools(server as any, { client, ...stdio(true) });
 
       await expect(
         server.tools.get(name)!.handler({

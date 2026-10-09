@@ -1,5 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { allowsNothing, assertAllowed, NO_PERMISSIONS } from "./permissions.js";
+import {
+  assertEntitySetName,
+  assertNoNestedRecords,
+  assertRecordId,
+} from "./shared/paths.js";
 import type { ToolDeps } from "./types.js";
 
 const CREATE_RECORD_INPUT = z.object({
@@ -33,44 +39,66 @@ const DELETE_RECORD_DISABLED_INPUT = z.object({
   id: z.string().describe("Record GUID"),
 });
 
+// Each handler checks its arguments in the same order: their shape, then the
+// allowlist, then (on the server) that the entity set exists, which costs a
+// request. The allowlist is checked here even though a tool whose list is
+// empty is never registered (ADR-0001 §9).
 export function registerDataWriteTools(
   server: McpServer,
   deps: ToolDeps,
 ): void {
-  const { client, allowDelete = false } = deps;
-  server.registerTool(
-    "create_record",
-    {
-      description: "Create a new record in a Dataverse table",
-      inputSchema: CREATE_RECORD_INPUT,
-    },
-    async ({ entity_set, data }) => {
-      const result = await client.post(`/${entity_set}`, data);
-      return {
-        content: [
-          { type: "text" as const, text: JSON.stringify(result, null, 2) },
-        ],
-      };
-    },
-  );
+  const { client, entitySets, deleteStubs = false } = deps;
+  const permissions = deps.permissions ?? NO_PERMISSIONS;
 
-  server.registerTool(
-    "update_record",
-    {
-      description: "Update an existing record in a Dataverse table",
-      inputSchema: UPDATE_RECORD_INPUT,
-    },
-    async ({ entity_set, id, data }) => {
-      await client.patch(`/${entity_set}(${id})`, data);
-      return {
-        content: [
-          { type: "text" as const, text: `Record ${id} updated successfully.` },
-        ],
-      };
-    },
-  );
+  if (!allowsNothing(permissions.create)) {
+    server.registerTool(
+      "create_record",
+      {
+        description: "Create a new record in a Dataverse table",
+        inputSchema: CREATE_RECORD_INPUT,
+      },
+      async ({ entity_set, data }) => {
+        assertEntitySetName(entity_set);
+        assertAllowed(permissions.create, entity_set, "create in");
+        if (permissions.create !== "*") assertNoNestedRecords(data);
+        await entitySets?.assertExists(entity_set);
+        const result = await client.post(`/${entity_set}`, data);
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(result, null, 2) },
+          ],
+        };
+      },
+    );
+  }
 
-  if (allowDelete) {
+  if (!allowsNothing(permissions.update)) {
+    server.registerTool(
+      "update_record",
+      {
+        description: "Update an existing record in a Dataverse table",
+        inputSchema: UPDATE_RECORD_INPUT,
+      },
+      async ({ entity_set, id, data }) => {
+        assertEntitySetName(entity_set);
+        assertRecordId(id);
+        assertAllowed(permissions.update, entity_set, "update in");
+        if (permissions.update !== "*") assertNoNestedRecords(data);
+        await entitySets?.assertExists(entity_set);
+        await client.patch(`/${entity_set}(${id})`, data);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Record ${id} updated successfully.`,
+            },
+          ],
+        };
+      },
+    );
+  }
+
+  if (!allowsNothing(permissions.delete)) {
     server.registerTool(
       "delete_record",
       {
@@ -78,6 +106,10 @@ export function registerDataWriteTools(
         inputSchema: DELETE_RECORD_INPUT,
       },
       async ({ entity_set, id }) => {
+        assertEntitySetName(entity_set);
+        assertRecordId(id);
+        assertAllowed(permissions.delete, entity_set, "delete from");
+        await entitySets?.assertExists(entity_set);
         await client.delete(`/${entity_set}(${id})`);
         return {
           content: [
@@ -89,7 +121,7 @@ export function registerDataWriteTools(
         };
       },
     );
-  } else {
+  } else if (deleteStubs) {
     server.registerTool(
       "delete_record",
       {

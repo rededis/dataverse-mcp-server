@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { readWholeNumber } from "../config.js";
+import type { Allowlist, Permissions } from "../tools/permissions.js";
+import type { ServerToolGroup } from "../tools/server-groups.js";
 
 /**
  * One bearer token the server accepts. The token itself is never stored, only
@@ -13,12 +15,73 @@ export interface TokenEntry {
   sha256: string;
   /** ISO 8601 date and time with a time zone; absent means no expiry. */
   expiresAt?: string;
+  /** The name of the role in `roles`. */
+  role: string;
+  /**
+   * The Microsoft Entra object id of the Dataverse user the token's calls are
+   * made on behalf of; absent means as the server's application user.
+   */
+  actAs?: string;
+}
+
+/** What a role may do (ADR-0001 §8). */
+export interface Role {
+  groups: ServerToolGroup[];
+  permissions: Permissions;
 }
 
 /** The server's JSON config file. Changes apply on restart. */
 export interface ServerConfig {
+  roles: Record<string, Role>;
   tokens: TokenEntry[];
 }
+
+// Kept in step with SERVER_TOOL_GROUPS by tests/server/config.test.ts. Listed
+// here rather than imported, so reading the config does not load the tools.
+export const ROLE_GROUPS = [
+  "metadata-read",
+  "data-read",
+  "data-write",
+  "actions",
+  "functions",
+] as const satisfies readonly ServerToolGroup[];
+
+// Matched exactly as Dataverse matches them (case-sensitively); the same
+// shapes the tools accept, so a name that can never match is a config error.
+const ENTITY_SET = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const OPERATION = /^[A-Za-z][A-Za-z0-9_]*$/;
+const GUID = /^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+
+const allowlist = (name: RegExp, what: string) =>
+  z
+    .array(
+      z.union([
+        z.literal("*"),
+        z.string().regex(name, `expected "*" or ${what}`),
+      ]),
+    )
+    .refine((list) => !list.includes("*") || list.length === 1, {
+      message: '"*" allows everything, so it must be the only entry',
+    });
+
+const ENTITY_SETS = allowlist(ENTITY_SET, "an entity set name, e.g. emails");
+const OPERATIONS = allowlist(
+  OPERATION,
+  "an operation name without a namespace, e.g. SendEmail",
+);
+
+const ROLE = z.strictObject({
+  groups: z.array(z.enum(ROLE_GROUPS)).min(1, "at least one group is required"),
+  dataWrite: z
+    .strictObject({
+      create: ENTITY_SETS.optional(),
+      update: ENTITY_SETS.optional(),
+      delete: ENTITY_SETS.optional(),
+    })
+    .optional(),
+  actions: OPERATIONS.optional(),
+  functions: OPERATIONS.optional(),
+});
 
 const TOKEN = z.strictObject({
   name: z.string().min(1),
@@ -32,11 +95,67 @@ const TOKEN = z.strictObject({
       message: "expected an ISO 8601 date and time with a time zone",
     })
     .optional(),
+  role: z.string().min(1),
+  actAs: z
+    .string()
+    .regex(GUID, "expected the user's Microsoft Entra object id (a GUID)")
+    .optional(),
 });
 
 const CONFIG = z.strictObject({
+  roles: z.record(z.string().min(1), ROLE),
   tokens: z.array(TOKEN).min(1, "at least one token is required"),
 });
+
+type RoleInput = z.infer<typeof ROLE>;
+
+const asAllowlist = (list: string[] | undefined): Allowlist =>
+  list?.[0] === "*" ? "*" : (list ?? []);
+
+/**
+ * A role's lists must agree with its groups: a list without its group grants
+ * nothing, and a group without a list registers no tool. Either is a mistake
+ * in the file, not a setting.
+ */
+function roleProblems(name: string, role: RoleInput): string[] {
+  const at = `roles.${name}`;
+  const problems = duplicates(role.groups).map(
+    (group) => `${at}.groups: "${group}" is listed more than once`,
+  );
+  const writes = Object.values(role.dataWrite ?? {}).some((l) => l.length > 0);
+  const listed: [ServerToolGroup, string, boolean][] = [
+    ["data-write", "dataWrite", writes],
+    ["actions", "actions", (role.actions ?? []).length > 0],
+    ["functions", "functions", (role.functions ?? []).length > 0],
+  ];
+  for (const [group, key, hasEntries] of listed) {
+    const granted = role.groups.includes(group);
+    if (granted && !hasEntries) {
+      problems.push(
+        `${at}: the "${group}" group needs entries in ${key}, or it gives no tools`,
+      );
+    }
+    if (!granted && hasEntries) {
+      problems.push(
+        `${at}.${key}: has no effect without the "${group}" group in groups`,
+      );
+    }
+  }
+  return problems;
+}
+
+function toRole(role: RoleInput): Role {
+  return {
+    groups: role.groups,
+    permissions: {
+      create: asAllowlist(role.dataWrite?.create),
+      update: asAllowlist(role.dataWrite?.update),
+      delete: asAllowlist(role.dataWrite?.delete),
+      actions: asAllowlist(role.actions),
+      functions: asAllowlist(role.functions),
+    },
+  };
+}
 
 function duplicates(values: string[]): string[] {
   return [...new Set(values.filter((v, i) => values.indexOf(v) !== i))];
@@ -70,8 +189,17 @@ export function readServerConfig(
     };
   }
 
-  const { tokens } = parsed.data;
+  const { roles, tokens } = parsed.data;
   const problems = [
+    ...Object.entries(roles).flatMap(([name, role]) =>
+      roleProblems(name, role),
+    ),
+    ...tokens
+      .filter((t) => !Object.hasOwn(roles, t.role))
+      .map(
+        (t) =>
+          `tokens: "${t.name}" has the role "${t.role}", which is not in roles`,
+      ),
     ...duplicates(tokens.map((t) => t.name)).map(
       (name) => `tokens: the name "${name}" is used more than once`,
     ),
@@ -82,7 +210,15 @@ export function readServerConfig(
   ];
   if (problems.length > 0) return { ok: false, problems };
 
-  return { ok: true, config: parsed.data };
+  return {
+    ok: true,
+    config: {
+      roles: Object.fromEntries(
+        Object.entries(roles).map(([name, role]) => [name, toRole(role)]),
+      ),
+      tokens,
+    },
+  };
 }
 
 export interface ListenSettings {

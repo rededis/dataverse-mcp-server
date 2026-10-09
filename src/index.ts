@@ -8,6 +8,7 @@ import { config } from "dotenv";
 import { createDataverseClient, readDataverseSettings } from "./dataverse.js";
 import { registerSetupTool } from "./setup.js";
 import { registerAllTools } from "./tools/all.js";
+import { stdioPermissions } from "./tools/permissions.js";
 
 const projectRoot = resolve(__dirname, "..");
 const cwdEnvPath = resolve(process.cwd(), ".env");
@@ -60,7 +61,8 @@ function chooseTools(): (server: McpServer) => void {
       client,
       entityPrefix,
       solutionName,
-      allowDelete,
+      permissions: stdioPermissions(allowDelete),
+      deleteStubs: true,
     });
 }
 

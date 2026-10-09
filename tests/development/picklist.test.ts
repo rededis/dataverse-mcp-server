@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { registerAllTools } from "../../src/tools/all.js";
-import { createMockServer } from "../helpers.js";
+import { createMockServer, stdio } from "../helpers.js";
 
 describe("add_picklist_option", () => {
   it("posts InsertOptionValue with EntityLogicalName/AttributeLogicalName for Local", async () => {
@@ -8,7 +8,7 @@ describe("add_picklist_option", () => {
     const client = {
       post: vi.fn().mockResolvedValue({ NewOptionValue: 909890007 }),
     } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server as any, { client, ...stdio() });
 
     const result = await server.tools.get("add_picklist_option")!.handler({
       entity_logical_name: "fundai_achtransaction",
@@ -32,7 +32,7 @@ describe("add_picklist_option", () => {
   it("posts InsertOptionValue with OptionSetName for Global", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server as any, { client, ...stdio() });
 
     await server.tools.get("add_picklist_option")!.handler({
       option_set_name: "MyGlobalSet",
@@ -50,7 +50,7 @@ describe("add_picklist_option", () => {
     const client = {
       post: vi.fn().mockResolvedValue({ NewOptionValue: 100000042 }),
     } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server as any, { client, ...stdio() });
 
     await server.tools.get("add_picklist_option")!.handler({
       option_set_name: "MyGlobalSet",
@@ -64,7 +64,7 @@ describe("add_picklist_option", () => {
   it("includes Description and SolutionUniqueName when provided", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server as any, { client, ...stdio() });
 
     await server.tools.get("add_picklist_option")!.handler({
       option_set_name: "MyGlobalSet",
@@ -88,16 +88,14 @@ describe("update_picklist_option", () => {
   it("posts UpdateOptionValue with Value, Label and MergeLabels=false by default", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server as any, { client, ...stdio() });
 
-    const result = await server.tools
-      .get("update_picklist_option")!
-      .handler({
-        entity_logical_name: "fundai_x",
-        attribute_logical_name: "fundai_status",
-        value: 100000000,
-        label: "Renamed",
-      });
+    const result = await server.tools.get("update_picklist_option")!.handler({
+      entity_logical_name: "fundai_x",
+      attribute_logical_name: "fundai_status",
+      value: 100000000,
+      label: "Renamed",
+    });
 
     const [path, body] = client.post.mock.calls[0];
     expect(path).toBe("/UpdateOptionValue");
@@ -113,7 +111,7 @@ describe("update_picklist_option", () => {
   it("forwards merge_labels=true to MergeLabels", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server as any, { client, ...stdio() });
 
     await server.tools.get("update_picklist_option")!.handler({
       option_set_name: "MyGlobalSet",
@@ -131,14 +129,12 @@ describe("delete_picklist_option", () => {
   it("posts DeleteOptionValue with Value and location when allowDelete is true", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, allowDelete: true });
+    registerAllTools(server as any, { client, ...stdio(true) });
 
-    const result = await server.tools
-      .get("delete_picklist_option")!
-      .handler({
-        option_set_name: "MyGlobalSet",
-        value: 909890009,
-      });
+    const result = await server.tools.get("delete_picklist_option")!.handler({
+      option_set_name: "MyGlobalSet",
+      value: 909890009,
+    });
 
     const [path, body] = client.post.mock.calls[0];
     expect(path).toBe("/DeleteOptionValue");
@@ -152,7 +148,7 @@ describe("delete_picklist_option", () => {
     const server = createMockServer();
     registerAllTools(server as any, {
       client: { post: vi.fn() } as any,
-      allowDelete: true,
+      ...stdio(true),
     });
     const tool = server.tools.get("delete_picklist_option")!;
     expect(tool.description.toLowerCase()).toContain("orphan");
@@ -161,7 +157,7 @@ describe("delete_picklist_option", () => {
   it("returns isError when allowDelete is false (default)", async () => {
     const server = createMockServer();
     const client = { post: vi.fn() } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server as any, { client, ...stdio() });
 
     const tool = server.tools.get("delete_picklist_option")!;
     expect(tool.description).toContain("disabled");

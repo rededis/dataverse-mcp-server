@@ -7,7 +7,7 @@ import {
   readServerConfig,
 } from "./config.js";
 import { listen as startListening } from "./listener.js";
-import { createReadServerFactory } from "./mcp.js";
+import { createServerFactory } from "./mcp.js";
 import { ConfigTokenVerifier } from "./tokens.js";
 
 // The HTTP server (ADR-0001 §1). Settings come from the environment only: no
@@ -59,8 +59,8 @@ const logError = (error: Error) =>
 
 const { entityPrefix, solutionName } = dataverse.settings;
 const app = createServerApp({
-  verifier: new ConfigTokenVerifier(serverConfig.config.tokens),
-  createServer: createReadServerFactory({
+  verifier: new ConfigTokenVerifier(serverConfig.config),
+  createServer: createServerFactory({
     client: createDataverseClient(dataverse.settings),
     entityPrefix,
     solutionName,

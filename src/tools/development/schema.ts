@@ -575,7 +575,9 @@ const ADD_ENTITY_KEY_INPUT = z.object({
 });
 
 export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
-  const { client, allowDelete = false } = deps;
+  const { client } = deps;
+  // stdio only: the development tools delete all or nothing.
+  const allowDelete = deps.permissions?.delete === "*";
   server.registerTool(
     "create_entity",
     {

@@ -42,6 +42,34 @@ export class DataverseApiError extends DataverseError {
   }
 }
 
+/** Who a request was made on behalf of: the token's name and its `actAs`. */
+export interface OnBehalfOf {
+  /** The token's name in the server config. */
+  name: string;
+  /** The Dataverse user's Microsoft Entra object id. */
+  objectId: string;
+}
+
+// prvActOnBehalfOfAnotherUser is missing from the application user's roles.
+const CANNOT_ACT_ON_BEHALF = "0x8004a110";
+
+/**
+ * Dataverse refused (403) a request made on behalf of a user. Its own message
+ * names a systemuserid, which neither the agent nor the operator can map to
+ * a token, so this one names the token and the user it acts as, and keeps
+ * Dataverse's text, which names the missing privilege.
+ */
+export class DataverseCallerDeniedError extends DataverseApiError {
+  constructor(request: RequestLine, body: string, caller: OnBehalfOf) {
+    super(403, request, body);
+    const detail = errorMessage(body) ?? body;
+    this.message =
+      this.code?.toLowerCase() === CANNOT_ACT_ON_BEHALF
+        ? `Dataverse refused to act on behalf of user ${caller.objectId} (token "${caller.name}"): the server's application user lacks the "Act on Behalf of Another User" privilege (prvActOnBehalfOfAnotherUser), which must be in a security role assigned to it directly, not through a team. Dataverse said: ${detail}`
+        : `Dataverse denied this call to user ${caller.objectId}, on whose behalf token "${caller.name}" acts. The user, and the server's application user, both need the privilege. Dataverse said: ${detail}`;
+  }
+}
+
 /** No complete response arrived within the per-request timeout. */
 export class DataverseTimeoutError extends DataverseError {
   readonly method: string;
@@ -113,6 +141,16 @@ function errorCode(body: string): string | undefined {
     const code = (JSON.parse(body) as { error?: { code?: unknown } }).error
       ?.code;
     return typeof code === "string" ? code : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function errorMessage(body: string): string | undefined {
+  try {
+    const message = (JSON.parse(body) as { error?: { message?: unknown } })
+      .error?.message;
+    return typeof message === "string" ? message : undefined;
   } catch {
     return undefined;
   }

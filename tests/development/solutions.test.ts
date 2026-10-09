@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { registerAllTools } from "../../src/tools/all.js";
-import { createMockServer } from "../helpers.js";
+import { createMockServer, stdio } from "../helpers.js";
 
 describe("list_solutions", () => {
   it("queries /solutions excluding managed by default", async () => {
@@ -8,7 +8,7 @@ describe("list_solutions", () => {
     const client = {
       get: vi.fn().mockResolvedValue({ value: [{ uniquename: "Default" }] }),
     } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server as any, { client, ...stdio() });
 
     const tool = server.tools.get("list_solutions");
     expect(tool).toBeDefined();
@@ -26,9 +26,11 @@ describe("list_solutions", () => {
   it("includes managed solutions when include_managed=true", async () => {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server as any, { client, ...stdio() });
 
-    await server.tools.get("list_solutions")!.handler({ include_managed: true });
+    await server.tools
+      .get("list_solutions")!
+      .handler({ include_managed: true });
     const url = client.get.mock.calls[0][0] as string;
     const qs = new URLSearchParams(url.slice(url.indexOf("?") + 1));
     expect(qs.get("$filter")).toBe("isvisible eq true");
@@ -47,7 +49,7 @@ describe("list_solutions", () => {
         })
         .mockResolvedValueOnce({ value: [{ uniquename: "B" }] }),
     } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server as any, { client, ...stdio() });
 
     const result = await server.tools.get("list_solutions")!.handler({});
     expect(client.get).toHaveBeenCalledTimes(2);
