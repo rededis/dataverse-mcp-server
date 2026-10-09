@@ -4,13 +4,15 @@
 // `/accounts(<id>)`.
 
 import type { DataverseClient } from "../../client.js";
+import type { Permissions } from "../permissions.js";
 import { escapeODataString } from "./odata.js";
 
 /** A plain entity set name; the server config holds its allowlists to it too. */
 export const ENTITY_SET_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 /** A record id, braces allowed. */
-export const GUID =
-  /^\{?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\}?$/;
+const GUID_BODY = "[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}";
+/** A record id: bare, or in a pair of braces. */
+export const GUID = new RegExp(`^(?:${GUID_BODY}|\\{${GUID_BODY}\\})$`);
 
 /** A logical name: of a table, a column, a key or a global choice. */
 const LOGICAL_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -67,17 +69,38 @@ function isActivityParty(party: unknown): boolean {
 }
 
 /**
- * Refuses related records nested in a create or update body (deep insert),
- * which would create rows in tables the allowlist does not name. A link set
- * with `<lookup>@odata.bind` and one URL passes: it fills a column of the
- * record being written. An array of URLs does not: on a one-to-many
- * relationship (`Account_Tasks@odata.bind`) Dataverse writes the lookup of
- * each existing record listed, which is an update to a table the allowlist
- * may not name. Activity parties pass.
+ * Refuses what a create or update body could do beyond writing its own record,
+ * unless the role allows that other operation for every entity set. Which tool
+ * carries the body does not matter:
+ *
+ * - a related record nested in the body (deep insert) creates a row in a table
+ *   the call does not name, so it needs create `"*"`. Its own body is checked
+ *   the same way;
+ * - an array of URLs under `<nav>@odata.bind` on a one-to-many relationship
+ *   (`Account_Tasks@odata.bind`) writes the lookup of each existing record
+ *   listed, so it needs update `"*"`.
+ *
+ * A link with one URL fills a column of the record being written and passes.
+ * Activity parties pass whatever the lists say.
  */
-export function assertNoNestedRecords(data: Record<string, unknown>): void {
+export function assertBodyWithin(
+  data: Record<string, unknown>,
+  permissions: Pick<Permissions, "create" | "update">,
+): void {
   for (const [key, value] of Object.entries(data)) {
     if (!isRecordLike(value)) continue;
+    if (
+      BIND.test(key) &&
+      Array.isArray(value) &&
+      value.every((url) => typeof url === "string")
+    ) {
+      if (permissions.update !== "*") {
+        throw new Error(
+          `Linking several records is not permitted for this token: '${key}' would rewrite the lookup of each record listed, which needs update on every table. Set the lookup from each of those records instead.`,
+        );
+      }
+      continue;
+    }
     if (
       ACTIVITY_PARTIES.test(key) &&
       Array.isArray(value) &&
@@ -85,9 +108,16 @@ export function assertNoNestedRecords(data: Record<string, unknown>): void {
     ) {
       continue;
     }
-    throw new Error(
-      `Nested or linked records are not permitted for this token: '${key}'. Create related records separately, and link them from the record that holds the lookup, with '<lookup>@odata.bind'.`,
-    );
+    if (permissions.create !== "*") {
+      throw new Error(
+        `Nested records are not permitted for this token: '${key}' would create records, which needs create on every table. Create related records separately, and link them with '<lookup>@odata.bind'.`,
+      );
+    }
+    for (const nested of Array.isArray(value) ? value : [value]) {
+      if (isRecordLike(nested) && !Array.isArray(nested)) {
+        assertBodyWithin(nested as Record<string, unknown>, permissions);
+      }
+    }
   }
 }
 

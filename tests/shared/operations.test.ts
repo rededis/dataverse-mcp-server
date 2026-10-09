@@ -58,6 +58,16 @@ describe("helpers", () => {
     );
   });
 
+  it("resolveBinding accepts a GUID bare or in a pair of braces, not in half a pair", () => {
+    expect(resolveBinding("leads", `{${GUID}}`)).toBe(true);
+    expect(() => resolveBinding("leads", `{${GUID}`)).toThrow(
+      /Invalid record id/,
+    );
+    expect(() => resolveBinding("leads", `${GUID}}`)).toThrow(
+      /Invalid record id/,
+    );
+  });
+
   it("resolveBinding rejects a non-GUID id", () => {
     expect(() => resolveBinding("leads", "not-a-guid")).toThrow(
       /Invalid record id/,

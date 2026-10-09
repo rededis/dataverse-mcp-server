@@ -29,10 +29,17 @@ was implemented, each in a review round after the previous fix:
 | `/code-review` | `PATCH /<set>(<id>)` without `If-Match` is an upsert | an update grant creates records |
 | Security review | A collection-valued `@odata.bind` on a one-to-many relationship writes the lookup of each existing record listed | `create: ["accounts"]` re-parents existing tasks or contacts |
 | Security review | Metadata tools put logical names into a quoted key in the path; escaping the quote does not stop `..` and `#` | a role with only `metadata-read` reads any table through `get_entity_schema` |
+| Copilot on PR #97 | The body check was skipped when the tool's **own** list was `*` | `create: "*"` with a restricted update re-parents existing records; `update: "*"` with a restricted create creates records by deep insert |
 
 The rule about collection-valued `@odata.bind` changed twice in the branch
 (refused, then allowed as "only many-to-many", then refused again). Nothing
 written down said which way it should go.
+
+The last row shows why the rule has to be stated in terms of operations, not
+tools. The first version tied the body check to the list of the tool's own
+operation; the issue, the code and a first draft of this record all said so,
+and the three reviews run on the branch inherited that framing. A reviewer
+that saw only the code found it.
 
 ## Decision
 
@@ -85,10 +92,16 @@ anyway, and the lookup would cost a request per new entity set.
 
 - `update_record` sends `If-Match: *`, so a missing record is a 404 and not a
   create.
-- When the create or update list is not `*`, the body may not carry related
-  records (deep insert) nor a collection-valued `@odata.bind`. A single-valued
-  `<lookup>@odata.bind`, which fills a column of the record being written,
-  passes.
+- A body may do another operation than its tool's, and is checked against
+  **that** operation's list, whichever tool carries it:
+  - a related record nested in the body (deep insert) creates a row, so it
+    needs create `*`; its own body is checked the same way;
+  - a collection-valued `@odata.bind` on a one-to-many relationship writes the
+    lookup of each existing record listed, so it needs update `*`.
+
+  A single-valued `<lookup>@odata.bind`, which fills a column of the record
+  being written, passes. Tests cover every combination of tool, create list
+  and update list.
 - **Exception: activity parties** (`<activity>_activity_parties`). They can
   only be written nested in their activity, and an email cannot be addressed
   without them. Each party must carry `participationtypemask` and otherwise
@@ -109,9 +122,10 @@ and `/whoami` are 404), and so do the allowlists.
   changelog: `update_record` no longer creates a missing record, and operation
   names in any namespace other than `Microsoft.Dynamics.CRM.` are refused. A
   logical name with a quote, which used to be escaped and sent, is refused.
-- A role with a restricted create or update list cannot associate records
-  many-to-many in the same call. It has to be done through a role with `*`, or
-  waits for an explicit rule (see Not decided).
+- A role whose update list is not `*` cannot link several records in one
+  call, many-to-many included; one whose create list is not `*` cannot create
+  related records in one call. Either is done by separate calls, or waits for
+  an explicit rule (see Not decided).
 - The server spends one metadata request per distinct entity set per process,
   plus one per call that names an unknown entity set.
 

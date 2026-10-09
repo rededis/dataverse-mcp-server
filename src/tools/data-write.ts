@@ -2,8 +2,8 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { allowsNothing, assertAllowed, NO_PERMISSIONS } from "./permissions.js";
 import {
+  assertBodyWithin,
   assertEntitySetName,
-  assertNoNestedRecords,
   assertRecordId,
 } from "./shared/paths.js";
 import type { ToolDeps } from "./types.js";
@@ -60,7 +60,7 @@ export function registerDataWriteTools(
       async ({ entity_set, data }) => {
         assertEntitySetName(entity_set);
         assertAllowed(permissions.create, entity_set, "create in");
-        if (permissions.create !== "*") assertNoNestedRecords(data);
+        assertBodyWithin(data, permissions);
         await entitySets?.assertExists(entity_set);
         const result = await client.post(`/${entity_set}`, data);
         return {
@@ -83,7 +83,7 @@ export function registerDataWriteTools(
         assertEntitySetName(entity_set);
         assertRecordId(id);
         assertAllowed(permissions.update, entity_set, "update in");
-        if (permissions.update !== "*") assertNoNestedRecords(data);
+        assertBodyWithin(data, permissions);
         await entitySets?.assertExists(entity_set);
         // Without If-Match, a PATCH to a missing id creates the record
         // (upsert), which an update allowlist must not grant.

@@ -200,7 +200,7 @@ describe("nested records (deep insert)", () => {
         },
       }),
     ).rejects.toThrow(
-      /Nested or linked records are not permitted for this token: 'regardingobjectid_account_email'/,
+      /Nested records are not permitted for this token: 'regardingobjectid_account_email'/,
     );
     expect(client.post).not.toHaveBeenCalled();
   });
@@ -227,7 +227,7 @@ describe("nested records (deep insert)", () => {
           ],
         },
       }),
-    ).rejects.toThrow(/Nested or linked records are not permitted/);
+    ).rejects.toThrow(/Nested records are not permitted/);
   });
 
   it.each([
@@ -251,7 +251,7 @@ describe("nested records (deep insert)", () => {
     const tools = writeTools({ create: ["emails"] });
     await expect(
       tools.get("create_record")!.handler({ entity_set: "emails", data }),
-    ).rejects.toThrow(/Nested or linked records are not permitted/);
+    ).rejects.toThrow(/Nested records are not permitted/);
   });
 
   it("lets a lookup of the new record through", async () => {
@@ -282,7 +282,7 @@ describe("nested records (deep insert)", () => {
         data: { name: "A", "Account_Tasks@odata.bind": [`/tasks(${GUID})`] },
       }),
     ).rejects.toThrow(
-      /Nested or linked records are not permitted for this token: 'Account_Tasks@odata.bind'/,
+      /Linking several records is not permitted for this token: 'Account_Tasks@odata.bind'/,
     );
     expect(client.post).not.toHaveBeenCalled();
   });
@@ -295,7 +295,7 @@ describe("nested records (deep insert)", () => {
         id: GUID,
         data: { regardingobjectid_account_email: { name: "New" } },
       }),
-    ).rejects.toThrow(/Nested or linked records are not permitted/);
+    ).rejects.toThrow(/Nested records are not permitted/);
   });
 
   it("allows nested records when the list allows any entity set", async () => {
@@ -331,5 +331,86 @@ describe("unknown entity sets", () => {
         .handler({ entity_set: "WinOpportunity", data: {} }),
     ).rejects.toThrow("Unknown entity set");
     expect(client.post).not.toHaveBeenCalled();
+  });
+});
+
+// A body can do another operation than its tool's: a nested record creates,
+// a list of links updates the records listed. Each is allowed only when the
+// role allows that other operation for every table, whichever tool carries
+// the body (#97 review).
+describe("what a body may do, by the other operation's list", () => {
+  const nested = {
+    contact_customer_accounts: [{ lastname: "New" }],
+  };
+  const links = {
+    "Account_Tasks@odata.bind": [`/tasks(${GUID})`],
+  };
+  const linksInsideNested = {
+    contact_customer_accounts: [
+      { lastname: "New", "contact_tasks@odata.bind": [`/tasks(${GUID})`] },
+    ],
+  };
+  const LISTS = ["*", ["accounts"]] as const;
+  const cases = [];
+  for (const tool of ["create_record", "update_record"] as const) {
+    for (const create of LISTS) {
+      for (const update of LISTS) {
+        cases.push(
+          {
+            tool,
+            create,
+            update,
+            body: "nested",
+            data: nested,
+            ok: create === "*",
+          },
+          {
+            tool,
+            create,
+            update,
+            body: "links",
+            data: links,
+            ok: update === "*",
+          },
+          {
+            tool,
+            create,
+            update,
+            body: "links inside nested",
+            data: linksInsideNested,
+            ok: create === "*" && update === "*",
+          },
+        );
+      }
+    }
+  }
+
+  it.each(
+    cases,
+  )("$tool with create $create and update $update: $body is allowed: $ok", async ({
+    tool,
+    create,
+    update,
+    data,
+    ok,
+  }) => {
+    const client = writingClient();
+    const tools = writeTools(
+      { create, update },
+      client as unknown as DataverseClient,
+    );
+    const call = tools
+      .get(tool)!
+      .handler({ entity_set: "accounts", id: GUID, data });
+    if (ok) {
+      await call;
+      expect(
+        tool === "create_record" ? client.post : client.patch,
+      ).toHaveBeenCalledOnce();
+    } else {
+      await expect(call).rejects.toThrow(/not permitted for this token/);
+      expect(client.post).not.toHaveBeenCalled();
+      expect(client.patch).not.toHaveBeenCalled();
+    }
   });
 });
