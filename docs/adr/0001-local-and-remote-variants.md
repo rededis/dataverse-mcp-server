@@ -362,6 +362,28 @@ Dataverse error text. Field values are not logged **by default**. The only
 exception is opt-in: an installation may name specific entity-set/field pairs
 in a config allowlist, and only those values are logged (#78).
 
+_Changed on 2026-10-09, before #78 was started._ The log records **no content
+at all**, so neither the masking of `$filter` literals nor the field allowlist
+above is built:
+
+- Everything a call carries and returns (its arguments: filters, bodies,
+  action and function parameters; its result: the records; Dataverse's error
+  text) is seen in full by whatever sits between the agent and the server: an
+  MCP gateway, a proxy, the agent's framework. An installation that wants
+  content logged logs it there, under its own retention and access rules.
+  The server does not know where its logs go, and what an installation
+  considers sensitive is policy (§2).
+- Masking would have meant parsing OData well enough never to miss a
+  literal, in `$filter`, in filters nested in `$expand` and in function
+  parameters: one miss puts personal data in the log. Not logging content
+  makes the log safe by construction instead of by correct parsing.
+- So the server logs what only it knows: who called after the token check
+  (token name, role, `actAs`), what was asked and how it ended (tool, entity
+  set, selected column names, record id, status, Dataverse error code), and
+  what happened inside (Dataverse request count, throttling and retries,
+  duration, record count). Never: tokens, secrets, argument or result
+  content, Dataverse error text. There is no flag to turn content on.
+
 ### 13. Two independent release lines
 
 - Tags `v*` publish the npm package (`release.yml`).
@@ -409,7 +431,6 @@ Not planned now. Each item names what would make it worth revisiting.
 | Pool of Dataverse application users | One application user's limits are the bottleneck. Extra users only spread the 5-minute limits and share the tenant's daily allowance. Microsoft's Product Terms forbid working "around any technical limitations"; whether a pool counts is unresolved ([E3](#e3-microsoft-dataverse-limits-and-licensing)), so check it first. |
 | Browser clients (`Origin` allowlist; CORS too for another origin) | A web page must call the server from the user's browser rather than through its backend (§7). Decide together with OAuth: a token from the config file would sit in the page. |
 | `structuredContent` / `outputSchema` | Programmatic consumers need a typed response contract. |
-| Excluding field-secured columns (`IsSecured`) from logs | Field value logging is enabled for an installation. |
 
 ## Evidence
 
