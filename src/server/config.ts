@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { readWholeNumber } from "../config.js";
-import type { Allowlist, Permissions } from "../tools/permissions.js";
+import type { Permissions } from "../tools/permissions.js";
 import type { ServerToolGroup } from "../tools/server-groups.js";
 import { OPERATION_NAME } from "../tools/shared/operations.js";
 import { ENTITY_SET_NAME } from "../tools/shared/paths.js";
@@ -53,33 +53,21 @@ export const ROLE_GROUPS = [
 // An Entra object id goes in a header as written: no braces.
 const ENTRA_OBJECT_ID = /^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
-const allowlist = (name: RegExp, what: string) =>
-  z
-    .array(
-      z.union([
-        z.literal("*"),
-        z.string().regex(name, `expected "*" or ${what}`),
-      ]),
-    )
-    .refine((list) => !list.includes("*") || list.length === 1, {
-      message: '"*" allows everything, so it must be the only entry',
-    });
+// Lists name what they allow; there is no "*" (ADR-0002 §3, §5). For an
+// operation it could not be told from a table (`invoke_function {name:
+// "accounts"}` is `GET /accounts`), and for an entity set it would hide what
+// the role may write.
+const names = (pattern: RegExp, what: string) =>
+  z.array(
+    z
+      .string()
+      .regex(pattern, `expected ${what} ("*" is not accepted: list the names)`),
+  );
 
-const ENTITY_SETS = allowlist(
-  ENTITY_SET_NAME,
-  "an entity set name, e.g. emails",
-);
-// No "*" for operations: an unbound name is sent as `/<name>`, and nothing
-// tells an operation from an entity set (`accounts`) or a metadata root
-// (`EntityDefinitions`), so "any operation" would also mean reading and
-// creating in any table (ADR-0002 §3).
-const OPERATIONS = z.array(
-  z
-    .string()
-    .regex(
-      OPERATION_NAME,
-      'expected an operation name without a namespace, e.g. SendEmail ("*" is not accepted: list the names)',
-    ),
+const ENTITY_SETS = names(ENTITY_SET_NAME, "an entity set name, e.g. emails");
+const OPERATIONS = names(
+  OPERATION_NAME,
+  "an operation name without a namespace, e.g. SendEmail",
 );
 
 const ROLE = z.strictObject({
@@ -124,9 +112,6 @@ const CONFIG = z.strictObject({
 
 type RoleInput = z.infer<typeof ROLE>;
 
-const asAllowlist = (list: string[] | undefined): Allowlist =>
-  list?.[0] === "*" ? "*" : (list ?? []);
-
 /**
  * A role's lists must agree with its groups: a list without its group grants
  * nothing, and a group without a list registers no tool. Either is a mistake
@@ -163,11 +148,11 @@ function toRole(role: RoleInput): Role {
   return {
     groups: role.groups,
     permissions: {
-      create: asAllowlist(role.dataWrite?.create),
-      update: asAllowlist(role.dataWrite?.update),
-      delete: asAllowlist(role.dataWrite?.delete),
-      actions: asAllowlist(role.actions),
-      functions: asAllowlist(role.functions),
+      create: role.dataWrite?.create ?? [],
+      update: role.dataWrite?.update ?? [],
+      delete: role.dataWrite?.delete ?? [],
+      actions: role.actions ?? [],
+      functions: role.functions ?? [],
     },
   };
 }

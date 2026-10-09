@@ -32,8 +32,8 @@ const SUPPORT: Role = {
 const EVERYTHING: Role = {
   groups: ["functions", "actions", "data-write", "data-read", "metadata-read"],
   permissions: {
-    create: "*",
-    update: "*",
+    create: ["accounts", "emails", "tasks"],
+    update: ["accounts", "tasks"],
     delete: ["tasks"],
     actions: ["SendEmail"],
     functions: ["WhoAmI"],

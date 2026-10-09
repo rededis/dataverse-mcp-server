@@ -4,7 +4,8 @@
 // not only when deciding what to register (ADR-0001 §9).
 
 /**
- * The names an operation may touch: `"*"` for any, or the exact names.
+ * The names an operation may touch: the exact names, or `"*"` for any. Only
+ * the stdio package uses `"*"`; the server config takes names (ADR-0002).
  * Dataverse matches entity set and operation names case-sensitively
  * (`/ACCOUNTS` and `/whoami` are 404), and so does this list.
  */

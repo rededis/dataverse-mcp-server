@@ -187,7 +187,7 @@ describe("readServerConfig: roles", () => {
           support,
           writer: {
             groups: ["data-read", "data-write", "functions"],
-            dataWrite: { create: ["*"], update: ["*"] },
+            dataWrite: { create: ["tasks"], update: ["tasks", "accounts"] },
             functions: ["RetrieveTotalRecordCount"],
           },
         },
@@ -213,8 +213,8 @@ describe("readServerConfig: roles", () => {
             groups: ["data-read", "data-write", "functions"],
             permissions: {
               ...NO_PERMISSIONS,
-              create: "*",
-              update: "*",
+              create: ["tasks"],
+              update: ["tasks", "accounts"],
               functions: ["RetrieveTotalRecordCount"],
             },
           },
@@ -285,12 +285,9 @@ describe("readServerConfig: roles", () => {
       /the "functions" group needs entries in functions/,
     ],
     [
-      '"*" next to a name',
-      withRole({
-        groups: ["data-write"],
-        dataWrite: { create: ["*", "emails"] },
-      }),
-      /must be the only entry/,
+      '"*" for entity sets',
+      withRole({ groups: ["data-write"], dataWrite: { create: ["*"] } }),
+      /"\*" is not accepted: list the names/,
     ],
     [
       "an entity set that is not a plain name",

@@ -82,7 +82,7 @@ that was checked, never from the original argument.
 An unbound call goes to `/<name>`, and from the name alone an operation cannot
 be told from an entity set (`accounts`) or a metadata root
 (`EntityDefinitions`). So **the server config takes action and function names
-only, never `"*"`**: each name is one the operator chose to expose. The
+only, never `"*"`** (§7): each name is one the operator chose to expose. The
 Dataverse metadata could tell them apart (`ActionImport`/`FunctionImport` in
 `$metadata`), but that is a document of several megabytes for a convenience no
 role needs; SDK message names (`sdkmessages`) do not match Web API operation
@@ -113,6 +113,10 @@ anyway, and the lookup would cost a request per new entity set.
   A single-valued `<lookup>@odata.bind`, which fills a column of the record
   being written, passes. Tests cover every combination of tool, create list
   and update list.
+
+  The server config takes no `"*"` (§7), so on the server nested records and
+  collection-valued links are always refused, activity parties aside. Only the
+  stdio package, which grants `"*"` for both, lets them through.
 - **Exception: activity parties** (`<activity>_activity_parties`). They can
   only be written nested in their activity, and an email cannot be addressed
   without them. Each party must carry `participationtypemask` and otherwise
@@ -124,6 +128,15 @@ anyway, and the lookup would cost a request per new entity set.
 Dataverse matches entity set and operation names case-sensitively (`/ACCOUNTS`
 and `/whoami` are 404), and so do the allowlists.
 
+### 7. The server config names what it allows
+
+No list in the server config accepts `"*"`: entity sets for create, update
+and delete, actions and functions are all listed by name. For operations,
+`"*"` cannot be made safe (§3). For entity sets it would be safe as written,
+but it hides what a role may write, and it is what rule 5 would turn into
+"may also create or update through any body". Listing the names is the price,
+and no role has needed more. `"*"` stays in the code for the stdio package.
+
 ## Consequences
 
 - A new tool that builds a path must use the identifier checks of rule 1; the
@@ -133,10 +146,10 @@ and `/whoami` are 404), and so do the allowlists.
   changelog: `update_record` no longer creates a missing record, and operation
   names in any namespace other than `Microsoft.Dynamics.CRM.` are refused. A
   logical name with a quote, which used to be escaped and sent, is refused.
-- A role whose update list is not `*` cannot link several records in one
-  call, many-to-many included; one whose create list is not `*` cannot create
-  related records in one call. Either is done by separate calls, or waits for
-  an explicit rule (see Not decided).
+- On the server, no role can link several records in one call, many-to-many
+  included, nor create related records in one call: both are done by separate
+  calls, or wait for an explicit rule (see Not decided).
+- A role lists every table it may write and every operation it may call.
 - The server spends one metadata request per distinct entity set per process,
   plus one per call that names an unknown entity set.
 

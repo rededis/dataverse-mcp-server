@@ -70,7 +70,8 @@ function isActivityParty(party: unknown): boolean {
 
 /**
  * Refuses what a create or update body could do beyond writing its own record,
- * unless the role allows that other operation for every entity set. Which tool
+ * unless that other operation is allowed for every entity set, which only the
+ * stdio package grants: on the server these are always refused. Which tool
  * carries the body does not matter:
  *
  * - a related record nested in the body (deep insert) creates a row in a table
