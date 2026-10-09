@@ -16,7 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `entity_set` and `id` are checked before they go into the request URL, in `query_records`, `get_record`, `create_record`, `update_record`, `delete_record` and the bound forms of `invoke_action` and `invoke_function`. An entity set must be a plain name and an id a GUID. Before, an `id` such as `<guid>)/../accounts(<guid>` reached a different table than the one named (#77).
+- Tool arguments can no longer change which resource a request reaches. Before, an `id` such as `<guid>)/../accounts(<guid>` reached a different table than the one named, and an `entity_logical_name` such as `/../contacts?$top=5#` turned `get_entity_schema` into a read of `contacts` (#77).
+  - `entity_set` must be a plain name and `id` a GUID, in `query_records`, `get_record`, `create_record`, `update_record`, `delete_record` and the bound forms of `invoke_action` and `invoke_function`.
+  - Logical names must be plain names in `get_entity_schema`, `get_picklist_options` and `list_entity_keys`. A name with a quote, which used to be escaped and sent, is now refused.
+  - Every request path is checked once more before it is sent: a `.` or `..` segment, an encoded dot, a backslash, a `#` or a control character before the query string is refused, whichever tool built the path.
 
 ## [0.9.0] - 2026-10-02
 

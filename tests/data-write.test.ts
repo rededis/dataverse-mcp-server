@@ -200,7 +200,7 @@ describe("nested records (deep insert)", () => {
         },
       }),
     ).rejects.toThrow(
-      /Nested records are not permitted for this token: 'regardingobjectid_account_email'/,
+      /Nested or linked records are not permitted for this token: 'regardingobjectid_account_email'/,
     );
     expect(client.post).not.toHaveBeenCalled();
   });
@@ -227,7 +227,7 @@ describe("nested records (deep insert)", () => {
           ],
         },
       }),
-    ).rejects.toThrow(/Nested records are not permitted/);
+    ).rejects.toThrow(/Nested or linked records are not permitted/);
   });
 
   it.each([
@@ -251,10 +251,10 @@ describe("nested records (deep insert)", () => {
     const tools = writeTools({ create: ["emails"] });
     await expect(
       tools.get("create_record")!.handler({ entity_set: "emails", data }),
-    ).rejects.toThrow(/Nested records are not permitted/);
+    ).rejects.toThrow(/Nested or linked records are not permitted/);
   });
 
-  it("lets links to existing records through, one or many", async () => {
+  it("lets a lookup of the new record through", async () => {
     const client = writingClient();
     const tools = writeTools(
       { create: ["emails"] },
@@ -262,10 +262,29 @@ describe("nested records (deep insert)", () => {
     );
     const data = {
       "regardingobjectid_account_email@odata.bind": `/accounts(${GUID})`,
-      "new_tags@odata.bind": [`/new_tags(${GUID})`],
     };
     await tools.get("create_record")!.handler({ entity_set: "emails", data });
     expect(client.post).toHaveBeenCalledWith("/emails", data);
+  });
+
+  // On a one-to-many relationship Dataverse writes the lookup of each listed
+  // record: creating an account would re-parent existing tasks, a table the
+  // role may not update.
+  it("refuses a link that would rewrite existing records", async () => {
+    const client = writingClient();
+    const tools = writeTools(
+      { create: ["accounts"] },
+      client as unknown as DataverseClient,
+    );
+    await expect(
+      tools.get("create_record")!.handler({
+        entity_set: "accounts",
+        data: { name: "A", "Account_Tasks@odata.bind": [`/tasks(${GUID})`] },
+      }),
+    ).rejects.toThrow(
+      /Nested or linked records are not permitted for this token: 'Account_Tasks@odata.bind'/,
+    );
+    expect(client.post).not.toHaveBeenCalled();
   });
 
   it("checks updates the same way", async () => {
@@ -276,7 +295,7 @@ describe("nested records (deep insert)", () => {
         id: GUID,
         data: { regardingobjectid_account_email: { name: "New" } },
       }),
-    ).rejects.toThrow(/Nested records are not permitted/);
+    ).rejects.toThrow(/Nested or linked records are not permitted/);
   });
 
   it("allows nested records when the list allows any entity set", async () => {

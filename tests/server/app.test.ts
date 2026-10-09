@@ -100,6 +100,7 @@ function createApp() {
           },
           { name: "sam", sha256: sha256("sam-token"), role: "support" },
           { name: "erin", sha256: sha256("erin-token"), role: "everything" },
+          { name: "mona", sha256: sha256("mona-token"), role: "schema" },
           {
             name: "dave",
             sha256: sha256("dave-token"),
@@ -107,7 +108,12 @@ function createApp() {
             actAs: DAVE,
           },
         ],
-        { reader: READER, support: SUPPORT, everything: EVERYTHING },
+        {
+          reader: READER,
+          support: SUPPORT,
+          everything: EVERYTHING,
+          schema: { groups: ["metadata-read"], permissions: NO_PERMISSIONS },
+        },
       ),
     ),
     createServer: createServerFactory({
@@ -502,6 +508,21 @@ describe("roles", () => {
     ];
     expect(results.map((r) => r.isError)).toEqual([true, true, false]);
     expect(requests).toEqual([{ method: "DELETE", path: `/tasks(${GUID})` }]);
+  });
+
+  // fetch resolves `..` and drops what follows `#`, so this name used to
+  // turn get_entity_schema into GET /contacts for a role that may not read
+  // data.
+  it("keeps a metadata-only role from reading rows through a metadata tool", async () => {
+    expect(await toolNames("mona-token")).not.toContain("query_records");
+    const result = await call("mona-token", "get_entity_schema", {
+      entity_logical_name: "/../contacts?$select=fullname&$top=5#",
+    });
+    expect(result).toEqual({
+      isError: true,
+      text: expect.stringContaining("Invalid entity logical name"),
+    });
+    expect(requests).toEqual([]);
   });
 
   it("keeps query_records from calling a function, even with every group", async () => {

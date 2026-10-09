@@ -12,6 +12,22 @@ export const ENTITY_SET_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 export const GUID =
   /^\{?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\}?$/;
 
+/** A logical name: of a table, a column, a key or a global choice. */
+const LOGICAL_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * The metadata tools put logical names in the path, inside a quoted key
+ * (`EntityDefinitions(LogicalName='…')`). Escaping the quote does not keep a
+ * name like `/../contacts?…#` in there: fetch resolves the `..` first.
+ */
+export function assertLogicalName(name: string, what: string): void {
+  if (!LOGICAL_NAME.test(name)) {
+    throw new Error(
+      `Invalid ${what}: '${name}'. Use the logical name, e.g. 'account'.`,
+    );
+  }
+}
+
 export function assertEntitySetName(name: string): void {
   if (!ENTITY_SET_NAME.test(name)) {
     throw new Error(
@@ -52,20 +68,16 @@ function isActivityParty(party: unknown): boolean {
 
 /**
  * Refuses related records nested in a create or update body (deep insert),
- * which would create rows in tables the allowlist does not name. Links to
- * existing records pass: `<lookup>@odata.bind` with one URL, or with an array
- * of them for a many-to-many relationship. Activity parties pass too.
+ * which would create rows in tables the allowlist does not name. A link set
+ * with `<lookup>@odata.bind` and one URL passes: it fills a column of the
+ * record being written. An array of URLs does not: on a one-to-many
+ * relationship (`Account_Tasks@odata.bind`) Dataverse writes the lookup of
+ * each existing record listed, which is an update to a table the allowlist
+ * may not name. Activity parties pass.
  */
 export function assertNoNestedRecords(data: Record<string, unknown>): void {
   for (const [key, value] of Object.entries(data)) {
     if (!isRecordLike(value)) continue;
-    if (
-      BIND.test(key) &&
-      Array.isArray(value) &&
-      value.every((url) => typeof url === "string")
-    ) {
-      continue;
-    }
     if (
       ACTIVITY_PARTIES.test(key) &&
       Array.isArray(value) &&
@@ -74,7 +86,7 @@ export function assertNoNestedRecords(data: Record<string, unknown>): void {
       continue;
     }
     throw new Error(
-      `Nested records are not permitted for this token: '${key}'. Create related records separately, and link them with '<lookup>@odata.bind'.`,
+      `Nested or linked records are not permitted for this token: '${key}'. Create related records separately, and link them from the record that holds the lookup, with '<lookup>@odata.bind'.`,
     );
   }
 }

@@ -619,18 +619,20 @@ describe("get_entity_schema", () => {
     ).rejects.toThrow(/404/);
   });
 
-  it("escapes single quotes in the entity logical name on both requests", async () => {
+  // Escaping the quote is not enough: fetch resolves the `..` and drops the
+  // rest after `#`, so this name used to read /contacts.
+  it.each([
+    "/../contacts?$select=fullname&$top=5#",
+    "o'brien",
+  ])("refuses the name %j before any request", async (entity_logical_name) => {
     const server = createMockServer();
     const client = schemaClient([]);
     registerAllTools(server as any, { client, ...stdio() });
 
-    await server.tools
-      .get("get_entity_schema")!
-      .handler({ entity_logical_name: "o'brien" });
-
-    for (const call of client.get.mock.calls) {
-      expect(call[0] as string).toContain("LogicalName='o''brien'");
-    }
+    await expect(
+      server.tools.get("get_entity_schema")!.handler({ entity_logical_name }),
+    ).rejects.toThrow(/Invalid entity logical name/);
+    expect(client.get).not.toHaveBeenCalled();
   });
 });
 
@@ -1081,16 +1083,39 @@ describe("list_entity_keys", () => {
     ).rejects.toThrow(/Entity not found: missing_table/);
   });
 
-  it("escapes single quotes in entity name (OData injection)", async () => {
+  it("refuses a name that is not a logical name (path traversal)", async () => {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
     registerAllTools(server as any, { client, ...stdio() });
 
-    await server.tools.get("list_entity_keys")!.handler({
-      entity_logical_name: "weird'name",
-    });
-    expect(client.get).toHaveBeenCalledWith(
-      "/EntityDefinitions(LogicalName='weird''name')/Keys",
-    );
+    await expect(
+      server.tools.get("list_entity_keys")!.handler({
+        entity_logical_name: "/../accounts#",
+      }),
+    ).rejects.toThrow(/Invalid entity logical name/);
+    expect(client.get).not.toHaveBeenCalled();
+  });
+});
+
+describe("get_picklist_options names", () => {
+  it.each([
+    [{ option_set_name: "/../accounts#" }, /Invalid option set name/],
+    [
+      { entity_logical_name: "account", attribute_logical_name: "x/../../y" },
+      /Invalid attribute logical name/,
+    ],
+    [
+      { entity_logical_name: "/../a#", attribute_logical_name: "b" },
+      /Invalid entity logical name/,
+    ],
+  ])("refuses %j before any request", async (params, error) => {
+    const server = createMockServer();
+    const client = { get: vi.fn() } as any;
+    registerAllTools(server as any, { client, ...stdio() });
+
+    await expect(
+      server.tools.get("get_picklist_options")!.handler(params),
+    ).rejects.toThrow(error);
+    expect(client.get).not.toHaveBeenCalled();
   });
 });

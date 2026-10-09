@@ -21,6 +21,30 @@ export interface DataverseClientOptions {
   caller?: OnBehalfOf;
 }
 
+// What fetch would resolve or cut off in the path, so that it addressed
+// another resource than the one built: a `.` or `..` segment, encoded dots,
+// a backslash (a `/` to the URL parser), a fragment, and control characters,
+// tabs and newlines included, which the parser deletes (`.\t.` becomes `..`).
+// Only the part before `?` is checked: a query may hold such text as data.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: they are what this refuses.
+const UNSAFE_PATH = /(^|\/)\.{1,2}(\/|$)|%2e|\\|#|[\x00-\x1f\x7f]/i;
+
+/**
+ * The last line of defence against a tool argument that changes which
+ * resource a request reaches (`/EntityDefinitions(LogicalName='/../contacts`).
+ * Tools check their arguments first, with messages that say what is wrong;
+ * this catches the tool that forgot. Absolute URLs are Dataverse's own
+ * (`@odata.nextLink`) and pass.
+ */
+function assertPathStaysPut(path: string): void {
+  const beforeQuery = path.split("?", 1)[0];
+  if (UNSAFE_PATH.test(beforeQuery)) {
+    throw new DataverseError(
+      `Refused a request path that would reach another resource: ${beforeQuery}`,
+    );
+  }
+}
+
 export class DataverseClient {
   private baseUrl: string;
   private executor: RequestExecutor;
@@ -56,6 +80,7 @@ export class DataverseClient {
     path: string,
     options: DataverseRequestOptions = {},
   ): Promise<unknown> {
+    if (!path.startsWith("http")) assertPathStaysPut(path);
     const token = await this.auth.getToken();
     const url = path.startsWith("http") ? path : `${this.baseUrl}${path}`;
     const method = options.method || "GET";

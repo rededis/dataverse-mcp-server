@@ -312,3 +312,56 @@ describe("DataverseClient on behalf of a user", () => {
     expect(error).toBeInstanceOf(DataverseApiError);
   });
 });
+
+describe("DataverseClient request paths", () => {
+  function setup() {
+    const requests: HttpRequest[] = [];
+    const executor: RequestExecutor = {
+      execute: async (request) => {
+        requests.push(request);
+        return { status: 200, headers: new Headers(), body: "{}" };
+      },
+    };
+    const auth = new DataverseAuth(
+      "t",
+      "c",
+      "s",
+      "https://org.crm.dynamics.com",
+    );
+    vi.spyOn(auth, "getToken").mockResolvedValue("t");
+    const client = new DataverseClient(auth, "https://org.crm.dynamics.com", {
+      executor,
+    });
+    return { client, requests };
+  }
+
+  // Each of these would reach another resource than the one the path names,
+  // whichever tool built it.
+  it.each([
+    "/EntityDefinitions(LogicalName='/../contacts?$top=5#')/Attributes",
+    "/emails(1)/%2e%2e/accounts",
+    "/emails(1)/.%2E/accounts",
+    "/emails/./x",
+    "/emails\\..\\accounts",
+    "/accounts#x",
+    "/emails/.\t./accounts",
+    "/emails/.\n./accounts",
+  ])("refuses %j without sending it", async (path) => {
+    const { client, requests } = setup();
+    await expect(client.get(path)).rejects.toThrow(
+      /Refused a request path that would reach another resource/,
+    );
+    expect(requests).toEqual([]);
+  });
+
+  it.each([
+    "/accounts?$filter=name eq 'a..b' and contains(x,'#')",
+    "/Microsoft.Dynamics.CRM.WhoAmI",
+    "/EntityDefinitions(LogicalName='account')/Attributes/Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
+    "https://org.crm.dynamics.com/api/data/v9.2/accounts?$skiptoken=%3Ccookie%20pagenumber=%222%22/%3E",
+  ])("sends %j", async (path) => {
+    const { client, requests } = setup();
+    await client.get(path);
+    expect(requests).toHaveLength(1);
+  });
+});
