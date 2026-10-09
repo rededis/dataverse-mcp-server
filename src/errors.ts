@@ -6,8 +6,9 @@
 // Logging (ADR-0001 §12): `status`, `code`, `method`, `reason`,
 // `retryAfterMs` and the class name are safe to log. `message` and `url` are
 // not: messages carry raw Dataverse and Entra response text, and URLs carry
-// `$filter` literals unmasked. DataverseBusyError is the exception: its
-// message is written here and carries neither.
+// the call's `$filter` and other arguments, which the log never records.
+// DataverseBusyError is the exception: its message is written here and
+// carries neither.
 
 import type { HttpRequest } from "./http.js";
 
