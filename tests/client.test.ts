@@ -240,6 +240,39 @@ describe("DataverseClient on behalf of a user", () => {
     expect(requests[1].headers).not.toHaveProperty("CallerObjectId");
   });
 
+  // No header passed to request() may change who makes the request: not the
+  // user acted for, not the token, and not a second, legacy caller header.
+  it.each([
+    "CallerObjectId",
+    "callerobjectid",
+    "MSCRMCallerID",
+    "mscrmcallerid",
+    "Authorization",
+    "authorization",
+  ])("refuses a %s header from the caller of request()", async (name) => {
+    const { base, requests } = setup();
+    for (const client of [base, base.onBehalfOf(caller)]) {
+      await expect(
+        client.request("/WhoAmI", {
+          headers: { [name]: "33333333-3333-3333-3333-333333333333" },
+        }),
+      ).rejects.toThrow(`Refused a request that sets who makes it: ${name}`);
+    }
+    expect(requests).toEqual([]);
+  });
+
+  it("still sends the headers a tool may set", async () => {
+    const { base, requests } = setup();
+    await base
+      .onBehalfOf(caller)
+      .patch("/accounts(1)", {}, { "If-Match": "*" });
+    expect(requests[0].headers).toMatchObject({
+      "If-Match": "*",
+      CallerObjectId: USER,
+      Authorization: "Bearer t",
+    });
+  });
+
   it("shares the token source and executor with the base client", async () => {
     const { base, requests, getToken } = setup();
     await base.onBehalfOf(caller).get("/WhoAmI");

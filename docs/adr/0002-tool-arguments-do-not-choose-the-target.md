@@ -72,6 +72,12 @@ URLs pass: they are Dataverse's own (`@odata.nextLink`).
 
 This is a backstop for a tool that forgets rule 1, not a replacement for it.
 
+Likewise for who makes the request: the client alone sets `Authorization`
+and `CallerObjectId`, after any header a tool passes, and refuses a request
+whose own headers name `Authorization`, `CallerObjectId` or `MSCRMCallerID`
+in any letter case. No tool passes caller-controlled headers today; this keeps
+`onBehalfOf()` true for the tool that one day does.
+
 ### 3. Operation names are normalized before they are checked
 
 An action or function name is reduced to its bare form: exactly the

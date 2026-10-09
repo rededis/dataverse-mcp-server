@@ -45,6 +45,27 @@ function assertPathStaysPut(path: string): void {
   }
 }
 
+// The headers that say who makes a request. Only the client sets them, from
+// its token and its caller: a header passed to request() must not replace
+// them, nor add MSCRMCallerID next to CallerObjectId. Header names are
+// case-insensitive, so they are compared in lower case.
+const IDENTITY_HEADERS = new Set([
+  "authorization",
+  "callerobjectid",
+  "mscrmcallerid",
+]);
+
+function assertNoIdentityHeaders(headers: Record<string, string>): void {
+  const found = Object.keys(headers).filter((name) =>
+    IDENTITY_HEADERS.has(name.toLowerCase()),
+  );
+  if (found.length > 0) {
+    throw new DataverseError(
+      `Refused a request that sets who makes it: ${found.join(", ")}`,
+    );
+  }
+}
+
 export class DataverseClient {
   private baseUrl: string;
   private executor: RequestExecutor;
@@ -81,19 +102,21 @@ export class DataverseClient {
     options: DataverseRequestOptions = {},
   ): Promise<unknown> {
     if (!path.startsWith("http")) assertPathStaysPut(path);
+    assertNoIdentityHeaders(options.headers ?? {});
     const token = await this.auth.getToken();
     const url = path.startsWith("http") ? path : `${this.baseUrl}${path}`;
     const method = options.method || "GET";
 
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${token}`,
       "OData-Version": "4.0",
       "OData-MaxVersion": "4.0",
       Accept: "application/json",
+      ...options.headers,
+      // Last, so that nothing above can stand in for them.
+      Authorization: `Bearer ${token}`,
       // Microsoft's preferred header; MSCRMCallerID with a systemuserid is
       // the legacy one.
       ...(this.caller && { CallerObjectId: this.caller.objectId }),
-      ...options.headers,
     };
 
     if (options.body !== undefined) {
