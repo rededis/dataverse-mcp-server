@@ -35,8 +35,8 @@ const EVERYTHING: Role = {
     create: "*",
     update: "*",
     delete: ["tasks"],
-    actions: "*",
-    functions: "*",
+    actions: ["SendEmail"],
+    functions: ["WhoAmI"],
   },
 };
 

@@ -301,6 +301,16 @@ describe("readServerConfig: roles", () => {
       /an entity set name/,
     ],
     [
+      '"*" for actions',
+      withRole({ groups: ["actions"], actions: ["*"] }),
+      /"\*" is not accepted: list the names/,
+    ],
+    [
+      '"*" for functions',
+      withRole({ groups: ["functions"], functions: ["*"] }),
+      /"\*" is not accepted: list the names/,
+    ],
+    [
       "a namespaced action name",
       withRole({
         groups: ["actions"],

@@ -17,7 +17,11 @@ export interface Permissions {
   update: Allowlist;
   /** Entity sets `delete_record` may delete from; `"*"` also enables the development delete tools. */
   delete: Allowlist;
-  /** Action names `invoke_action` may call, without the `Microsoft.Dynamics.CRM.` namespace. */
+  /**
+   * Action names `invoke_action` may call, without the `Microsoft.Dynamics.CRM.`
+   * namespace. `"*"` is for stdio only: the server config takes names
+   * (ADR-0002 §3).
+   */
   actions: Allowlist;
   /** Function names `invoke_function` may call, likewise. */
   functions: Allowlist;

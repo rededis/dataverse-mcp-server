@@ -69,9 +69,17 @@ const ENTITY_SETS = allowlist(
   ENTITY_SET_NAME,
   "an entity set name, e.g. emails",
 );
-const OPERATIONS = allowlist(
-  OPERATION_NAME,
-  "an operation name without a namespace, e.g. SendEmail",
+// No "*" for operations: an unbound name is sent as `/<name>`, and nothing
+// tells an operation from an entity set (`accounts`) or a metadata root
+// (`EntityDefinitions`), so "any operation" would also mean reading and
+// creating in any table (ADR-0002 §3).
+const OPERATIONS = z.array(
+  z
+    .string()
+    .regex(
+      OPERATION_NAME,
+      'expected an operation name without a namespace, e.g. SendEmail ("*" is not accepted: list the names)',
+    ),
 );
 
 const ROLE = z.strictObject({

@@ -29,6 +29,7 @@ was implemented, each in a review round after the previous fix:
 | `/code-review` | `PATCH /<set>(<id>)` without `If-Match` is an upsert | an update grant creates records |
 | Security review | A collection-valued `@odata.bind` on a one-to-many relationship writes the lookup of each existing record listed | `create: ["accounts"]` re-parents existing tasks or contacts |
 | Security review | Metadata tools put logical names into a quoted key in the path; escaping the quote does not stop `..` and `#` | a role with only `metadata-read` reads any table through `get_entity_schema` |
+| Blind security review | An unbound operation name is sent as `/<name>`, and nothing checked it named an operation; the server config accepted `"*"` for actions and functions | `actions: "*"` creates in any table (`invoke_action {name:"accounts"}` → `POST /accounts`, confirmed on the dev org) or a table (`EntityDefinitions`); `functions: "*"` reads any table |
 | Copilot on PR #97 | The body check was skipped when the tool's **own** list was `*` | `create: "*"` with a restricted update re-parents existing records; `update: "*"` with a restricted create creates records by deep insert |
 
 The rule about collection-valued `@odata.bind` changed twice in the branch
@@ -77,6 +78,16 @@ An action or function name is reduced to its bare form: exactly the
 `Microsoft.Dynamics.CRM.` prefix is stripped, and any other dot is refused. The
 allowlist is matched against the bare name, and the URL is built from the name
 that was checked, never from the original argument.
+
+An unbound call goes to `/<name>`, and from the name alone an operation cannot
+be told from an entity set (`accounts`) or a metadata root
+(`EntityDefinitions`). So **the server config takes action and function names
+only, never `"*"`**: each name is one the operator chose to expose. The
+Dataverse metadata could tell them apart (`ActionImport`/`FunctionImport` in
+`$metadata`), but that is a document of several megabytes for a convenience no
+role needs; SDK message names (`sdkmessages`) do not match Web API operation
+names (`SendEmail` is the `Send` message), so they cannot serve either. The
+stdio package keeps `"*"`: it grants every table anyway.
 
 ### 4. On the server, an entity set must exist
 
