@@ -114,6 +114,26 @@ describe("allowlists", () => {
   });
 });
 
+describe("update_record", () => {
+  // A PATCH to a missing id would create the record (upsert), so an update
+  // grant would also be a create grant.
+  it("updates only an existing record", async () => {
+    const client = writingClient();
+    const tools = writeTools(
+      { update: ["accounts"] },
+      client as unknown as DataverseClient,
+    );
+    await tools
+      .get("update_record")!
+      .handler({ entity_set: "accounts", id: GUID, data: { name: "A" } });
+    expect(client.patch).toHaveBeenCalledWith(
+      `/accounts(${GUID})`,
+      { name: "A" },
+      { "If-Match": "*" },
+    );
+  });
+});
+
 describe("path arguments", () => {
   // fetch resolves `..`, so this id would reach /accounts(<id>) through a
   // list that names only emails.
@@ -208,6 +228,44 @@ describe("nested records (deep insert)", () => {
         },
       }),
     ).rejects.toThrow(/Nested records are not permitted/);
+  });
+
+  it.each([
+    [
+      "a custom relationship that only ends like activity parties",
+      { new_x_activity_parties: [{ name: "New account" }] },
+    ],
+    [
+      "a party without a participation type",
+      {
+        email_activity_parties: [
+          { "parentaccountid@odata.bind": `/accounts(${GUID})` },
+        ],
+      },
+    ],
+    [
+      "a party with another field",
+      { email_activity_parties: [{ participationtypemask: 2, name: "X" }] },
+    ],
+  ])("refuses %s", async (_, data) => {
+    const tools = writeTools({ create: ["emails"] });
+    await expect(
+      tools.get("create_record")!.handler({ entity_set: "emails", data }),
+    ).rejects.toThrow(/Nested records are not permitted/);
+  });
+
+  it("lets links to existing records through, one or many", async () => {
+    const client = writingClient();
+    const tools = writeTools(
+      { create: ["emails"] },
+      client as unknown as DataverseClient,
+    );
+    const data = {
+      "regardingobjectid_account_email@odata.bind": `/accounts(${GUID})`,
+      "new_tags@odata.bind": [`/new_tags(${GUID})`],
+    };
+    await tools.get("create_record")!.handler({ entity_set: "emails", data });
+    expect(client.post).toHaveBeenCalledWith("/emails", data);
   });
 
   it("checks updates the same way", async () => {

@@ -33,9 +33,11 @@ export class DataverseApiError extends DataverseError {
     readonly status: number,
     request: RequestLine,
     body: string,
+    /** Replaces the default text; set here so `stack` carries it too. */
+    message?: string,
   ) {
     // Same text as before typed errors existed; callers may still show it.
-    super(`Dataverse API error (${status}): ${body}`);
+    super(message ?? `Dataverse API error (${status}): ${body}`);
     this.method = request.method;
     this.url = request.url;
     this.code = errorField(body, "code");
@@ -65,19 +67,20 @@ const PRIVILEGE_DENIED = "0x80040220";
  */
 export class DataverseCallerDeniedError extends DataverseApiError {
   constructor(request: RequestLine, body: string, caller: OnBehalfOf) {
-    super(403, request, body);
-    const who = `user ${caller.objectId}, on whose behalf token "${caller.name}" acts`;
-    const said = `Dataverse said: ${errorField(body, "message") ?? body}`;
-    switch (this.code?.toLowerCase()) {
-      case CANNOT_ACT_ON_BEHALF:
-        this.message = `Dataverse refused to act for ${who}: the server's application user lacks the "Act on Behalf of Another User" privilege (prvActOnBehalfOfAnotherUser), which must be in a security role assigned to it directly, not through a team. ${said}`;
-        break;
-      case PRIVILEGE_DENIED:
-        this.message = `Dataverse denied this call for lack of a privilege, to ${who}. The user, and the server's application user, both need it. ${said}`;
-        break;
-      default:
-        this.message = `Dataverse refused this call made for ${who}. ${said}`;
-    }
+    super(403, request, body, deniedMessage(body, caller));
+  }
+}
+
+function deniedMessage(body: string, caller: OnBehalfOf): string {
+  const who = `user ${caller.objectId}, on whose behalf token "${caller.name}" acts`;
+  const said = `Dataverse said: ${errorField(body, "message") ?? body}`;
+  switch (errorField(body, "code")?.toLowerCase()) {
+    case CANNOT_ACT_ON_BEHALF:
+      return `Dataverse refused to act for ${who}: the server's application user lacks the "Act on Behalf of Another User" privilege (prvActOnBehalfOfAnotherUser), which must be in a security role assigned to it directly, not through a team. ${said}`;
+    case PRIVILEGE_DENIED:
+      return `Dataverse denied this call for lack of a privilege, to ${who}. The user, and the server's application user, both need it. ${said}`;
+    default:
+      return `Dataverse refused this call made for ${who}. ${said}`;
   }
 }
 

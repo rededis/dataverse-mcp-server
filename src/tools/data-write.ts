@@ -85,7 +85,9 @@ export function registerDataWriteTools(
         assertAllowed(permissions.update, entity_set, "update in");
         if (permissions.update !== "*") assertNoNestedRecords(data);
         await entitySets?.assertExists(entity_set);
-        await client.patch(`/${entity_set}(${id})`, data);
+        // Without If-Match, a PATCH to a missing id creates the record
+        // (upsert), which an update allowlist must not grant.
+        await client.patch(`/${entity_set}(${id})`, data, { "If-Match": "*" });
         return {
           content: [
             {

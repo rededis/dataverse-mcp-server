@@ -122,8 +122,12 @@ export class DataverseClient {
     return this.request(path, { method: "POST", body });
   }
 
-  async patch(path: string, body: unknown): Promise<unknown> {
-    return this.request(path, { method: "PATCH", body });
+  async patch(
+    path: string,
+    body: unknown,
+    headers?: Record<string, string>,
+  ): Promise<unknown> {
+    return this.request(path, { method: "PATCH", body, headers });
   }
 
   async delete(path: string): Promise<unknown> {

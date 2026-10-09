@@ -282,6 +282,8 @@ describe("DataverseClient on behalf of a user", () => {
       .catch((e: unknown) => e)) as Error;
 
     expect(error.message).toContain("prvActOnBehalfOfAnotherUser");
+    // Operators' logs print the stack: it must carry the same explanation.
+    expect(error.stack).toContain("prvActOnBehalfOfAnotherUser");
     expect(error.message).toContain("not through a team");
   });
 

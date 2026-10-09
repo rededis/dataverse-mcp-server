@@ -31,7 +31,10 @@ describe("path arguments of the read tools", () => {
     await expect(
       readTools(client)
         .get("get_record")!
-        .handler({ entity_set: "accounts", id: `${GUID})/../contacts(${GUID}` }),
+        .handler({
+          entity_set: "accounts",
+          id: `${GUID})/../contacts(${GUID}`,
+        }),
     ).rejects.toThrow(/Invalid record id/);
     expect(client.get).not.toHaveBeenCalled();
   });
@@ -41,9 +44,9 @@ describe("EntitySetCatalog", () => {
   function metadataClient(known: string[]) {
     return {
       get: vi.fn(async (path: string) => {
-        const filter = new URLSearchParams(path.slice(path.indexOf("?") + 1)).get(
-          "$filter",
-        );
+        const filter = new URLSearchParams(
+          path.slice(path.indexOf("?") + 1),
+        ).get("$filter");
         const name = /EntitySetName eq '(.*)'$/.exec(filter ?? "")?.[1];
         return {
           value: known

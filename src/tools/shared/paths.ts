@@ -28,27 +28,48 @@ export function assertRecordId(id: string): void {
 
 // Activity parties (To, Cc, From of an email, …) can only be written nested in
 // the activity, so they are the one kind of related record a restricted
-// create or update may carry.
+// create or update may carry. The navigation property name alone would admit
+// a custom relationship that merely ends the same way, so each party must
+// also look like one: a participation type, which no other table has, and
+// otherwise only an address and links to existing records.
 const ACTIVITY_PARTIES = /_activity_parties$/;
+const BIND = /@odata\.bind$/;
+
+function isActivityParty(party: unknown): boolean {
+  if (!isRecordLike(party) || Array.isArray(party)) return false;
+  const fields = Object.entries(party);
+  return (
+    typeof (party as Record<string, unknown>).participationtypemask ===
+      "number" &&
+    fields.every(
+      ([key, value]) =>
+        key === "participationtypemask" ||
+        (key === "addressused" && typeof value === "string") ||
+        (BIND.test(key) && typeof value === "string"),
+    )
+  );
+}
 
 /**
  * Refuses related records nested in a create or update body (deep insert),
- * which would create rows in tables the allowlist does not name. Lookups set
- * with `@odata.bind` are strings and pass. Activity parties pass too, as
- * long as they nest nothing themselves.
+ * which would create rows in tables the allowlist does not name. Links to
+ * existing records pass: `<lookup>@odata.bind` with one URL, or with an array
+ * of them for a many-to-many relationship. Activity parties pass too.
  */
 export function assertNoNestedRecords(data: Record<string, unknown>): void {
   for (const [key, value] of Object.entries(data)) {
     if (!isRecordLike(value)) continue;
     if (
+      BIND.test(key) &&
+      Array.isArray(value) &&
+      value.every((url) => typeof url === "string")
+    ) {
+      continue;
+    }
+    if (
       ACTIVITY_PARTIES.test(key) &&
       Array.isArray(value) &&
-      value.every(
-        (party) =>
-          isRecordLike(party) &&
-          !Array.isArray(party) &&
-          !Object.values(party).some(isRecordLike),
-      )
+      value.every(isActivityParty)
     ) {
       continue;
     }
