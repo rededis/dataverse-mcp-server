@@ -11,8 +11,11 @@ import { escapeODataString } from "./odata.js";
 export const ENTITY_SET_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 /** A record id, braces allowed. */
 const GUID_BODY = "[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}";
-/** A record id: bare, or in a pair of braces. */
-export const GUID = new RegExp(`^(?:${GUID_BODY}|\\{${GUID_BODY}\\})$`);
+/**
+ * A record id, without braces: Dataverse rejects `accounts({…})` (400, "Error
+ * in query syntax"), and an unquoted `{…}` is no OData literal either.
+ */
+export const GUID = new RegExp(`^${GUID_BODY}$`);
 
 /** A logical name: of a table, a column, a key or a global choice. */
 const LOGICAL_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;

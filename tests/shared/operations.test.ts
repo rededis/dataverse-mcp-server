@@ -58,8 +58,10 @@ describe("helpers", () => {
     );
   });
 
-  it("resolveBinding accepts a GUID bare or in a pair of braces, not in half a pair", () => {
-    expect(resolveBinding("leads", `{${GUID}}`)).toBe(true);
+  it("resolveBinding accepts a GUID without braces only", () => {
+    expect(() => resolveBinding("leads", `{${GUID}}`)).toThrow(
+      /Invalid record id/,
+    );
     expect(() => resolveBinding("leads", `{${GUID}`)).toThrow(
       /Invalid record id/,
     );
@@ -78,6 +80,8 @@ describe("helpers", () => {
     expect(formatODataLiteral("hello")).toBe("'hello'");
     expect(formatODataLiteral("O'Brien")).toBe("'O''Brien'");
     expect(formatODataLiteral(GUID)).toBe(GUID); // GUIDs are unquoted
+    // A GUID in braces is no Edm.Guid literal: it goes as a string.
+    expect(formatODataLiteral(`{${GUID}}`)).toBe(`'{${GUID}}'`);
     expect(formatODataLiteral(42)).toBe("42");
     expect(formatODataLiteral(true)).toBe("true");
     expect(formatODataLiteral(null)).toBe("null");

@@ -97,10 +97,15 @@ stdio package keeps `"*"`: it grants every table anyway.
 
 ### 4. On the server, an entity set must exist
 
-The server checks each `entity_set` against the metadata
-(`EntityDefinitions?$filter=EntitySetName eq '…'`, looked up as the
+The server checks the `entity_set` of each data tool (`query_records`,
+`get_record`, `create_record`, `update_record`, `delete_record`) against the
+metadata (`EntityDefinitions?$filter=EntitySetName eq '…'`, looked up as the
 application user, found names cached for the life of the process), so that a
-data tool cannot reach an unbound function or action by its name.
+data tool cannot reach an unbound function or action by its name. There the
+name can stand alone as the first path segment (`/WhoAmI`). A bound
+`invoke_action` or `invoke_function` is not checked: its entity set is always
+followed by `(<id>)` and the namespaced operation, so a name that is not a
+table only gets an error from Dataverse.
 
 The stdio package does not do this: it grants every group and every operation
 anyway, and the lookup would cost a request per new entity set.

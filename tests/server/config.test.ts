@@ -248,6 +248,13 @@ describe("readServerConfig: roles", () => {
       /"a" has the role "admin", which is not in roles/,
     ],
     ["a config without roles", JSON.stringify({ tokens: [] }), /roles/],
+    [
+      "a role named __proto__",
+      '{"roles":{"__proto__":{"groups":["data-read"]}},"tokens":[{"name":"a","sha256":"' +
+        sha256("a") +
+        '","role":"__proto__"}]}',
+      /"__proto__" is not a role name/,
+    ],
     ["a role without groups", withRole({ groups: [] }), /at least one group/],
     [
       "the development group",

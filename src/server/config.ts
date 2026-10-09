@@ -51,6 +51,7 @@ export const ROLE_GROUPS = [
 // Allowlist entries have the shapes the tools accept, so a name that could
 // never match is a config error. They match exactly, as Dataverse does.
 // An Entra object id goes in a header as written: no braces.
+const ROLE_NAME = /^[A-Za-z][A-Za-z0-9_-]*$/;
 const ENTRA_OBJECT_ID = /^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
 // Lists name what they allow; there is no "*" (ADR-0002 §3, §5). For an
@@ -106,7 +107,7 @@ const TOKEN = z.strictObject({
 });
 
 const CONFIG = z.strictObject({
-  roles: z.record(z.string().min(1), ROLE),
+  roles: z.record(z.string(), ROLE),
   tokens: z.array(TOKEN).min(1, "at least one token is required"),
 });
 
@@ -176,6 +177,23 @@ export function readServerConfig(
     return {
       ok: false,
       problems: [`not valid JSON: ${(err as Error).message}`],
+    };
+  }
+
+  // Checked on the parsed JSON, not by the schema: zod drops a `__proto__`
+  // key without a word, and the role would vanish.
+  const rawRoles = (json as { roles?: unknown } | null)?.roles;
+  const badNames =
+    typeof rawRoles === "object" && rawRoles !== null
+      ? Object.keys(rawRoles).filter((name) => !ROLE_NAME.test(name))
+      : [];
+  if (badNames.length > 0) {
+    return {
+      ok: false,
+      problems: badNames.map(
+        (name) =>
+          `roles: "${name}" is not a role name (letters, digits, '_' and '-', starting with a letter)`,
+      ),
     };
   }
 
