@@ -12,8 +12,7 @@ export type { HttpRequest, HttpResponse } from "./http.js";
  * Performs one HTTP exchange with Dataverse. DataverseClient builds the
  * request (URL, auth, OData headers) and interprets the response; wrappers
  * around an executor add behaviour in between (retries and limits in
- * service-protection.ts, acting on behalf of a user in #77, auditing in #78)
- * without touching the tools.
+ * service-protection.ts, auditing in #78) without touching the tools.
  *
  * Implementations resolve with any status, 4xx and 5xx included: a status
  * is a response, never an exception, so a wrapper can act on it (a 429 and

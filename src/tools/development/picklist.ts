@@ -91,7 +91,9 @@ export function registerPicklistWriteTools(
   server: McpServer,
   deps: ToolDeps,
 ): void {
-  const { client, allowDelete = false } = deps;
+  const { client } = deps;
+  // stdio only: the development tools delete all or nothing.
+  const allowDelete = deps.permissions?.delete === "*";
   server.registerTool(
     "add_picklist_option",
     {

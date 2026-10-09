@@ -20,6 +20,7 @@ import {
   type RawOptionSet,
   summarizeOptionSet,
 } from "./shared/optionset.js";
+import { assertLogicalName } from "./shared/paths.js";
 import {
   LOCATION_INPUT,
   validatePicklistLocation,
@@ -183,6 +184,7 @@ export function registerMetadataReadTools(
       inputSchema: GET_ENTITY_SCHEMA_INPUT,
     },
     async ({ entity_logical_name }) => {
+      assertLogicalName(entity_logical_name, "entity logical name");
       const escaped = escapeODataString(entity_logical_name);
       const attributesPath = `/EntityDefinitions(LogicalName='${escaped}')/Attributes`;
       const query = buildODataQuery({
@@ -281,6 +283,7 @@ export function registerMetadataReadTools(
       validatePicklistLocation(params);
       let optionSet: RawOptionSet;
       if (params.option_set_name) {
+        assertLogicalName(params.option_set_name, "option set name");
         const escaped = escapeODataString(params.option_set_name);
         const query = buildODataQuery({
           $select: `${OPTION_SET_IDENTITY_SELECT},Options`,
@@ -301,6 +304,8 @@ export function registerMetadataReadTools(
         // validatePicklistLocation guarantees both are present when option_set_name is absent
         const entity = params.entity_logical_name ?? "";
         const attr = params.attribute_logical_name ?? "";
+        assertLogicalName(entity, "entity logical name");
+        assertLogicalName(attr, "attribute logical name");
         const entityEscaped = escapeODataString(entity);
         const attrEscaped = escapeODataString(attr);
         const query = buildODataQuery({
@@ -349,6 +354,7 @@ export function registerMetadataReadTools(
       inputSchema: LIST_ENTITY_KEYS_INPUT,
     },
     async ({ entity_logical_name }) => {
+      assertLogicalName(entity_logical_name, "entity logical name");
       const entityEscaped = escapeODataString(entity_logical_name);
       let result: {
         value: Array<{

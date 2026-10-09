@@ -231,6 +231,15 @@ and send messages to customers. Depending on the org, sending is either
 queued state that a flow or plugin picks up". Only per-entity-set and per-action
 allowlists can express both (#77).
 
+_Settled in #77._ `actAs` is the user's Microsoft Entra object id, sent as
+`CallerObjectId` (Microsoft's preferred header; `MSCRMCallerID` is legacy).
+Dataverse allows a call only when both the application user and the mapped
+user hold the privilege, and the application user needs
+`prvActOnBehalfOfAnotherUser` in a role assigned to it directly. An allowlist
+protects only if the request goes where the checked name says and does only
+what its tool claims: [ADR-0002](0002-tool-arguments-do-not-choose-the-target.md)
+records how the tools make sure of that.
+
 ### 9. Per-caller tool lists
 
 `tools/list` returns only what the caller's role allows. The 2026-07-28 tools
@@ -319,6 +328,10 @@ where the choice was not obvious:
 a request counts against. If Dataverse counts it against the user acted for,
 one throttling state per instance is wrong, and the state has to be kept per
 user. How Dataverse counts impersonated requests was not verified.
+
+_Still open after #77._ The server keeps one throttling state per instance:
+a client acting on behalf of a user shares the application user's executor.
+Dev-org check O8 in #77 decides whether it has to become one per `actAs`.
 
 Adding application users would only spread the 5-minute limits. All
 application users in a tenant **share one tenant-level daily allowance**

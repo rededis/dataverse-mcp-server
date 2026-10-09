@@ -1,22 +1,29 @@
 import { OAuthError, verifyBearerToken } from "@modelcontextprotocol/server";
 import { describe, expect, it } from "vitest";
-import { ConfigTokenVerifier } from "../../src/server/tokens.js";
-import { sha256 } from "./helpers.js";
+import { ConfigTokenVerifier, callerOf } from "../../src/server/tokens.js";
+import { READER, serverConfig, sha256 } from "./helpers.js";
 
 describe("ConfigTokenVerifier", () => {
-  const verifier = new ConfigTokenVerifier([
-    { name: "alice", sha256: sha256("alice-token") },
-    {
-      name: "bob",
-      sha256: sha256("bob-token"),
-      expiresAt: "2099-01-01T00:00:00Z",
-    },
-    {
-      name: "carol",
-      sha256: sha256("carol-token"),
-      expiresAt: "2020-01-01T00:00:00Z",
-    },
-  ]);
+  const verifier = new ConfigTokenVerifier(
+    serverConfig([
+      { name: "alice", sha256: sha256("alice-token") },
+      {
+        name: "bob",
+        sha256: sha256("bob-token"),
+        expiresAt: "2099-01-01T00:00:00Z",
+      },
+      {
+        name: "carol",
+        sha256: sha256("carol-token"),
+        expiresAt: "2020-01-01T00:00:00Z",
+      },
+      {
+        name: "dave",
+        sha256: sha256("dave-token"),
+        actAs: "22222222-2222-2222-2222-222222222222",
+      },
+    ]),
+  );
 
   const verify = (header: string | undefined) =>
     verifyBearerToken(header, { verifier });
@@ -36,6 +43,24 @@ describe("ConfigTokenVerifier", () => {
     const info = await verify("Bearer bob-token");
     expect(info.clientId).toBe("bob");
     expect(info.expiresAt).toBe(Date.parse("2099-01-01T00:00:00Z") / 1000);
+  });
+
+  it("carries the caller: its name, role and user", async () => {
+    expect(callerOf(await verify("Bearer alice-token"))).toEqual({
+      name: "alice",
+      role: READER,
+      actAs: undefined,
+    });
+    expect(callerOf(await verify("Bearer dave-token")).actAs).toBe(
+      "22222222-2222-2222-2222-222222222222",
+    );
+  });
+
+  it("refuses to make up a caller for unverified auth info", () => {
+    expect(() => callerOf(undefined)).toThrow(/no verified caller/);
+    expect(() => callerOf({ token: "x", clientId: "x", scopes: [] })).toThrow(
+      /no verified caller/,
+    );
   });
 
   it.each([

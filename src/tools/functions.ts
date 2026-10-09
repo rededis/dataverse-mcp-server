@@ -1,7 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { allowsNothing, assertAllowed, NO_PERMISSIONS } from "./permissions.js";
 import {
-  assertValidName,
+  bareOperationName,
   buildFunctionCall,
   qualifyOperationName,
   resolveBinding,
@@ -12,7 +13,7 @@ const INVOKE_FUNCTION_INPUT = z.object({
   name: z
     .string()
     .describe(
-      "Function name, e.g. 'WhoAmI'. Bare names are namespaced automatically for bound calls; pass a fully-qualified name to override.",
+      "Function name, e.g. 'WhoAmI'. The Microsoft.Dynamics.CRM. namespace is added for bound calls and may be omitted.",
     ),
   entity_set: z
     .string()
@@ -36,6 +37,8 @@ const INVOKE_FUNCTION_INPUT = z.object({
 
 export function registerFunctionTools(server: McpServer, deps: ToolDeps): void {
   const { client } = deps;
+  const allowed = (deps.permissions ?? NO_PERMISSIONS).functions;
+  if (allowsNothing(allowed)) return;
   server.registerTool(
     "invoke_function",
     {
@@ -44,9 +47,10 @@ export function registerFunctionTools(server: McpServer, deps: ToolDeps): void {
       inputSchema: INVOKE_FUNCTION_INPUT,
     },
     async ({ name, entity_set, id, parameters }) => {
-      assertValidName(name);
+      const bare = bareOperationName(name);
       const bound = resolveBinding(entity_set, id);
-      const opName = qualifyOperationName(name, bound);
+      assertAllowed(allowed, bare, "call function");
+      const opName = qualifyOperationName(bare, bound);
       const fnCall = buildFunctionCall(opName, parameters);
       const path = bound ? `/${entity_set}(${id})/${fnCall}` : `/${fnCall}`;
       const result = await client.get(path);

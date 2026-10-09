@@ -3,6 +3,7 @@ import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
 import { describe, expect, it } from "vitest";
 import type { DataverseClient } from "../src/client.js";
 import { registerAllTools } from "../src/tools/all.js";
+import { stdio } from "./helpers.js";
 
 // The wire contract of the stdio server, registered the way src/index.ts
 // does: every tool's name, description and input JSON Schema exactly as a
@@ -15,7 +16,7 @@ const client = {} as DataverseClient;
 
 async function fetchTools(allowDelete: boolean) {
   const server = new McpServer({ name: "snapshot", version: "0.0.0" });
-  registerAllTools(server, { client, allowDelete });
+  registerAllTools(server, { client, ...stdio(allowDelete) });
 
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();

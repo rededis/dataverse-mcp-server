@@ -646,7 +646,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
           "type": "string",
         },
         "name": {
-          "description": "Action name, e.g. 'PublishDuplicateRule', 'QualifyLead'. Bare names are namespaced automatically for bound calls; pass a fully-qualified name to override.",
+          "description": "Action name, e.g. 'PublishDuplicateRule', 'QualifyLead'. The Microsoft.Dynamics.CRM. namespace is added for bound calls and may be omitted.",
           "type": "string",
         },
         "parameters": {
@@ -679,7 +679,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
           "type": "string",
         },
         "name": {
-          "description": "Function name, e.g. 'WhoAmI'. Bare names are namespaced automatically for bound calls; pass a fully-qualified name to override.",
+          "description": "Function name, e.g. 'WhoAmI'. The Microsoft.Dynamics.CRM. namespace is added for bound calls and may be omitted.",
           "type": "string",
         },
         "parameters": {
@@ -1616,7 +1616,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
           "type": "string",
         },
         "name": {
-          "description": "Action name, e.g. 'PublishDuplicateRule', 'QualifyLead'. Bare names are namespaced automatically for bound calls; pass a fully-qualified name to override.",
+          "description": "Action name, e.g. 'PublishDuplicateRule', 'QualifyLead'. The Microsoft.Dynamics.CRM. namespace is added for bound calls and may be omitted.",
           "type": "string",
         },
         "parameters": {
@@ -1649,7 +1649,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
           "type": "string",
         },
         "name": {
-          "description": "Function name, e.g. 'WhoAmI'. Bare names are namespaced automatically for bound calls; pass a fully-qualified name to override.",
+          "description": "Function name, e.g. 'WhoAmI'. The Microsoft.Dynamics.CRM. namespace is added for bound calls and may be omitted.",
           "type": "string",
         },
         "parameters": {

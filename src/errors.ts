@@ -33,12 +33,54 @@ export class DataverseApiError extends DataverseError {
     readonly status: number,
     request: RequestLine,
     body: string,
+    /** Replaces the default text; set here so `stack` carries it too. */
+    message?: string,
   ) {
     // Same text as before typed errors existed; callers may still show it.
-    super(`Dataverse API error (${status}): ${body}`);
+    super(message ?? `Dataverse API error (${status}): ${body}`);
     this.method = request.method;
     this.url = request.url;
-    this.code = errorCode(body);
+    this.code = errorField(body, "code");
+  }
+}
+
+/** Who a request was made on behalf of: the token's name and its `actAs`. */
+export interface OnBehalfOf {
+  /** The token's name in the server config. */
+  name: string;
+  /** The Dataverse user's Microsoft Entra object id. */
+  objectId: string;
+}
+
+// prvActOnBehalfOfAnotherUser is missing from the application user's roles.
+const CANNOT_ACT_ON_BEHALF = "0x8004a110";
+// PrivilegeDenied: the user, or the application user, lacks a privilege.
+const PRIVILEGE_DENIED = "0x80040220";
+
+/**
+ * Dataverse refused (403) a request made on behalf of a user. Its own message
+ * names a systemuserid, which neither the agent nor the operator can map to
+ * a token, so this one names the token and the user it acts as, and keeps
+ * Dataverse's text. Only the two codes whose cause is known get an
+ * explanation; any other 403 (a disabled or unlicensed user, for instance)
+ * is passed on as Dataverse put it.
+ */
+export class DataverseCallerDeniedError extends DataverseApiError {
+  constructor(request: RequestLine, body: string, caller: OnBehalfOf) {
+    super(403, request, body, deniedMessage(body, caller));
+  }
+}
+
+function deniedMessage(body: string, caller: OnBehalfOf): string {
+  const who = `user ${caller.objectId}, on whose behalf token "${caller.name}" acts`;
+  const said = `Dataverse said: ${errorField(body, "message") ?? body}`;
+  switch (errorField(body, "code")?.toLowerCase()) {
+    case CANNOT_ACT_ON_BEHALF:
+      return `Dataverse refused to act for ${who}: the server's application user lacks the "Act on Behalf of Another User" privilege (prvActOnBehalfOfAnotherUser), which must be in a security role assigned to it directly, not through a team. ${said}`;
+    case PRIVILEGE_DENIED:
+      return `Dataverse denied this call for lack of a privilege, to ${who}. The user, and the server's application user, both need it. ${said}`;
+    default:
+      return `Dataverse refused this call made for ${who}. ${said}`;
   }
 }
 
@@ -108,11 +150,15 @@ export class DataverseBusyError extends DataverseError {
   }
 }
 
-function errorCode(body: string): string | undefined {
+/** A string field of the JSON error body (`{"error":{"code":…,"message":…}}`). */
+function errorField(
+  body: string,
+  field: "code" | "message",
+): string | undefined {
   try {
-    const code = (JSON.parse(body) as { error?: { code?: unknown } }).error
-      ?.code;
-    return typeof code === "string" ? code : undefined;
+    const value = (JSON.parse(body) as { error?: Record<string, unknown> })
+      .error?.[field];
+    return typeof value === "string" ? value : undefined;
   } catch {
     return undefined;
   }

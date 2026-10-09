@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DataverseAuth } from "../src/auth.js";
 import { DataverseClient } from "../src/client.js";
-import { DataverseApiError, DataverseError } from "../src/errors.js";
+import {
+  DataverseApiError,
+  DataverseCallerDeniedError,
+  DataverseError,
+} from "../src/errors.js";
 import type { HttpRequest, RequestExecutor } from "../src/executor.js";
 
 describe("DataverseClient", () => {
@@ -168,7 +172,8 @@ describe("DataverseClient with an injected executor", () => {
   it("passes absolute URLs (e.g. @odata.nextLink) through unchanged", async () => {
     const { executor, requests } = recordingExecutor();
     const client = makeClient(executor);
-    const next = "https://org.crm.dynamics.com/api/data/v9.2/accounts?$skiptoken=x";
+    const next =
+      "https://org.crm.dynamics.com/api/data/v9.2/accounts?$skiptoken=x";
 
     await client.get(next);
 
@@ -193,5 +198,203 @@ describe("DataverseClient with an injected executor", () => {
     const client = makeClient({ execute: () => Promise.reject(failure) });
 
     await expect(client.get("/accounts")).rejects.toBe(failure);
+  });
+});
+
+describe("DataverseClient on behalf of a user", () => {
+  const USER = "22222222-2222-2222-2222-222222222222";
+  const caller = { name: "support-agent", objectId: USER };
+
+  function setup(status = 200, body = "{}") {
+    const requests: HttpRequest[] = [];
+    const executor: RequestExecutor = {
+      execute: async (request) => {
+        requests.push(request);
+        return { status, headers: new Headers(), body };
+      },
+    };
+    const auth = new DataverseAuth(
+      "tenant",
+      "client",
+      "secret",
+      "https://org.crm.dynamics.com",
+    );
+    const getToken = vi.spyOn(auth, "getToken").mockResolvedValue("t");
+    const base = new DataverseClient(auth, "https://org.crm.dynamics.com", {
+      executor,
+    });
+    return { base, requests, getToken };
+  }
+
+  it("sends CallerObjectId on every request, and the base client does not", async () => {
+    const { base, requests } = setup();
+    const user = base.onBehalfOf(caller);
+
+    await user.post("/emails", { subject: "Hi" });
+    await base.get("/WhoAmI");
+
+    expect(requests[0].headers.CallerObjectId).toBe(USER);
+    expect(requests[0].url).toBe(
+      "https://org.crm.dynamics.com/api/data/v9.2/emails",
+    );
+    expect(requests[1].headers).not.toHaveProperty("CallerObjectId");
+  });
+
+  // No header passed to request() may change who makes the request: not the
+  // user acted for, not the token, and not a second, legacy caller header.
+  it.each([
+    "CallerObjectId",
+    "callerobjectid",
+    "MSCRMCallerID",
+    "mscrmcallerid",
+    "Authorization",
+    "authorization",
+  ])("refuses a %s header from the caller of request()", async (name) => {
+    const { base, requests } = setup();
+    for (const client of [base, base.onBehalfOf(caller)]) {
+      await expect(
+        client.request("/WhoAmI", {
+          headers: { [name]: "33333333-3333-3333-3333-333333333333" },
+        }),
+      ).rejects.toThrow(`Refused a request that sets who makes it: ${name}`);
+    }
+    expect(requests).toEqual([]);
+  });
+
+  it("still sends the headers a tool may set", async () => {
+    const { base, requests } = setup();
+    await base
+      .onBehalfOf(caller)
+      .patch("/accounts(1)", {}, { "If-Match": "*" });
+    expect(requests[0].headers).toMatchObject({
+      "If-Match": "*",
+      CallerObjectId: USER,
+      Authorization: "Bearer t",
+    });
+  });
+
+  it("shares the token source and executor with the base client", async () => {
+    const { base, requests, getToken } = setup();
+    await base.onBehalfOf(caller).get("/WhoAmI");
+    expect(getToken).toHaveBeenCalledOnce();
+    expect(requests).toHaveLength(1);
+  });
+
+  it("names the token and user when Dataverse denies a privilege", async () => {
+    const body = JSON.stringify({
+      error: {
+        code: "0x80040220",
+        message:
+          "Principal user (Id=9f0c…, type=8, roleCount=1) is missing prvCreateContact privilege (Id=…) on OTC=2 for entity 'contact'.",
+      },
+    });
+    const { base } = setup(403, body);
+    const error = await base
+      .onBehalfOf(caller)
+      .post("/contacts", {})
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(DataverseCallerDeniedError);
+    expect(error).toBeInstanceOf(DataverseApiError);
+    const denied = error as DataverseCallerDeniedError;
+    expect(denied.status).toBe(403);
+    expect(denied.code).toBe("0x80040220");
+    expect(denied.message).toContain(`user ${USER}`);
+    expect(denied.message).toContain('token "support-agent"');
+    expect(denied.message).toContain("missing prvCreateContact privilege");
+  });
+
+  it("says what to fix when the application user may not act on behalf of others", async () => {
+    const body = JSON.stringify({
+      error: { code: "0x8004A110", message: "Caller does not have privilege" },
+    });
+    const { base } = setup(403, body);
+    const error = (await base
+      .onBehalfOf(caller)
+      .get("/WhoAmI")
+      .catch((e: unknown) => e)) as Error;
+
+    expect(error.message).toContain("prvActOnBehalfOfAnotherUser");
+    // Operators' logs print the stack: it must carry the same explanation.
+    expect(error.stack).toContain("prvActOnBehalfOfAnotherUser");
+    expect(error.message).toContain("not through a team");
+  });
+
+  // A disabled or unlicensed user is refused with other codes; the message
+  // must not blame a privilege it does not know is missing.
+  it("passes any other 403 on without naming a privilege", async () => {
+    const body = JSON.stringify({
+      error: { code: "0x8004d24b", message: "The user is disabled." },
+    });
+    const { base } = setup(403, body);
+    const error = (await base
+      .onBehalfOf(caller)
+      .get("/WhoAmI")
+      .catch((e: unknown) => e)) as Error;
+
+    expect(error).toBeInstanceOf(DataverseCallerDeniedError);
+    expect(error.message).toBe(
+      `Dataverse refused this call made for user ${USER}, on whose behalf token "support-agent" acts. Dataverse said: The user is disabled.`,
+    );
+  });
+
+  it("leaves a 403 to the application user itself as it was", async () => {
+    const { base } = setup(403, '{"error":{"code":"0x80040220"}}');
+    const error = await base.get("/contacts").catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(DataverseCallerDeniedError);
+    expect(error).toBeInstanceOf(DataverseApiError);
+  });
+});
+
+describe("DataverseClient request paths", () => {
+  function setup() {
+    const requests: HttpRequest[] = [];
+    const executor: RequestExecutor = {
+      execute: async (request) => {
+        requests.push(request);
+        return { status: 200, headers: new Headers(), body: "{}" };
+      },
+    };
+    const auth = new DataverseAuth(
+      "t",
+      "c",
+      "s",
+      "https://org.crm.dynamics.com",
+    );
+    vi.spyOn(auth, "getToken").mockResolvedValue("t");
+    const client = new DataverseClient(auth, "https://org.crm.dynamics.com", {
+      executor,
+    });
+    return { client, requests };
+  }
+
+  // Each of these would reach another resource than the one the path names,
+  // whichever tool built it.
+  it.each([
+    "/EntityDefinitions(LogicalName='/../contacts?$top=5#')/Attributes",
+    "/emails(1)/%2e%2e/accounts",
+    "/emails(1)/.%2E/accounts",
+    "/emails/./x",
+    "/emails\\..\\accounts",
+    "/accounts#x",
+    "/emails/.\t./accounts",
+    "/emails/.\n./accounts",
+  ])("refuses %j without sending it", async (path) => {
+    const { client, requests } = setup();
+    await expect(client.get(path)).rejects.toThrow(
+      /Refused a request path that would reach another resource/,
+    );
+    expect(requests).toEqual([]);
+  });
+
+  it.each([
+    "/accounts?$filter=name eq 'a..b' and contains(x,'#')",
+    "/Microsoft.Dynamics.CRM.WhoAmI",
+    "/EntityDefinitions(LogicalName='account')/Attributes/Microsoft.Dynamics.CRM.PicklistAttributeMetadata",
+    "https://org.crm.dynamics.com/api/data/v9.2/accounts?$skiptoken=%3Ccookie%20pagenumber=%222%22/%3E",
+  ])("sends %j", async (path) => {
+    const { client, requests } = setup();
+    await client.get(path);
+    expect(requests).toHaveLength(1);
   });
 });
