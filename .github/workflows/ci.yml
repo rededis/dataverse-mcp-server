@@ -16,7 +16,7 @@ jobs:
           node-version: 24
           cache: npm
 
-      - run: npm install
+      - run: npm ci
 
       - name: Lint
         run: npm run lint
@@ -26,6 +26,11 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # Fails if the bundle holds development tools or leaves a package for
+      # run time (scripts/build-server.mjs).
+      - name: Build the server bundle
+        run: npm run build:server
 
   # engines.node says >=20; `ci` above runs on the version we develop on.
   node-floor:
@@ -39,7 +44,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm install
+      - run: npm ci
 
       - name: Test
         run: npm test
