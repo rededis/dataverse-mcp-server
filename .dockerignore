@@ -1,0 +1,8 @@
+# Only what the build stage copies.
+*
+!package.json
+!package-lock.json
+!tsconfig.json
+!LICENSE
+!scripts/
+!src/
