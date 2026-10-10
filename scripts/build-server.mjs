@@ -101,12 +101,15 @@ export function licenceTexts(metafile, sourcemap) {
     const match = path.match(/^(.*node_modules\/((?:@[^/]+\/)?[^/]+))\//);
     if (match) dirs.set(match[2], join(ROOT, match[1]));
   }
+  // Every package a source map entry comes from, by its innermost
+  // node_modules/ segment, whatever tool built the package that inlined it.
+  // The SDK's own internal packages (core-internal) are under its licence.
   for (const source of JSON.parse(sourcemap).sources) {
-    const match = source.match(
-      /\.pnpm\/[^/]+\/node_modules\/((?:@[^/]+\/)?[^/]+)\//,
-    );
-    if (match && !dirs.has(match[1])) {
-      dirs.set(match[1], join(ROOT, "scripts/licenses", match[1]));
+    const name = [
+      ...source.matchAll(/node_modules\/((?:@[^/]+\/)?[^/.][^/]*)\//g),
+    ].at(-1)?.[1];
+    if (name && !dirs.has(name) && !name.startsWith("@modelcontextprotocol/")) {
+      dirs.set(name, join(ROOT, "scripts/licenses", name));
     }
   }
   const texts = new Map();
@@ -115,7 +118,9 @@ export function licenceTexts(metafile, sourcemap) {
     let files = [];
     try {
       files = readdirSync(dir).filter((f) => LICENCE_FILE.test(f));
-    } catch {}
+    } catch (err) {
+      if (err.code !== "ENOENT") throw err;
+    }
     if (files.length === 0) missing.push(name);
     else
       texts.set(
