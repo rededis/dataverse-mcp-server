@@ -60,6 +60,7 @@
     "@biomejs/biome": "^2.4.10",
     "@modelcontextprotocol/client": "^2.3.1",
     "@types/node": "^22.0.0",
+    "esbuild": "0.28.2",
     "husky": "^9.1.7",
     "tsx": "^4.21.0",
     "typescript": "^5.7.0",
