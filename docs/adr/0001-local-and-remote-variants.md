@@ -152,6 +152,10 @@ Migrating to SDK v2 (#75) raises `engines.node` from `>=18` to `>=20`, because
 it ([E1](#e1-mcp-typescript-sdk-v2)). That is a breaking change for the npm package and is released as
 0.9.0.
 
+_Raised on 2026-10-10 (#101)._ `engines.node` is `>=24`, the same floor as the
+server image (#79). Node 20 reached end of life on 2026-04-30 and Node 22
+reaches it on 2027-04-30.
+
 ### 6. Proxy headers
 
 A 2026-07-28 request carries its method and protocol version in HTTP headers
