@@ -404,6 +404,28 @@ above is built:
 - Tags `server-v*` publish the image (`server-release.yml`), with its own
   version and CHANGELOG. `release.yml` ignores `server-v*`.
 
+_Settled on 2026-10-11 (#96)._ What a `server-v*` tag publishes, once
+pushed, is what installations pull, so these are fixed here rather than only
+in the workflow:
+
+- The image is `ghcr.io/rededis/dataverse-mcp-server-http`, the name #96 was
+  opened with.
+- Tags are `server-vX.Y.Z` or `server-vX.Y.Z-rc.N`; no other pre-release
+  form. A release gets the image tags `X.Y.Z`, `X.Y` and `latest`; a
+  pre-release gets only `X.Y.Z-rc.N`. With one release line, a patch to an
+  older `X.Y` would move `latest` back; that waits until there is a second
+  line.
+- Each tag is built for `linux/amd64` and `linux/arm64`. The bundle is plain
+  JavaScript, so it is built once on the builder's platform and nothing runs
+  under emulation.
+- The tag push starts `server-release.yml`, which creates the GitHub Release
+  itself as its last step, not marked latest, so the repo's releases page
+  stays on the npm package. A tag whose Release exists is refused: a re-run
+  would push the image again under the same tags.
+- The CHANGELOG is `CHANGELOG-server.md`. A release needs its `## [X.Y.Z]`
+  section; a pre-release may use `## [Unreleased]`. The section becomes the
+  Release notes.
+
 Deploying a particular installation is outside this repository.
 
 ### 14. The server ships as 0.x, as-is
