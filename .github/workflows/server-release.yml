@@ -42,6 +42,17 @@ jobs:
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # The Release is the run's last step: if it exists, the image was
+      # published, and a re-run would push it again under the same tags.
+      - name: Not released yet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::error::${GITHUB_REF_NAME} is already released; tag a new version instead"
+            exit 1
+          fi
+
       # A release needs its own section; a pre-release may still be
       # Unreleased. The section becomes the Release notes.
       - name: Server CHANGELOG has this version
@@ -64,7 +75,7 @@ jobs:
             echo "::error::CHANGELOG-server.md is missing a '## [${BASE}]' section"
             exit 1
           fi
-          if ! grep -q '[^[:space:]]' release-notes.md; then
+          if ! grep -v '^[[:space:]]*#' release-notes.md | grep -q '[^[:space:]]'; then
             echo "::error::The CHANGELOG-server.md section for ${BASE} is empty"
             exit 1
           fi
@@ -99,6 +110,43 @@ jobs:
         env:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
 
+      # The image runs before anything is pushed: it must start and report the
+      # tag's version. Only the runner's platform (amd64) is started; the
+      # arm64 image holds the same bundle.
+      - name: Build for the check
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: server-release-check
+          build-args: SERVER_VERSION=${{ steps.version.outputs.version }}
+          provenance: false
+
+      # Placeholder settings: the server reads them but calls Dataverse only
+      # when a tool is used.
+      - name: The image starts and reports the tag's version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          printf '{"roles":{"r":{"groups":["data-read"]}},"tokens":[{"name":"check","sha256":"%064d","role":"r"}]}' 0 > check-config.json
+          chmod 644 check-config.json
+          docker run -d --name check -p 127.0.0.1:3000:3000 \
+            -e DATAVERSE_TENANT_ID=check -e DATAVERSE_CLIENT_ID=check \
+            -e DATAVERSE_CLIENT_SECRET=check -e DATAVERSE_RESOURCE_URL=https://check.invalid \
+            -e DATAVERSE_SERVER_CONFIG=/config/server.json \
+            -v "$PWD/check-config.json:/config/server.json:ro" \
+            server-release-check
+          for _ in $(seq 30); do
+            curl -sf http://127.0.0.1:3000/health >/dev/null && break
+            sleep 1
+          done
+          docker logs check
+          curl -sf http://127.0.0.1:3000/health
+          docker logs check 2>&1 | grep -Fq "Dataverse MCP server ${VERSION} listening" ||
+            { echo "::error::The image does not report ${VERSION}"; exit 1; }
+          docker rm -f check
+
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
@@ -118,15 +166,6 @@ jobs:
           # Provenance comes from the attestation (#104); BuildKit's own adds
           # unknown/unknown entries to the index.
           provenance: false
-
-      - name: The image reports the tag's version
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          docker run --rm -e VERSION --entrypoint /nodejs/bin/node "${IMAGE}:${VERSION}" -e '
-            const code = require("fs").readFileSync("/app/server.js", "utf-8");
-            process.exit(code.includes(JSON.stringify(process.env.VERSION)) ? 0 : 1);
-          ' || { echo "::error::The image does not report ${VERSION}"; exit 1; }
 
       # Not marked latest: the repo's releases page stays on the npm package.
       # A Release made with GITHUB_TOKEN starts no other workflow, so
