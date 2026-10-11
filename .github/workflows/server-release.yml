@@ -35,7 +35,7 @@ jobs:
           fi
           VERSION="${TAG#server-v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "base=${VERSION%%-*}" >> "$GITHUB_OUTPUT"
+          echo "core_version=${VERSION%%-*}" >> "$GITHUB_OUTPUT"
           if [[ "$VERSION" == *-rc.* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
@@ -57,7 +57,7 @@ jobs:
       # Unreleased. The section becomes the Release notes.
       - name: Server CHANGELOG has this version
         env:
-          BASE: ${{ steps.version.outputs.base }}
+          CORE_VERSION: ${{ steps.version.outputs.core_version }}
           PRERELEASE: ${{ steps.version.outputs.prerelease }}
         run: |
           # Headings only at the start of a line: the file's preamble quotes them.
@@ -67,16 +67,16 @@ jobs:
           section() {
             awk -v h="## [$1]" 'index($0, h) == 1 { on = 1; next } /^## \[/ { on = 0 } on' CHANGELOG-server.md
           }
-          if has "$BASE"; then
-            section "$BASE" > release-notes.md
+          if has "$CORE_VERSION"; then
+            section "$CORE_VERSION" > release-notes.md
           elif [ "$PRERELEASE" = true ] && has Unreleased; then
             section Unreleased > release-notes.md
           else
-            echo "::error::CHANGELOG-server.md is missing a '## [${BASE}]' section"
+            echo "::error::CHANGELOG-server.md is missing a '## [${CORE_VERSION}]' section"
             exit 1
           fi
           if ! grep -v '^[[:space:]]*#' release-notes.md | grep -q '[^[:space:]]'; then
-            echo "::error::The CHANGELOG-server.md section for ${BASE} is empty"
+            echo "::error::The CHANGELOG-server.md section for ${CORE_VERSION} is empty"
             exit 1
           fi
 
@@ -92,6 +92,10 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # The image's esbuild bundle does not type-check; tsc does.
+      - name: Build
+        run: npm run build
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
