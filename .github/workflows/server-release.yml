@@ -1,0 +1,142 @@
+name: Server release
+
+# Publishes the HTTP server image for a server-v* tag (ADR-0001 §13):
+# server-vX.Y.Z or server-vX.Y.Z-rc.N. The npm package has its own line
+# (release.yml, v* releases).
+
+on:
+  push:
+    tags: ["server-v*"]
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/rededis/dataverse-mcp-server-http
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # the GitHub Release
+      packages: write # GHCR
+
+    steps:
+      # Actions are pinned by full commit SHA, the tag in a comment.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Version from the tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^server-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.(0|[1-9][0-9]*))?$ ]]; then
+            echo "::error::Tag ${TAG} is not server-vX.Y.Z or server-vX.Y.Z-rc.N"
+            exit 1
+          fi
+          VERSION="${TAG#server-v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "base=${VERSION%%-*}" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-rc.* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A release needs its own section; a pre-release may still be
+      # Unreleased. The section becomes the Release notes.
+      - name: Server CHANGELOG has this version
+        env:
+          BASE: ${{ steps.version.outputs.base }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          # Headings only at the start of a line: the file's preamble quotes them.
+          has() {
+            awk -v h="## [$1]" 'index($0, h) == 1 { found = 1 } END { exit !found }' CHANGELOG-server.md
+          }
+          section() {
+            awk -v h="## [$1]" 'index($0, h) == 1 { on = 1; next } /^## \[/ { on = 0 } on' CHANGELOG-server.md
+          }
+          if has "$BASE"; then
+            section "$BASE" > release-notes.md
+          elif [ "$PRERELEASE" = true ] && has Unreleased; then
+            section Unreleased > release-notes.md
+          else
+            echo "::error::CHANGELOG-server.md is missing a '## [${BASE}]' section"
+            exit 1
+          fi
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::error::The CHANGELOG-server.md section for ${BASE} is empty"
+            exit 1
+          fi
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # X.Y.Z, X.Y and latest for a release; only X.Y.Z-rc.N for a pre-release.
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},match=^server-v(.*)$
+            type=semver,pattern={{major}}.{{minor}},match=^server-v(.*)$
+          labels: |
+            org.opencontainers.image.description=MCP server for Microsoft Dataverse over Streamable HTTP
+          annotations: |
+            org.opencontainers.image.description=MCP server for Microsoft Dataverse over Streamable HTTP
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          build-args: SERVER_VERSION=${{ steps.version.outputs.version }}
+          # Provenance comes from the attestation (#104); BuildKit's own adds
+          # unknown/unknown entries to the index.
+          provenance: false
+
+      - name: The image reports the tag's version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker run --rm -e VERSION --entrypoint /nodejs/bin/node "${IMAGE}:${VERSION}" -e '
+            const code = require("fs").readFileSync("/app/server.js", "utf-8");
+            process.exit(code.includes(JSON.stringify(process.env.VERSION)) ? 0 : 1);
+          ' || { echo "::error::The image does not report ${VERSION}"; exit 1; }
+
+      # Not marked latest: the repo's releases page stays on the npm package.
+      # A Release made with GITHUB_TOKEN starts no other workflow, so
+      # release.yml does not run for it.
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          flags=(--verify-tag --latest=false --notes-file release-notes.md)
+          [ "$PRERELEASE" = true ] && flags+=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" --title "Server ${VERSION}" "${flags[@]}"

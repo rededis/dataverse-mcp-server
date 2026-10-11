@@ -10,6 +10,8 @@ permissions:
 
 jobs:
   publish:
+    # server-v* tags are the image's line (server-release.yml, ADR-0001 §13).
+    if: ${{ !startsWith(github.event.release.tag_name, 'server-v') }}
     runs-on: ubuntu-latest
 
     steps:
