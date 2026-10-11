@@ -12,7 +12,9 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { isBuiltin } from "node:module";
 import { basename, dirname, join, resolve } from "node:path";
@@ -23,15 +25,20 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const OUTDIR = "build/server";
 
 /**
- * Bundles a server entry point. Without `outdir` nothing is written and the
- * bundle comes back as `code` and `sourcemap`. Metafile paths are relative to the repo root.
+ * Bundles a server entry point in memory: nothing is written, so a bundle
+ * the checks refuse never reaches build/server/. Metafile paths are relative
+ * to the repo root.
  */
 export async function bundleServer({
   entryPoint = "src/server/index.ts",
   version,
   external = [],
-  outdir,
 }) {
+  if (typeof version !== "string" || version === "") {
+    throw new Error(
+      "bundleServer: version is required (the server reports it)",
+    );
+  }
   const result = await build({
     absWorkingDir: ROOT,
     entryPoints: { server: entryPoint },
@@ -44,12 +51,14 @@ export async function bundleServer({
     define: { SERVER_VERSION: JSON.stringify(version) },
     metafile: true,
     logLevel: "warning",
-    ...(outdir ? { outdir } : { outdir: "out", write: false }),
+    outdir: OUTDIR,
+    write: false,
   });
   const text = (ext) =>
-    result.outputFiles?.find((f) => f.path.endsWith(ext))?.text;
+    result.outputFiles.find((f) => f.path.endsWith(ext)).text;
   return {
     metafile: result.metafile,
+    outputFiles: result.outputFiles,
     code: text(".js"),
     sourcemap: text(".map"),
   };
@@ -84,6 +93,11 @@ export function bundleProblems(metafile) {
 
 const LICENCE_FILE = /^(licen[cs]e|copying|notice)/i;
 
+// The SDK's internal workspace package, inlined into @modelcontextprotocol/core
+// and /server and published under their licence. Named exactly, so any other
+// package the SDK starts to inline still needs a licence text.
+const COVERED_BY_SDK = new Set(["@modelcontextprotocol/core-internal"]);
+
 /**
  * Where to find the licence texts of every package the bundle holds code
  * from, keyed by package name, and the packages that have none. Bundling
@@ -103,12 +117,11 @@ export function licenceTexts(metafile, sourcemap) {
   }
   // Every package a source map entry comes from, by its innermost
   // node_modules/ segment, whatever tool built the package that inlined it.
-  // The SDK's own internal packages (core-internal) are under its licence.
   for (const source of JSON.parse(sourcemap).sources) {
     const name = [
       ...source.matchAll(/node_modules\/((?:@[^/]+\/)?[^/.][^/]*)\//g),
     ].at(-1)?.[1];
-    if (name && !dirs.has(name) && !name.startsWith("@modelcontextprotocol/")) {
+    if (name && !dirs.has(name) && !COVERED_BY_SDK.has(name)) {
       dirs.set(name, join(ROOT, "scripts/licenses", name));
     }
   }
@@ -145,9 +158,9 @@ async function main() {
     readFileSync(join(ROOT, "package.json"), "utf-8"),
   );
   const version = process.env.SERVER_VERSION || `${packageVersion}-dev`;
+  // Cleared first, so a refused build leaves no bundle, old or new.
   rmSync(join(ROOT, OUTDIR), { recursive: true, force: true });
-  const { metafile } = await bundleServer({ version, outdir: OUTDIR });
-  const sourcemap = readFileSync(join(ROOT, OUTDIR, "server.js.map"), "utf-8");
+  const { metafile, outputFiles, sourcemap } = await bundleServer({ version });
   const { texts, missing } = licenceTexts(metafile, sourcemap);
   const problems = [
     ...bundleProblems(metafile),
@@ -158,8 +171,17 @@ async function main() {
     for (const problem of problems) console.error(`  - ${problem}`);
     process.exit(1);
   }
+  mkdirSync(join(ROOT, OUTDIR), { recursive: true });
+  for (const file of outputFiles) writeFileSync(file.path, file.contents);
   copyLicences(texts, OUTDIR);
   console.log(`Built ${OUTDIR}/server.js (version ${version})`);
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) await main();
+// Node resolves symlinks in import.meta.url but not in argv[1]: compare real
+// paths, or a checkout under a symlink would skip the build and exit 0.
+if (
+  process.argv[1] &&
+  realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  await main();
+}
