@@ -50,9 +50,15 @@ if (expired.length > 0) {
   );
 }
 
-// The same relative path from src/server/ and dist/server/. A bundle (#79)
-// inlines the file at build time.
-const { version } = require("../../package.json") as { version: string };
+// The image's bundle gets its version from scripts/build-server.mjs, which
+// defines SERVER_VERSION (the image has its own release line, ADR-0001 §13)
+// and drops the package.json branch. Run from src/ or dist/, it is undefined
+// and the npm package's version is read: the same relative path from both.
+declare const SERVER_VERSION: string | undefined;
+const version: string =
+  typeof SERVER_VERSION === "string"
+    ? SERVER_VERSION
+    : (require("../../package.json") as { version: string }).version;
 
 const logError = (error: Error) =>
   console.error(`MCP server error: ${error.message}`);

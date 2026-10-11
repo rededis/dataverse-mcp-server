@@ -62,6 +62,16 @@ flag that a misconfiguration could flip.
 points in one package). Workspaces add release and build machinery without
 buying anything the bundle does not already give. See Deferred.
 
+_Settled on 2026-10-10 (#79)._ The npm package keeps what the server needs:
+it goes on depending on `@modelcontextprotocol/node` (and through it `hono`)
+and shipping `dist/server/`, although stdio users never run them. The
+direction of the asymmetry is deliberate: the server is expected to change
+faster than the stdio package, and the stdio package may grow development
+needs of its own, so neither side is trimmed to the other's shape yet. The
+image is unaffected, since it holds only the server bundle. Differences
+between the two variants are left alone until the npm workspaces trigger in
+Deferred is met.
+
 ### 2. Mechanism in code, policy in configuration
 
 Whatever differs between installations is configuration: Dataverse endpoint
@@ -141,6 +151,10 @@ Migrating to SDK v2 (#75) raises `engines.node` from `>=18` to `>=20`, because
 `@modelcontextprotocol/server` and `@modelcontextprotocol/core` 2.0.0 require
 it ([E1](#e1-mcp-typescript-sdk-v2)). That is a breaking change for the npm package and is released as
 0.9.0.
+
+_Raised on 2026-10-10 (#101)._ `engines.node` is `>=24`, the same floor as the
+server image (#79). Node 20 reached end of life on 2026-04-30 and Node 22
+reaches it on 2027-04-30.
 
 ### 6. Proxy headers
 

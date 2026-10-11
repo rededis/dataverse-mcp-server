@@ -14,7 +14,7 @@
     ".env.example"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "build": "tsc",
@@ -22,12 +22,13 @@
     "start:server": "node dist/server/index.js",
     "dev": "tsx src/index.ts",
     "dev:server": "tsx src/server/index.ts",
-    "lint": "biome check src/",
-    "lint:fix": "biome check --write src/",
+    "lint": "biome check src/ scripts/",
+    "lint:fix": "biome check --write src/ scripts/",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepare": "husky",
-    "prepublishOnly": "npm run lint && npm test && npm run build"
+    "prepublishOnly": "npm run lint && npm test && npm run build",
+    "build:server": "node scripts/build-server.mjs"
   },
   "keywords": [
     "mcp",
@@ -59,7 +60,8 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",
     "@modelcontextprotocol/client": "^2.3.1",
-    "@types/node": "^22.0.0",
+    "@types/node": "^24.19.2",
+    "esbuild": "0.28.2",
     "husky": "^9.1.7",
     "tsx": "^4.21.0",
     "typescript": "^5.7.0",

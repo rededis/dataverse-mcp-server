@@ -98,7 +98,8 @@ describe("tool groups", () => {
 // A server entry point may import src/tools/server-groups.ts. Nothing reachable from it
 // may import src/tools/development/, or the development tools end up in the
 // server bundle (ADR-0001 §1). The only way in is src/index.ts (stdio) →
-// src/tools/all.ts → development/. #79 adds the bundle-level check in CI.
+// src/tools/all.ts → development/. The bundle-level check is
+// tests/server/bundle.test.ts.
 describe("import boundary", () => {
   const root = resolve(__dirname, "..");
 
@@ -150,7 +151,7 @@ describe("import boundary", () => {
           f === "src/index.ts",
       ),
     ).toEqual([]);
-    // Packages are invisible to the walk; the bundle check (#79) covers them.
+    // Packages are invisible to the walk; the bundle check covers them.
     // dotenv is named here because the stdio entry uses it and the server
     // must not read a .env file.
     for (const file of reached) {
