@@ -9,6 +9,11 @@
 // the call's `$filter` and other arguments, which the log never records.
 // DataverseBusyError is the exception: its message is written here and
 // carries neither.
+//
+// RefusedError is not a Dataverse failure: the server's own checks refused
+// the call, the client's path and identity-header checks included. Its
+// `check` is safe to log; its `value` only as a fingerprint; its `message`,
+// which quotes the argument, never.
 
 import type { HttpRequest } from "./http.js";
 
@@ -148,6 +153,39 @@ export class DataverseBusyError extends DataverseError {
     readonly retryAfterMs?: number,
   ) {
     super(message);
+  }
+}
+
+/** Which of the server's own checks refused a call. */
+export type RefusalCheck =
+  | "entity-set-name"
+  | "record-id"
+  | "logical-name"
+  | "operation-name"
+  | "binding"
+  | "parameter-name"
+  | "picklist-location"
+  | "allowlist"
+  | "body"
+  | "unknown-entity-set"
+  | "path"
+  | "identity-headers";
+
+/**
+ * A call refused by a check of this server, before or instead of reaching
+ * Dataverse. The message is for the agent and may quote the argument; the
+ * audit log reads only `check`, and `value` only to fingerprint it
+ * (ADR-0001 §12).
+ */
+export class RefusedError extends Error {
+  constructor(
+    readonly check: RefusalCheck,
+    message: string,
+    /** The argument refused for its shape, when there is one. */
+    readonly value?: string,
+  ) {
+    super(message);
+    this.name = "RefusedError";
   }
 }
 

@@ -3,6 +3,25 @@ export interface HttpRequest {
   url: string;
   headers: Record<string, string>;
   body?: string;
+  /** Told what happens to this request on its way; never sent. */
+  observer?: RequestObserver;
+}
+
+/**
+ * What a call's requests went through, for the audit log (#78). The client
+ * and the service protection executors report to it; the executors stay one
+ * per process, and the observer travels with each request instead.
+ */
+export interface RequestObserver {
+  /**
+   * The request goes out to Dataverse, a resend included. One the
+   * concurrency limit or a throttling pause turns away is never sent.
+   */
+  sent?(): void;
+  answered?(response: { records?: number; more: boolean }): void;
+  throttled?(): void;
+  heldBack?(): void;
+  retried?(): void;
 }
 
 /** A complete response: the body is already read, so it can be retried or logged. */

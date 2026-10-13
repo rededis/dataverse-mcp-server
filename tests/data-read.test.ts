@@ -84,4 +84,16 @@ describe("EntitySetCatalog", () => {
     await expect(catalog.assertExists("Accounts")).rejects.toThrow(/Unknown/);
     expect(client.get).toHaveBeenCalledTimes(3);
   });
+
+  // The server builds a catalog per request, on that call's client, so the
+  // lookup is counted for the call; the names found are shared (#78).
+  it("shares the names found between catalogs given the same set", async () => {
+    const client = metadataClient(["accounts"]);
+    const known = new Set<string>();
+    const asClient = client as unknown as DataverseClient;
+
+    await new EntitySetCatalog(asClient, known).assertExists("accounts");
+    await new EntitySetCatalog(asClient, known).assertExists("accounts");
+    expect(client.get).toHaveBeenCalledTimes(1);
+  });
 });

@@ -447,3 +447,71 @@ describe("withServiceProtection", () => {
     expect(inner.execute).toHaveBeenCalledTimes(1);
   });
 });
+
+// The audit log reports, per call, whether Dataverse throttled it, whether it
+// waited for another call's throttling, and how often it was resent (#78).
+describe("observing a request", () => {
+  function observed(path: string) {
+    const seen = { sent: 0, throttled: 0, heldBack: 0, retried: 0 };
+    const req: HttpRequest = {
+      ...get(path),
+      observer: {
+        sent: () => seen.sent++,
+        throttled: () => seen.throttled++,
+        heldBack: () => seen.heldBack++,
+        retried: () => seen.retried++,
+      },
+    };
+    return { req, seen };
+  }
+
+  it("tells the throttled request from the one held back by it", async () => {
+    const inner = pending();
+    const executor = new RetryExecutor(inner);
+    const a = observed("a");
+    const b = observed("b");
+
+    const first = executor.execute(a.req);
+    await vi.advanceTimersByTimeAsync(0);
+    inner.open[0].answer(throttled("2"));
+    await vi.advanceTimersByTimeAsync(0);
+    // Sent while the first waits out its 429: held back, not throttled.
+    const second = executor.execute(b.req);
+    await vi.advanceTimersByTimeAsync(2_000);
+    inner.open[1].answer();
+    inner.open[2].answer();
+    await Promise.all([first, second]);
+
+    expect(a.seen).toEqual({ sent: 2, throttled: 1, heldBack: 0, retried: 1 });
+    expect(b.seen).toEqual({ sent: 1, throttled: 0, heldBack: 1, retried: 0 });
+  });
+
+  it("passes the observer through the concurrency limit unchanged", async () => {
+    const inner = answering(throttled("1"), response(200));
+    const executor = withServiceProtection(inner);
+    const a = observed("a");
+
+    const done = executor.execute(a.req);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await done;
+
+    expect(a.seen).toEqual({ sent: 2, throttled: 1, heldBack: 0, retried: 1 });
+  });
+
+  it("reports nothing sent for a request the queue turns away", async () => {
+    const inner = pending();
+    const executor = withServiceProtection(inner, {
+      maxConcurrency: 1,
+      maxQueueLength: 0,
+    });
+    const first = executor.execute(get("a"));
+    const b = observed("b");
+    await expect(executor.execute(b.req)).rejects.toBeInstanceOf(
+      DataverseBusyError,
+    );
+    expect(b.seen).toEqual({ sent: 0, throttled: 0, heldBack: 0, retried: 0 });
+    await vi.advanceTimersByTimeAsync(0);
+    inner.open[0].answer();
+    await first;
+  });
+});

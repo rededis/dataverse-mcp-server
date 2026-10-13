@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { DataverseClient } from "../../src/client.js";
 import { DataverseCallerDeniedError } from "../../src/errors.js";
 import { createServerApp } from "../../src/server/app.js";
+import { AuditLog } from "../../src/server/audit.js";
 import type { Role } from "../../src/server/config.js";
 import { createServerFactory } from "../../src/server/mcp.js";
 import { ConfigTokenVerifier } from "../../src/server/tokens.js";
@@ -84,8 +85,13 @@ function fakeDataverse(as?: string): DataverseClient {
       return {};
     },
     onBehalfOf: ({ objectId }: { objectId: string }) => fakeDataverse(objectId),
+    // The audit log's view of a call (#78); counted in tests/server/audit-log.test.ts.
+    observed: () => fakeDataverse(as),
   } as unknown as DataverseClient;
 }
+
+// Lines are checked in tests/server/audit-log.test.ts.
+const audit = new AuditLog({ write: () => {} });
 
 function createApp() {
   return createServerApp({
@@ -119,7 +125,9 @@ function createApp() {
     createServer: createServerFactory({
       client: fakeDataverse(),
       version: "0.0.0-test",
+      audit,
     }),
+    audit,
   });
 }
 
@@ -256,7 +264,9 @@ describe("the auth gate on /mcp", () => {
       createServer: createServerFactory({
         client: fakeDataverse(),
         version: "0.0.0-test",
+        audit,
       }),
+      audit,
       onerror: (error) => errors.push(error),
     });
     const res = await faulty.fetch(
@@ -274,7 +284,9 @@ describe("the auth gate on /mcp", () => {
       createServer: createServerFactory({
         client: fakeDataverse(),
         version: "0.0.0-test",
+        audit,
       }),
+      audit,
       onerror: (error) => errors.push(error),
     });
     const res = await quiet.fetch(

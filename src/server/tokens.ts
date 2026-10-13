@@ -17,6 +17,7 @@ export type TokenVerifier = OAuthTokenVerifier;
 /** Who is calling, as the token's config entry says: its name, role and user. */
 export interface Caller {
   name: string;
+  roleName: string;
   role: Role;
   /** The Microsoft Entra object id of the Dataverse user to act as. */
   actAs?: string;
@@ -47,7 +48,12 @@ export class ConfigTokenVerifier implements TokenVerifier {
 
   constructor(config: ServerConfig) {
     this.entries = config.tokens.map((t) => ({
-      caller: { name: t.name, role: config.roles[t.role], actAs: t.actAs },
+      caller: {
+        name: t.name,
+        roleName: t.role,
+        role: config.roles[t.role],
+        actAs: t.actAs,
+      },
       hash: Buffer.from(t.sha256, "hex"),
       // AuthInfo.expiresAt is in seconds since the epoch.
       expiresAt:

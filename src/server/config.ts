@@ -239,11 +239,18 @@ export function readServerConfig(
   };
 }
 
+const MIN_AUDIT_KEY_LENGTH = 32;
+
 export interface ListenSettings {
   host: string;
   port: number;
   /** DATAVERSE_SERVER_CONFIG: the JSON file read by readServerConfig. */
   configPath: string;
+  /**
+   * DATAVERSE_AUDIT_KEY: the HMAC key of the audit log's fingerprints. Without
+   * it a fingerprint has no hash, only a length and flags (#78).
+   */
+  auditKey?: string;
 }
 
 /**
@@ -267,14 +274,25 @@ export function readListenSettings(
   }
   const port = readWholeNumber("PORT", env.PORT, { min: 1, max: 65_535 });
   if (!port.ok) problems.push(port.problem);
+  // A short key could be found by trying keys against a known value. The
+  // key is a secret: its length is reported, never the key.
+  const auditKey = env.DATAVERSE_AUDIT_KEY || undefined;
+  if (auditKey !== undefined && auditKey.length < MIN_AUDIT_KEY_LENGTH) {
+    problems.push(
+      `DATAVERSE_AUDIT_KEY is ${auditKey.length} characters long (expected at least ${MIN_AUDIT_KEY_LENGTH}, e.g. from \`openssl rand -hex 32\`)`,
+    );
+  }
 
-  if (!port.ok || !configPath) return { ok: false, problems };
+  if (problems.length > 0 || !port.ok || !configPath) {
+    return { ok: false, problems };
+  }
   return {
     ok: true,
     settings: {
       host: env.DATAVERSE_SERVER_HOST || "127.0.0.1",
       port: port.value ?? 3000,
       configPath,
+      ...(auditKey && { auditKey }),
     },
   };
 }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { DataverseClient } from "../../src/client.js";
 import { createServerApp } from "../../src/server/app.js";
+import { AuditLog } from "../../src/server/audit.js";
 import { type Listener, listen } from "../../src/server/listener.js";
 import { createServerFactory } from "../../src/server/mcp.js";
 import { ConfigTokenVerifier } from "../../src/server/tokens.js";
@@ -13,14 +14,21 @@ afterEach(async () => {
 });
 
 async function start() {
+  const audit = new AuditLog({ write: () => {} });
+  // No tool is called: the client is only given its per-call view.
+  const client = {
+    observed: () => client,
+  } as unknown as DataverseClient;
   const app = createServerApp({
     verifier: new ConfigTokenVerifier(
       serverConfig([{ name: "alice", sha256: sha256("alice-token") }]),
     ),
     createServer: createServerFactory({
-      client: {} as DataverseClient,
+      client,
       version: "0.0.0-test",
+      audit,
     }),
+    audit,
   });
   listener = await listen(app, { host: "127.0.0.1", port: 0 });
   return `http://127.0.0.1:${listener.port}`;

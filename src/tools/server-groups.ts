@@ -5,7 +5,12 @@ import { registerFunctionTools } from "./functions.js";
 import { registerMetadataReadTools } from "./metadata-read.js";
 import type { RegisterTools, ToolGroup } from "./types.js";
 
-export type { RegisterTools, ToolDeps, ToolGroup } from "./types.js";
+export type {
+  RegisterTools,
+  ToolDeps,
+  ToolGroup,
+  ToolRegistrar,
+} from "./types.js";
 
 /**
  * The groups a remote server may expose. `development` is deliberately absent:

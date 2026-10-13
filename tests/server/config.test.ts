@@ -77,6 +77,43 @@ describe("readListenSettings", () => {
     });
     expect(result.ok).toBe(false);
   });
+
+  // The key of the audit log's fingerprints (#78): optional, and long enough
+  // that the fingerprints cannot be reversed by guessing the key.
+  it("reads DATAVERSE_AUDIT_KEY, and takes an empty one as unset", () => {
+    const key = "k".repeat(32);
+    const read = (value: string) =>
+      readListenSettings({
+        DATAVERSE_SERVER_CONFIG: "/c.json",
+        DATAVERSE_AUDIT_KEY: value,
+      });
+    expect(read(key)).toEqual({
+      ok: true,
+      settings: {
+        host: "127.0.0.1",
+        port: 3000,
+        configPath: "/c.json",
+        auditKey: key,
+      },
+    });
+    expect(read("")).toEqual({
+      ok: true,
+      settings: { host: "127.0.0.1", port: 3000, configPath: "/c.json" },
+    });
+  });
+
+  it("refuses a DATAVERSE_AUDIT_KEY shorter than 32 characters, without echoing it", () => {
+    const result = readListenSettings({
+      DATAVERSE_SERVER_CONFIG: "/c.json",
+      DATAVERSE_AUDIT_KEY: "short-secret",
+    });
+    expect(result).toEqual({
+      ok: false,
+      problems: [
+        "DATAVERSE_AUDIT_KEY is 12 characters long (expected at least 32, e.g. from `openssl rand -hex 32`)",
+      ],
+    });
+  });
 });
 
 describe("readServerConfig", () => {

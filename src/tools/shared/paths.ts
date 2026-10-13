@@ -4,6 +4,7 @@
 // `/accounts(<id>)`.
 
 import type { DataverseClient } from "../../client.js";
+import { RefusedError } from "../../errors.js";
 import type { Permissions } from "../permissions.js";
 import { escapeODataString } from "./odata.js";
 
@@ -18,7 +19,7 @@ const GUID_BODY = "[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}";
 export const GUID = new RegExp(`^${GUID_BODY}$`);
 
 /** A logical name: of a table, a column, a key or a global choice. */
-const LOGICAL_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+export const LOGICAL_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /**
  * The metadata tools put logical names in the path, inside a quoted key
@@ -27,23 +28,31 @@ const LOGICAL_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
  */
 export function assertLogicalName(name: string, what: string): void {
   if (!LOGICAL_NAME.test(name)) {
-    throw new Error(
+    throw new RefusedError(
+      "logical-name",
       `Invalid ${what}: '${name}'. Use the logical name, e.g. 'account'.`,
+      name,
     );
   }
 }
 
 export function assertEntitySetName(name: string): void {
   if (!ENTITY_SET_NAME.test(name)) {
-    throw new Error(
+    throw new RefusedError(
+      "entity-set-name",
       `Invalid entity set name: '${name}'. Use the plural entity set name, e.g. 'accounts'.`,
+      name,
     );
   }
 }
 
 export function assertRecordId(id: string): void {
   if (!GUID.test(id)) {
-    throw new Error(`Invalid record id (expected a GUID): ${id}`);
+    throw new RefusedError(
+      "record-id",
+      `Invalid record id (expected a GUID): ${id}`,
+      id,
+    );
   }
 }
 
@@ -99,7 +108,8 @@ export function assertBodyWithin(
       value.every((url) => typeof url === "string")
     ) {
       if (permissions.update !== "*") {
-        throw new Error(
+        throw new RefusedError(
+          "body",
           `Linking several records is not permitted for this token: '${key}' would rewrite the lookup of each record listed, which needs update on every table. Set the lookup from each of those records instead.`,
         );
       }
@@ -113,7 +123,8 @@ export function assertBodyWithin(
       continue;
     }
     if (permissions.create !== "*") {
-      throw new Error(
+      throw new RefusedError(
+        "body",
         `Nested records are not permitted for this token: '${key}' would create records, which needs create on every table. Create related records separately, and link them with '<lookup>@odata.bind'.`,
       );
     }
@@ -133,14 +144,16 @@ function isRecordLike(value: unknown): value is object {
  * The entity sets that exist, looked up in the metadata. A plain name in the
  * first path segment can also be an unbound function or action
  * (`/WhoAmI`), which `query_records` or `create_record` would otherwise call
- * outside the actions and functions groups. Found names are remembered for
- * the life of the process; names not found are looked up again, since a table
- * may be created meanwhile.
+ * outside the actions and functions groups. Found names are remembered in
+ * `known`, which catalogs may share: the server builds one per request on
+ * that call's client, and keeps the names for the life of the process. Names
+ * not found are looked up again, since a table may be created meanwhile.
  */
 export class EntitySetCatalog {
-  private known = new Set<string>();
-
-  constructor(private client: DataverseClient) {}
+  constructor(
+    private client: DataverseClient,
+    private known: Set<string> = new Set(),
+  ) {}
 
   async assertExists(name: string): Promise<void> {
     if (this.known.has(name)) return;
@@ -154,7 +167,8 @@ export class EntitySetCatalog {
       this.known.add(name);
       return;
     }
-    throw new Error(
+    throw new RefusedError(
+      "unknown-entity-set",
       `Unknown entity set: '${name}'. Use the plural entity set name, e.g. 'accounts' (list_entities shows them).`,
     );
   }
