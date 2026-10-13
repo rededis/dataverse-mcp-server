@@ -398,6 +398,35 @@ above is built:
   duration, record count). Never: tokens, secrets, argument or result
   content, Dataverse error text. There is no flag to turn content on.
 
+_Settled on 2026-10-13 (#78)._ What "shape, not content" covers, now that the
+line is built:
+
+- Names the call uses are logged only after the audit code's own shape
+  check, whatever the tool checked: entity set, column names, record id (a
+  GUID), action or function name, the logical names of a metadata call, the
+  field names of a create or update body and the parameter names of an
+  action or function. Their values never are, nor `list_entities`' prefix and
+  solution filters. `top` is logged as the number it is.
+- A value refused for its shape is not logged. Its length is, with whether it
+  has an `@`, a space or non-ASCII characters, and, when `DATAVERSE_AUDIT_KEY`
+  is set, an HMAC-SHA256 of it under that key, so whoever holds the key can
+  match it against the agent's own logs. A plain hash is not used: the CRM
+  itself is the dictionary that reverses the hash of an email.
+- The id of the record `create_record` made is logged, taken from
+  `OData-EntityId`, only when it is a GUID.
+- The JSON-RPC id is logged, so a line leads to the call in the agent's logs,
+  and the `X-Request-Id` a proxy set, so it leads to the proxy's logs: as is
+  when short and plain, otherwise its fingerprint. The server makes up
+  neither, and logs no client IP.
+- Lines that are not tool calls go to the same log: a refused token (no
+  token, malformed, unknown, expired; the name only when the token was known
+  and expired), a request refused for its `Origin`, and a call to a tool the
+  caller's role does not have. A call whose arguments fail the tool's input
+  schema is answered by the SDK before the server sees it and is not logged
+  (#80 says so).
+- The log is stdout, one JSON line each, `"type": "audit"`; everything else
+  the server says goes to stderr.
+
 ### 13. Two independent release lines
 
 - Tags `v*` publish the npm package (`release.yml`).
