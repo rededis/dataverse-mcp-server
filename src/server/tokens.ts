@@ -17,7 +17,6 @@ export type TokenVerifier = OAuthTokenVerifier;
 /** Who is calling, as the token's config entry says: its name, role and user. */
 export interface Caller {
   name: string;
-  /** The role's name in the config, for the audit log. */
   roleName: string;
   role: Role;
   /** The Microsoft Entra object id of the Dataverse user to act as. */

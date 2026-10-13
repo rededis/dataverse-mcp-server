@@ -37,7 +37,6 @@ export interface AuditLogger {
   write(line: AuditLine): void;
 }
 
-/** Enough of a writable stream: process.stdout in the server, a fake in tests. */
 interface LineStream {
   write(chunk: string, callback?: () => void): boolean;
 }
@@ -71,13 +70,11 @@ export class JsonLinesAuditLogger implements AuditLogger {
   }
 }
 
-/** What a refused or unexpected value was like, without the value. */
 export interface Fingerprint {
   length: number;
   hasAt: boolean;
   hasSpace: boolean;
   nonAscii: boolean;
-  /** HMAC-SHA256 under DATAVERSE_AUDIT_KEY, the first 16 hex; absent without a key. */
   hmac?: string;
 }
 
@@ -224,7 +221,6 @@ export function outcomeOf(
   }
   return {
     outcome: "error",
-    // Built-in classes keep their names; anything else is not worth more.
     error: { class: error instanceof Error ? error.name : typeof error },
   };
 }
@@ -301,9 +297,7 @@ export class CallMetrics {
   private retries = 0;
   private wasThrottled = false;
   private wasHeldBack = false;
-  /** Rows of the tool's last response with a `value` array. */
   records?: number;
-  /** Whether a response of the tool's had a next page. */
   more = false;
 
   private common: RequestObserver = {
@@ -386,12 +380,10 @@ export class AuditLog {
     this.logger.write({ type: "audit", time: time.toISOString(), ...fields });
   }
 
-  /** An id another system chose, as plainOrFingerprint logs it. */
   id(value: string | number): Id {
     return plainOrFingerprint(value, this.key);
   }
 
-  /** Counts a call as running until the returned function is called. */
   begin(): () => void {
     this.running++;
     let ended = false;
@@ -405,7 +397,6 @@ export class AuditLog {
     };
   }
 
-  /** Resolves when no call is running, or after `timeoutMs`. */
   settled(timeoutMs: number): Promise<void> {
     if (this.running === 0) return Promise.resolve();
     return new Promise((resolve) => {

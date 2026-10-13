@@ -21,7 +21,6 @@ export interface DataverseClientOptions {
   executor?: RequestExecutor;
   /** Every request is made on behalf of this user (`CallerObjectId`). */
   caller?: OnBehalfOf;
-  /** Told about every request, for the audit log (#78). */
   observer?: RequestObserver;
 }
 

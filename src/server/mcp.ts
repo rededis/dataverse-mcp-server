@@ -28,7 +28,6 @@ export interface ServerFactoryDeps
   /** The application user's client, shared by every request. */
   client: DataverseClient;
   version: string;
-  /** Where each tool call's line goes (#78). */
   audit: AuditLog;
 }
 
