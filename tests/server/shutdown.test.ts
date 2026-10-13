@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import type { DataverseAuth } from "../../src/auth.js";
 import { DataverseClient } from "../../src/client.js";
@@ -151,10 +152,15 @@ describe("the server process", () => {
       }),
     );
     const port = await freePort();
+    // tsx's loader, not its CLI: the CLI runs the server in a child process
+    // of its own, and on the Linux CI runner the CLI exited 143 on SIGTERM
+    // where the server itself exits 0. With the loader the signal reaches
+    // the server.
     const child = spawn(
       process.execPath,
       [
-        join(root, "node_modules/tsx/dist/cli.mjs"),
+        "--import",
+        pathToFileURL(join(root, "node_modules/tsx/dist/loader.mjs")).href,
         join(root, "src/server/index.ts"),
       ],
       {
