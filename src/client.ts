@@ -4,6 +4,7 @@ import {
   DataverseCallerDeniedError,
   DataverseError,
   type OnBehalfOf,
+  RefusedError,
 } from "./errors.js";
 import { FetchExecutor, type RequestExecutor } from "./executor.js";
 
@@ -39,7 +40,8 @@ const UNSAFE_PATH = /(^|\/)\.{1,2}(\/|$)|%2e|\\|#|[\x00-\x1f\x7f]/i;
 function assertPathStaysPut(path: string): void {
   const beforeQuery = path.split("?", 1)[0];
   if (UNSAFE_PATH.test(beforeQuery)) {
-    throw new DataverseError(
+    throw new RefusedError(
+      "path",
       `Refused a request path that would reach another resource: ${beforeQuery}`,
     );
   }
@@ -60,7 +62,8 @@ function assertNoIdentityHeaders(headers: Record<string, string>): void {
     IDENTITY_HEADERS.has(name.toLowerCase()),
   );
   if (found.length > 0) {
-    throw new DataverseError(
+    throw new RefusedError(
+      "identity-headers",
       `Refused a request that sets who makes it: ${found.join(", ")}`,
     );
   }

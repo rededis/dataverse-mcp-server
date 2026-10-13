@@ -4,6 +4,7 @@
 // `/accounts(<id>)`.
 
 import type { DataverseClient } from "../../client.js";
+import { RefusedError } from "../../errors.js";
 import type { Permissions } from "../permissions.js";
 import { escapeODataString } from "./odata.js";
 
@@ -27,23 +28,31 @@ const LOGICAL_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
  */
 export function assertLogicalName(name: string, what: string): void {
   if (!LOGICAL_NAME.test(name)) {
-    throw new Error(
+    throw new RefusedError(
+      "logical-name",
       `Invalid ${what}: '${name}'. Use the logical name, e.g. 'account'.`,
+      name,
     );
   }
 }
 
 export function assertEntitySetName(name: string): void {
   if (!ENTITY_SET_NAME.test(name)) {
-    throw new Error(
+    throw new RefusedError(
+      "entity-set-name",
       `Invalid entity set name: '${name}'. Use the plural entity set name, e.g. 'accounts'.`,
+      name,
     );
   }
 }
 
 export function assertRecordId(id: string): void {
   if (!GUID.test(id)) {
-    throw new Error(`Invalid record id (expected a GUID): ${id}`);
+    throw new RefusedError(
+      "record-id",
+      `Invalid record id (expected a GUID): ${id}`,
+      id,
+    );
   }
 }
 
@@ -99,7 +108,8 @@ export function assertBodyWithin(
       value.every((url) => typeof url === "string")
     ) {
       if (permissions.update !== "*") {
-        throw new Error(
+        throw new RefusedError(
+          "body",
           `Linking several records is not permitted for this token: '${key}' would rewrite the lookup of each record listed, which needs update on every table. Set the lookup from each of those records instead.`,
         );
       }
@@ -113,7 +123,8 @@ export function assertBodyWithin(
       continue;
     }
     if (permissions.create !== "*") {
-      throw new Error(
+      throw new RefusedError(
+        "body",
         `Nested records are not permitted for this token: '${key}' would create records, which needs create on every table. Create related records separately, and link them with '<lookup>@odata.bind'.`,
       );
     }
@@ -154,7 +165,8 @@ export class EntitySetCatalog {
       this.known.add(name);
       return;
     }
-    throw new Error(
+    throw new RefusedError(
+      "unknown-entity-set",
       `Unknown entity set: '${name}'. Use the plural entity set name, e.g. 'accounts' (list_entities shows them).`,
     );
   }

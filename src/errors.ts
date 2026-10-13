@@ -151,6 +151,39 @@ export class DataverseBusyError extends DataverseError {
   }
 }
 
+/** Which of the server's own checks refused a call. */
+export type RefusalCheck =
+  | "entity-set-name"
+  | "record-id"
+  | "logical-name"
+  | "operation-name"
+  | "binding"
+  | "parameter-name"
+  | "picklist-location"
+  | "allowlist"
+  | "body"
+  | "unknown-entity-set"
+  | "path"
+  | "identity-headers";
+
+/**
+ * A call refused by a check of this server, before or instead of reaching
+ * Dataverse. The message is for the agent and may quote the argument; the
+ * audit log reads only `check`, and `value` only to fingerprint it
+ * (ADR-0001 §12).
+ */
+export class RefusedError extends Error {
+  constructor(
+    readonly check: RefusalCheck,
+    message: string,
+    /** The argument refused for its shape, when there is one. */
+    readonly value?: string,
+  ) {
+    super(message);
+    this.name = "RefusedError";
+  }
+}
+
 /** A string field of the JSON error body (`{"error":{"code":…,"message":…}}`). */
 function errorField(
   body: string,

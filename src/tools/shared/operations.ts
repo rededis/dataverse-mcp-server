@@ -1,6 +1,7 @@
 // Helpers shared by invoke_action and invoke_function, which sit in separate
 // tool groups.
 
+import { RefusedError } from "../../errors.js";
 import { assertEntitySetName, assertRecordId, GUID } from "./paths.js";
 
 // Operation names are restricted to identifiers so a caller can never smuggle
@@ -23,8 +24,10 @@ export function bareOperationName(name: string): string {
     ? name.slice(CRM_NAMESPACE.length)
     : name;
   if (!OPERATION_NAME.test(bare)) {
-    throw new Error(
+    throw new RefusedError(
+      "operation-name",
       `Invalid operation name: '${name}'. Use the bare operation name (e.g. 'QualifyLead', 'PublishDuplicateRule').`,
+      name,
     );
   }
   return bare;
@@ -47,7 +50,8 @@ export function resolveBinding(entitySet?: string, id?: string): boolean {
   const hasSet = entitySet !== undefined && entitySet !== "";
   const hasId = id !== undefined && id !== "";
   if (hasSet !== hasId) {
-    throw new Error(
+    throw new RefusedError(
+      "binding",
       "Inconsistent binding: a bound call requires both entity_set and id; an unbound call requires neither.",
     );
   }
@@ -84,8 +88,10 @@ export function buildFunctionCall(
   if (keys.length === 0) return opName;
   for (const k of keys) {
     if (!PARAM_NAME.test(k)) {
-      throw new Error(
+      throw new RefusedError(
+        "parameter-name",
         `Invalid parameter name: '${k}'. Parameter names must be identifiers (letters, digits, underscore; starting with a letter).`,
+        k,
       );
     }
   }

@@ -3,6 +3,8 @@
 // the HTTP server from the caller's role. The tools check it on every call,
 // not only when deciding what to register (ADR-0001 §9).
 
+import { RefusedError } from "../errors.js";
+
 /**
  * The names an operation may touch: the exact names, or `"*"` for any. Only
  * the stdio package uses `"*"`; the server config takes names (ADR-0002).
@@ -68,7 +70,8 @@ export function assertAllowed(
 ): void {
   if (allows(list, name)) return;
   const allowed = list === "*" ? "any" : list.join(", ") || "none";
-  throw new Error(
+  throw new RefusedError(
+    "allowlist",
     `Not permitted: ${operation} '${name}'. This token is allowed: ${allowed}.`,
   );
 }
