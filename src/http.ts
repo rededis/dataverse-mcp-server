@@ -3,6 +3,26 @@ export interface HttpRequest {
   url: string;
   headers: Record<string, string>;
   body?: string;
+  /** Told what happens to this request on its way; never sent. */
+  observer?: RequestObserver;
+}
+
+/**
+ * What a call's requests went through, for the audit log (#78). The client
+ * and the service protection executors report to it; the executors stay one
+ * per process, and the observer travels with each request instead.
+ */
+export interface RequestObserver {
+  /** The client is sending a request (retries not counted). */
+  sent?(): void;
+  /** A JSON response: the length of its `value` array, and whether it has a next page. */
+  answered?(response: { records?: number; more: boolean }): void;
+  /** Dataverse answered this request with 429. */
+  throttled?(): void;
+  /** The request waited before its first send, because another was throttled. */
+  heldBack?(): void;
+  /** The request is sent again after a 429. */
+  retried?(): void;
 }
 
 /** A complete response: the body is already read, so it can be retried or logged. */

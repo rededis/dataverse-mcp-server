@@ -19,7 +19,7 @@ const GUID_BODY = "[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}";
 export const GUID = new RegExp(`^${GUID_BODY}$`);
 
 /** A logical name: of a table, a column, a key or a global choice. */
-const LOGICAL_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+export const LOGICAL_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /**
  * The metadata tools put logical names in the path, inside a quoted key

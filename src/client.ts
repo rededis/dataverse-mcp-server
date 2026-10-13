@@ -7,6 +7,7 @@ import {
   RefusedError,
 } from "./errors.js";
 import { FetchExecutor, type RequestExecutor } from "./executor.js";
+import type { RequestObserver } from "./http.js";
 
 export interface DataverseRequestOptions {
   method?: string;
@@ -20,6 +21,8 @@ export interface DataverseClientOptions {
   executor?: RequestExecutor;
   /** Every request is made on behalf of this user (`CallerObjectId`). */
   caller?: OnBehalfOf;
+  /** Told about every request, for the audit log (#78). */
+  observer?: RequestObserver;
 }
 
 // What fetch would resolve or cut off in the path, so that it addressed
@@ -73,6 +76,7 @@ export class DataverseClient {
   private baseUrl: string;
   private executor: RequestExecutor;
   private caller?: OnBehalfOf;
+  private observer?: RequestObserver;
 
   constructor(
     private auth: DataverseAuth,
@@ -83,6 +87,7 @@ export class DataverseClient {
     this.baseUrl = `${normalizedUrl}/api/data/${options.apiVersion ?? "v9.2"}`;
     this.executor = options.executor ?? new FetchExecutor();
     this.caller = options.caller;
+    this.observer = options.observer;
   }
 
   /**
@@ -97,6 +102,19 @@ export class DataverseClient {
       ...this.options,
       executor: this.executor,
       caller,
+    });
+  }
+
+  /**
+   * The same client, reporting its requests to an observer: one call's view,
+   * for the audit log. Like onBehalfOf it shares the token cache and the
+   * executor, and the two combine in either order.
+   */
+  observed(observer: RequestObserver): DataverseClient {
+    return new DataverseClient(this.auth, this.resourceUrl, {
+      ...this.options,
+      executor: this.executor,
+      observer,
     });
   }
 
@@ -126,12 +144,14 @@ export class DataverseClient {
       headers["Content-Type"] = "application/json";
     }
 
+    this.observer?.sent?.();
     const response = await this.executor.execute({
       method,
       url,
       headers,
       body:
         options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      ...(this.observer && { observer: this.observer }),
     });
 
     if (response.status === 204) {
@@ -155,14 +175,23 @@ export class DataverseClient {
       );
     }
 
+    let parsed: unknown;
     try {
-      return JSON.parse(response.body);
+      parsed = JSON.parse(response.body);
     } catch (err) {
       throw new DataverseError(
         `Dataverse returned ${response.status} with a body that is not JSON: ${method} ${url}`,
         { cause: err },
       );
     }
+    if (this.observer?.answered) {
+      const page = parsed as { value?: unknown; "@odata.nextLink"?: unknown };
+      this.observer.answered({
+        records: Array.isArray(page?.value) ? page.value.length : undefined,
+        more: typeof page?.["@odata.nextLink"] === "string",
+      });
+    }
+    return parsed;
   }
 
   async get(path: string): Promise<unknown> {

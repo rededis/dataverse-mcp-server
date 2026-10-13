@@ -73,6 +73,8 @@ export class RetryExecutor implements RequestExecutor {
       for (;;) {
         const pauseMs = this.pausedUntil - Date.now();
         if (pauseMs <= 0) break;
+        // Before its first send, a request waits only for another's 429.
+        if (attempt === 1) request.observer?.heldBack?.();
         if (waitedMs + pauseMs > this.maxRetryWaitMs) {
           throw throttledError(pauseMs);
         }
@@ -83,8 +85,10 @@ export class RetryExecutor implements RequestExecutor {
         waitedMs += Date.now() - before;
       }
 
+      if (attempt > 1) request.observer?.retried?.();
       const response = await this.inner.execute(request);
       if (response.status !== 429) return response;
+      request.observer?.throttled?.();
 
       const retryMs =
         parseRetryAfter(response.headers.get("Retry-After")) ??

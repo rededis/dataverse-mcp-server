@@ -398,3 +398,96 @@ describe("DataverseClient request paths", () => {
     expect(requests).toHaveLength(1);
   });
 });
+
+// What a call's requests report to the audit log (#78).
+describe("DataverseClient observed", () => {
+  function setup(responses: { status: number; body?: string }[]) {
+    const requests: HttpRequest[] = [];
+    const executor: RequestExecutor = {
+      execute: async (request) => {
+        requests.push(request);
+        const r = responses.shift() ?? { status: 200 };
+        return {
+          status: r.status,
+          headers: new Headers(),
+          body: r.body ?? "{}",
+        };
+      },
+    };
+    const auth = new DataverseAuth(
+      "t",
+      "c",
+      "s",
+      "https://org.crm.dynamics.com",
+    );
+    vi.spyOn(auth, "getToken").mockResolvedValue("t");
+    const base = new DataverseClient(auth, "https://org.crm.dynamics.com", {
+      executor,
+    });
+    const events: unknown[] = [];
+    const observer = {
+      sent: () => events.push("sent"),
+      answered: (r: unknown) => events.push(r),
+    };
+    return { base, requests, events, observer };
+  }
+
+  it("reports each request and the rows of its response", async () => {
+    const { base, events, observer } = setup([
+      {
+        status: 200,
+        body: JSON.stringify({
+          value: [{}, {}],
+          "@odata.nextLink": "https://x",
+        }),
+      },
+      { status: 200, body: "{}" },
+    ]);
+    const client = base.observed(observer);
+
+    await client.get("/accounts");
+    await client.get("/accounts(1)");
+
+    expect(events).toEqual([
+      "sent",
+      { records: 2, more: true },
+      "sent",
+      { records: undefined, more: false },
+    ]);
+  });
+
+  it("puts the observer on each request for the executors", async () => {
+    const { base, requests, observer } = setup([]);
+    await base.observed(observer).get("/accounts");
+    expect(requests[0].observer).toBe(observer);
+  });
+
+  it("keeps it when acting on behalf of a user, and the base client has none", async () => {
+    const { base, requests, observer } = setup([]);
+    const user = {
+      name: "dave",
+      objectId: "22222222-2222-2222-2222-222222222222",
+    };
+
+    await base.observed(observer).onBehalfOf(user).get("/a");
+    await base.onBehalfOf(user).observed(observer).get("/b");
+    await base.get("/c");
+
+    expect(requests.map((r) => [r.observer, r.headers.CallerObjectId])).toEqual(
+      [
+        [observer, user.objectId],
+        [observer, user.objectId],
+        [undefined, undefined],
+      ],
+    );
+  });
+
+  it("reports a request that fails as sent", async () => {
+    const { base, events, observer } = setup([{ status: 404 }]);
+    await base
+      .observed(observer)
+      .get("/accounts")
+      .catch(() => {});
+    expect(events).toEqual(["sent"]);
+  });
+});

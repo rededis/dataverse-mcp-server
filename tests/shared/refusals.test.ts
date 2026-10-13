@@ -44,11 +44,7 @@ const NOTHING = { create: [], update: [] } as const;
 
 describe("refusals name their check", () => {
   it.each<[RefusalCheck, () => unknown, string | undefined]>([
-    [
-      "entity-set-name",
-      () => assertEntitySetName("a/../b"),
-      "a/../b",
-    ],
+    ["entity-set-name", () => assertEntitySetName("a/../b"), "a/../b"],
     ["record-id", () => assertRecordId("john@example.com"), "john@example.com"],
     [
       "logical-name",
