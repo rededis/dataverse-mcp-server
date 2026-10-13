@@ -13,7 +13,10 @@ export interface HttpRequest {
  * per process, and the observer travels with each request instead.
  */
 export interface RequestObserver {
-  /** The client is sending a request (retries not counted). */
+  /**
+   * The request goes out to Dataverse, a resend included. One the
+   * concurrency limit or a throttling pause turns away is never sent.
+   */
   sent?(): void;
   /** A JSON response: the length of its `value` array, and whether it has a next page. */
   answered?(response: { records?: number; more: boolean }): void;

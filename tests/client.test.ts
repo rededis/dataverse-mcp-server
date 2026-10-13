@@ -432,7 +432,7 @@ describe("DataverseClient observed", () => {
     return { base, requests, events, observer };
   }
 
-  it("reports each request and the rows of its response", async () => {
+  it("reports the rows of each response", async () => {
     const { base, events, observer } = setup([
       {
         status: 200,
@@ -449,9 +449,7 @@ describe("DataverseClient observed", () => {
     await client.get("/accounts(1)");
 
     expect(events).toEqual([
-      "sent",
       { records: 2, more: true },
-      "sent",
       { records: undefined, more: false },
     ]);
   });
@@ -482,12 +480,12 @@ describe("DataverseClient observed", () => {
     );
   });
 
-  it("reports a request that fails as sent", async () => {
+  it("reports no rows for a request that fails", async () => {
     const { base, events, observer } = setup([{ status: 404 }]);
     await base
       .observed(observer)
       .get("/accounts")
       .catch(() => {});
-    expect(events).toEqual(["sent"]);
+    expect(events).toEqual([]);
   });
 });

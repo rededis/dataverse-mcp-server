@@ -144,7 +144,6 @@ export class DataverseClient {
       headers["Content-Type"] = "application/json";
     }
 
-    this.observer?.sent?.();
     const response = await this.executor.execute({
       method,
       url,

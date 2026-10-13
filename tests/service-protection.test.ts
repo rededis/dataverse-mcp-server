@@ -452,10 +452,11 @@ describe("withServiceProtection", () => {
 // waited for another call's throttling, and how often it was resent (#78).
 describe("observing a request", () => {
   function observed(path: string) {
-    const seen = { throttled: 0, heldBack: 0, retried: 0 };
+    const seen = { sent: 0, throttled: 0, heldBack: 0, retried: 0 };
     const req: HttpRequest = {
       ...get(path),
       observer: {
+        sent: () => seen.sent++,
         throttled: () => seen.throttled++,
         heldBack: () => seen.heldBack++,
         retried: () => seen.retried++,
@@ -481,8 +482,8 @@ describe("observing a request", () => {
     inner.open[2].answer();
     await Promise.all([first, second]);
 
-    expect(a.seen).toEqual({ throttled: 1, heldBack: 0, retried: 1 });
-    expect(b.seen).toEqual({ throttled: 0, heldBack: 1, retried: 0 });
+    expect(a.seen).toEqual({ sent: 2, throttled: 1, heldBack: 0, retried: 1 });
+    expect(b.seen).toEqual({ sent: 1, throttled: 0, heldBack: 1, retried: 0 });
   });
 
   it("passes the observer through the concurrency limit unchanged", async () => {
@@ -494,6 +495,23 @@ describe("observing a request", () => {
     await vi.advanceTimersByTimeAsync(1_000);
     await done;
 
-    expect(a.seen).toEqual({ throttled: 1, heldBack: 0, retried: 1 });
+    expect(a.seen).toEqual({ sent: 2, throttled: 1, heldBack: 0, retried: 1 });
+  });
+
+  it("reports nothing sent for a request the queue turns away", async () => {
+    const inner = pending();
+    const executor = withServiceProtection(inner, {
+      maxConcurrency: 1,
+      maxQueueLength: 0,
+    });
+    const first = executor.execute(get("a"));
+    const b = observed("b");
+    await expect(executor.execute(b.req)).rejects.toBeInstanceOf(
+      DataverseBusyError,
+    );
+    expect(b.seen).toEqual({ sent: 0, throttled: 0, heldBack: 0, retried: 0 });
+    await vi.advanceTimersByTimeAsync(0);
+    inner.open[0].answer();
+    await first;
   });
 });

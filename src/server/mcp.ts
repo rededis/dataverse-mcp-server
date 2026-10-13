@@ -35,9 +35,10 @@ export interface ServerFactoryDeps
 // A tool name as MCP allows it; anything else in the body is fingerprinted.
 const TOOL_NAME = /^[A-Za-z0-9_.-]{1,128}$/;
 
+// The SDK calls a tool's handler with (args, ctx), or with (ctx) alone when
+// the tool declares no input schema.
 type ToolHandler = (
-  args: Record<string, unknown>,
-  ctx: ServerContext,
+  ...params: unknown[]
 ) => CallToolResult | Promise<CallToolResult>;
 
 /**
@@ -90,8 +91,10 @@ export function createServerFactory(deps: ServerFactoryDeps): McpServerFactory {
     };
 
     const audited =
-      (tool: string, handler: ToolHandler): ToolHandler =>
-      async (args, callCtx) => {
+      (tool: string, handler: ToolHandler, takesArgs: boolean): ToolHandler =>
+      async (...params) => {
+        const args = (takesArgs ? params[0] : {}) as Record<string, unknown>;
+        const callCtx = params[takesArgs ? 1 : 0] as ServerContext;
         const start = new Date();
         const end = audit.begin();
         const line = (ending: Record<string, unknown>) =>
@@ -108,7 +111,7 @@ export function createServerFactory(deps: ServerFactoryDeps): McpServerFactory {
             start,
           );
         try {
-          const result = await handler(args, callCtx);
+          const result = await handler(...params);
           line(
             result.isError
               ? { outcome: "error" }
@@ -124,15 +127,22 @@ export function createServerFactory(deps: ServerFactoryDeps): McpServerFactory {
       };
 
     const server = new McpServer({ name: "dataverse-mcp-server", version });
+    const registered = new Set<string>();
     const registrar: ToolRegistrar = {
       // The overloads of registerTool are not worth restating: the wrapper
       // passes the tool's name and config through untouched.
-      registerTool: ((name: string, config: never, handler: ToolHandler) =>
-        server.registerTool(
+      registerTool: ((
+        name: string,
+        config: { inputSchema?: unknown },
+        handler: ToolHandler,
+      ) => {
+        registered.add(name);
+        return server.registerTool(
           name,
-          config,
-          audited(name, handler) as never,
-        )) as McpServer["registerTool"],
+          config as never,
+          audited(name, handler, config.inputSchema !== undefined) as never,
+        );
+      }) as McpServer["registerTool"],
     };
     for (const group of groups) {
       if (caller.role.groups.includes(group)) {
@@ -143,7 +153,7 @@ export function createServerFactory(deps: ServerFactoryDeps): McpServerFactory {
     // A call to a tool the role does not have: the SDK answers "not found"
     // before any handler runs, so the line is written here.
     const call = facts.call;
-    if (call && server.toolInputSchemaJson(call.tool) === undefined) {
+    if (call && !registered.has(call.tool)) {
       const named = TOOL_NAME.test(call.tool);
       audit.write({
         durationMs: 0,

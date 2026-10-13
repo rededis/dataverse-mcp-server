@@ -664,7 +664,8 @@ describe("throttling, per call", () => {
       throttled: true,
       heldBack: false,
       retries: 1,
-      dataverseRequests: 2,
+      // The lookup, and the query sent twice.
+      dataverseRequests: 3,
       outcome: "ok",
     });
     expect(byId.second).toMatchObject({

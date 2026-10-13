@@ -68,6 +68,15 @@ const logError = (error: Error) =>
   console.error(`MCP server error: ${error.message}`);
 
 const logger = new JsonLinesAuditLogger(process.stdout);
+// stdout's reader can go away (EPIPE). Without a listener that error would
+// end the process; the server keeps serving and says, once, that its audit
+// lines are being lost.
+let auditLost = false;
+process.stdout.on("error", (error) => {
+  if (auditLost) return;
+  auditLost = true;
+  console.error(`Audit log lost: writing to stdout failed: ${error.message}`);
+});
 const audit = new AuditLog(logger, listen.settings.auditKey);
 
 const { entityPrefix, solutionName } = dataverse.settings;

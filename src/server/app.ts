@@ -66,89 +66,96 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       }
       if (pathname !== MCP_PATH) return notFound();
 
-      // Set by the proxy in front, so a line leads to the proxy's own log.
-      const requestIdHeader = request.headers.get("x-request-id");
-      const requestId =
-        requestIdHeader === null ? undefined : audit.id(requestIdHeader);
-      const withRequestId = requestId !== undefined && { requestId };
-
-      // The specification requires validating Origin against DNS rebinding.
-      // No origin is allowed: browser clients are not supported (ADR-0001
-      // §7). Clients that are not browsers send none, and are served.
-      if (request.headers.has("origin")) {
-        audit.write({ event: "origin-refused", ...withRequestId });
-        return Response.json(
-          {
-            jsonrpc: "2.0",
-            id: null,
-            // -32000, as the SDK's Node adapter answers an origin it refuses.
-            error: {
-              code: -32000,
-              message: "Forbidden: browser requests are not served",
-            },
-          },
-          { status: 403 },
-        );
-      }
-
-      // What our verifier returned, if it was called: verifyBearerToken
-      // checks expiry after it, so an expired token's name is known only
-      // here.
-      let verified: AuthInfo | undefined;
-      let verifierCalled = false;
-      let authInfo: AuthInfo;
+      // Counted from here, so that shutdown also waits for a request still
+      // in the token check or the body read, not only for running tools.
+      const end = audit.begin();
       try {
-        // Every request: the protocol is stateless and there is no session to
-        // keep a verdict in.
-        authInfo = await verifyBearerToken(
-          request.headers.get("authorization"),
-          {
-            verifier: {
-              async verifyAccessToken(token) {
-                verifierCalled = true;
-                verified = await verifier.verifyAccessToken(token);
-                return verified;
-              },
-            },
-          },
-        );
-      } catch (error) {
-        // A refused token is the client's business; anything else is a fault
-        // in the verifier, answered with 500, and the operator must see it.
-        if (!(error instanceof OAuthError)) {
-          onerror?.(error as Error);
-        } else {
-          const reason: AuthRefusal = !request.headers.has("authorization")
-            ? "missing"
-            : !verifierCalled
-              ? "malformed"
-              : !verified
-                ? "unknown"
-                : error.code === OAuthErrorCode.InsufficientScope
-                  ? "insufficient-scope"
-                  : "expired";
-          audit.write({
-            event: "auth-refused",
-            reason,
-            // The name only for a token that was known: never the token.
-            ...(reason === "expired" &&
-              verified && { token: verified.clientId }),
-            ...withRequestId,
-          });
-        }
-        return bearerAuthChallengeResponse(error);
+        return await serveMcp(request);
+      } finally {
+        end();
       }
-
-      const { forward, parsedBody, call } = await readCall(request, audit);
-      const facts: RequestFacts = { ...withRequestId, ...(call && { call }) };
-      return handler.fetch(forward, {
-        authInfo: withRequestFacts(authInfo, facts),
-        ...(parsedBody !== undefined && { parsedBody }),
-      });
     },
 
     close: () => handler.close(),
   };
+
+  async function serveMcp(request: Request): Promise<Response> {
+    // Set by the proxy in front, so a line leads to the proxy's own log.
+    const requestIdHeader = request.headers.get("x-request-id");
+    const requestId =
+      requestIdHeader === null ? undefined : audit.id(requestIdHeader);
+    const withRequestId = requestId !== undefined && { requestId };
+
+    // The specification requires validating Origin against DNS rebinding.
+    // No origin is allowed: browser clients are not supported (ADR-0001
+    // §7). Clients that are not browsers send none, and are served.
+    if (request.headers.has("origin")) {
+      audit.write({ event: "origin-refused", ...withRequestId });
+      return Response.json(
+        {
+          jsonrpc: "2.0",
+          id: null,
+          // -32000, as the SDK's Node adapter answers an origin it refuses.
+          error: {
+            code: -32000,
+            message: "Forbidden: browser requests are not served",
+          },
+        },
+        { status: 403 },
+      );
+    }
+
+    // What our verifier returned, if it was called: verifyBearerToken
+    // checks expiry after it, so an expired token's name is known only
+    // here.
+    let verified: AuthInfo | undefined;
+    let verifierCalled = false;
+    let authInfo: AuthInfo;
+    try {
+      // Every request: the protocol is stateless and there is no session to
+      // keep a verdict in.
+      authInfo = await verifyBearerToken(request.headers.get("authorization"), {
+        verifier: {
+          async verifyAccessToken(token) {
+            verifierCalled = true;
+            verified = await verifier.verifyAccessToken(token);
+            return verified;
+          },
+        },
+      });
+    } catch (error) {
+      // A refused token is the client's business; anything else is a fault
+      // in the verifier, answered with 500, and the operator must see it.
+      if (!(error instanceof OAuthError)) {
+        onerror?.(error as Error);
+      } else {
+        const reason: AuthRefusal = !request.headers.has("authorization")
+          ? "missing"
+          : !verifierCalled
+            ? "malformed"
+            : !verified
+              ? "unknown"
+              : error.code === OAuthErrorCode.InsufficientScope
+                ? "insufficient-scope"
+                : "expired";
+        audit.write({
+          event: "auth-refused",
+          reason,
+          // The name only for a token that was known: never the token.
+          ...(reason === "expired" && verified && { token: verified.clientId }),
+          ...withRequestId,
+        });
+      }
+      return bearerAuthChallengeResponse(error);
+    }
+
+    const { forward, parsedBody, call } = await readCall(request, audit);
+    const facts: RequestFacts = { ...withRequestId, ...(call && { call }) };
+    return handler.fetch(forward, {
+      authInfo: withRequestFacts(authInfo, facts),
+      ...(parsedBody !== undefined && { parsedBody }),
+    });
+  }
 }
 
 /**
