@@ -5,9 +5,9 @@
 // server alone knows: who called, what it was allowed, how it ended, and what
 // it cost in Dataverse requests.
 //
-// Every name logged here passes this module's own shape check, whatever the
-// tool checked, so that a value sent where a name belongs never reaches the
-// log. A value that fails is fingerprinted: its length, a few flags, and an
+// Every name logged passes the audit code's own shape check (here, and for
+// the tool name in mcp.ts), whatever the tool checked, so that a value sent
+// where a name belongs never reaches the log. A value that fails is fingerprinted: its length, a few flags, and an
 // HMAC under DATAVERSE_AUDIT_KEY when that is set. A plain hash would not do:
 // the CRM itself is the dictionary that reverses the hash of an email.
 

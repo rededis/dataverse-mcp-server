@@ -15,8 +15,9 @@ import { ConfigTokenVerifier } from "./tokens.js";
 // The HTTP server (ADR-0001 §1). Settings come from the environment only: no
 // .env file is read, and bad settings stop the process instead of starting a
 // server that cannot work. stdout carries the audit log and nothing else
-// (#78); every other message goes to stderr. Nothing here may import src/setup.ts, src/tools/all.ts
-// or src/tools/development/ (tests/tool-groups.test.ts).
+// (#78); every other message goes to stderr. Nothing here may import
+// src/setup.ts, src/tools/all.ts or src/tools/development/
+// (tests/tool-groups.test.ts).
 
 function fail(problems: string[]): never {
   console.error("Dataverse MCP server not started:");

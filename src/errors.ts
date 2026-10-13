@@ -9,6 +9,11 @@
 // the call's `$filter` and other arguments, which the log never records.
 // DataverseBusyError is the exception: its message is written here and
 // carries neither.
+//
+// RefusedError is not a Dataverse failure: the server's own checks refused
+// the call, the client's path and identity-header checks included. Its
+// `check` is safe to log; its `value` only as a fingerprint; its `message`,
+// which quotes the argument, never.
 
 import type { HttpRequest } from "./http.js";
 
