@@ -170,6 +170,21 @@ _Added 2026-10-08 with #76._ There is a third: `tools/call` (and
 `resources/read`, `prompts/get`) also needs `Mcp-Name`, and its absence is the
 same `400 -32020`. A proxy must pass all three.
 
+_Added 2026-10-13 with #78._ The server reads the body of a JSON `POST` itself
+and hands it to the SDK parsed (`parsedBody`), so that the audit log takes a
+`tools/call`'s id and tool name from the body: the SDK checks `Mcp-Name`
+against the body only for requests, and a notification could otherwise fake a
+call's line (§12). This leans on the SDK, so an SDK upgrade checks it again:
+
+- With `parsedBody` the SDK must still check the headers against that body,
+  and read nothing more. Verified for SDK 2.3.1.
+- The SDK does not bound a body given as `parsedBody`; the server applies the
+  SDK's own bound (`DEFAULT_MAX_REQUEST_BODY_SIZE`) when it reads.
+- A body the server cannot use (too large, not JSON, unreadable) is passed on
+  unread, and the SDK answers it as before.
+- The body is read only after the `Origin` and token checks: a request
+  without a valid token is never read.
+
 ### 7. Access: bearer tokens from a config file
 
 - Tokens are stored as SHA-256 hashes in a JSON config file, compared in
@@ -426,6 +441,32 @@ line is built:
   (#80 says so).
 - The log is stdout, one JSON line each, `"type": "audit"`; everything else
   the server says goes to stderr.
+- The line's fields are what log queries are built on, so they are fixed
+  here, within §14's 0.x terms. A tool call's line has no `event`; it has
+  `time` (when the call started), `durationMs`, `rpcId`, `token`, `role`,
+  `actAs`, `requestId`, `tool`, the names the call used (`entitySet`,
+  `columns`, `top`, `id`, `operation`, `fields`, `params`, `entity`,
+  `attribute`, `optionSet`), `outcome`, the result (`records`, `more`,
+  `createdId`) and what it cost (`dataverseRequests`, `throttled`,
+  `heldBack`, `retries`). `outcome` is `ok`; `refused` with `check` (the
+  names are ADR-0002's) and `got` (a fingerprint); `dataverse-error` with
+  `error: {class, status, code, reason}`, each only when known; or `error`
+  with `error: {class}`. Other lines have `event`: `auth-refused` (with
+  `reason`, and `token` for an expired one) or `origin-refused`.
+- `dataverseRequests` counts HTTP requests sent to Dataverse, resends after
+  a 429 included (so `retries` is also part of it), and the entity-set
+  lookup a call caused. A request the concurrency limit or a throttling
+  pause turned away was never sent and is not counted. `throttled` means
+  this call got a 429; `heldBack` that it waited before its first send for
+  another call's 429.
+- `DATAVERSE_AUDIT_KEY` is optional; set, it must be at least 32 characters,
+  or the server does not start. A short key could be found by trying keys
+  against a known value. Changing the key ends matching against older lines.
+- No line is dropped. On SIGTERM the server stops accepting, waits for the
+  requests and tool calls still running, then for stdout to take every line,
+  and only then exits. If stdout's reader goes away, the server keeps
+  serving and says once on stderr that audit lines are being lost: losing
+  the log is not made into losing the service.
 
 ### 13. Two independent release lines
 

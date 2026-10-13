@@ -168,6 +168,24 @@ and no role has needed more. `"*"` stays in the code for the stdio package.
 - The server spends one metadata request per distinct entity set per process,
   plus one per call that names an unknown entity set.
 
+_Added 2026-10-13 with #78._ Each refusal these rules make throws a
+`RefusedError` with a `check` name, and the server's audit log records that
+name (ADR-0001 §12). The names are what an operator reads, so they are fixed
+here: `entity-set-name`, `record-id`, `logical-name` (rule 1),
+`operation-name` (rule 3), `binding` and `parameter-name` (an operation's
+arguments), `picklist-location` (a choice list named two ways), `allowlist`
+(rule 6), `body` (rule 5), `unknown-entity-set` (rule 4), `path` and
+`identity-headers` (rule 2). The audit log adds one of its own,
+`tool-not-in-role`, which no tool throws.
+
+- Messages to the agent are unchanged. A value refused for its shape is kept
+  on the error (`value`) only so the log can fingerprint it; it is never
+  logged as it is.
+- The client's two refusals (rule 2) were `DataverseError` and are now
+  `RefusedError`, which does not extend it: a refusal is the server's
+  verdict, not a failure of Dataverse. This holds for the stdio package too;
+  nothing there tells the two apart.
+
 ## Not decided
 
 - **Many-to-many associations for restricted roles.** Allowing a
