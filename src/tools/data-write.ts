@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { allowsNothing, assertAllowed, NO_PERMISSIONS } from "./permissions.js";
 import {
@@ -6,7 +5,7 @@ import {
   assertEntitySetName,
   assertRecordId,
 } from "./shared/paths.js";
-import type { ToolDeps } from "./types.js";
+import type { ToolDeps, ToolRegistrar } from "./types.js";
 
 const CREATE_RECORD_INPUT = z.object({
   entity_set: z
@@ -44,7 +43,7 @@ const DELETE_RECORD_DISABLED_INPUT = z.object({
 // request. The allowlist is checked here even though a tool whose list is
 // empty is never registered (ADR-0001 §9).
 export function registerDataWriteTools(
-  server: McpServer,
+  server: ToolRegistrar,
   deps: ToolDeps,
 ): void {
   const { client, entitySets, deleteStubs = false } = deps;

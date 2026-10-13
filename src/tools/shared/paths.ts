@@ -144,14 +144,16 @@ function isRecordLike(value: unknown): value is object {
  * The entity sets that exist, looked up in the metadata. A plain name in the
  * first path segment can also be an unbound function or action
  * (`/WhoAmI`), which `query_records` or `create_record` would otherwise call
- * outside the actions and functions groups. Found names are remembered for
- * the life of the process; names not found are looked up again, since a table
- * may be created meanwhile.
+ * outside the actions and functions groups. Found names are remembered in
+ * `known`, which catalogs may share: the server builds one per request on
+ * that call's client, and keeps the names for the life of the process. Names
+ * not found are looked up again, since a table may be created meanwhile.
  */
 export class EntitySetCatalog {
-  private known = new Set<string>();
-
-  constructor(private client: DataverseClient) {}
+  constructor(
+    private client: DataverseClient,
+    private known: Set<string> = new Set(),
+  ) {}
 
   async assertExists(name: string): Promise<void> {
     if (this.known.has(name)) return;

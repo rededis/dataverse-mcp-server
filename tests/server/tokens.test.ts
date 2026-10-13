@@ -48,6 +48,7 @@ describe("ConfigTokenVerifier", () => {
   it("carries the caller: its name, role and user", async () => {
     expect(callerOf(await verify("Bearer alice-token"))).toEqual({
       name: "alice",
+      roleName: "reader",
       role: READER,
       actAs: undefined,
     });

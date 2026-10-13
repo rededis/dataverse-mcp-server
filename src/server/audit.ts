@@ -12,7 +12,7 @@
 // the CRM itself is the dictionary that reverses the hash of an email.
 
 import { createHmac } from "node:crypto";
-import type { CallToolResult } from "@modelcontextprotocol/server";
+import type { AuthInfo, CallToolResult } from "@modelcontextprotocol/server";
 import {
   DataverseApiError,
   DataverseAuthError,
@@ -338,5 +338,82 @@ export class CallMetrics {
       heldBack: this.wasHeldBack,
       retries: this.retries,
     };
+  }
+}
+
+type Id = string | number | Fingerprint;
+
+/**
+ * What app.ts learns of a request before the MCP handler sees it, handed to
+ * the server factory in `authInfo.extra`: the proxy's X-Request-Id, and for a
+ * `tools/call` request the body's own id and tool name. A notification
+ * carries no `call`, so it cannot fake a call's line.
+ */
+export interface RequestFacts {
+  requestId?: Id;
+  call?: { rpcId: Id; tool: string };
+}
+
+const FACTS = "dataverse-mcp-server/request";
+
+export function withRequestFacts(
+  authInfo: AuthInfo,
+  facts: RequestFacts,
+): AuthInfo {
+  return { ...authInfo, extra: { ...authInfo.extra, [FACTS]: facts } };
+}
+
+export function requestFactsOf(authInfo: AuthInfo | undefined): RequestFacts {
+  return (authInfo?.extra?.[FACTS] as RequestFacts | undefined) ?? {};
+}
+
+/**
+ * The server's audit log: writes lines with the fingerprint key applied, and
+ * keeps count of the tool calls still running, so that shutdown can wait
+ * for their lines.
+ */
+export class AuditLog {
+  private running = 0;
+  private waiting: Array<() => void> = [];
+
+  constructor(
+    private logger: AuditLogger,
+    /** DATAVERSE_AUDIT_KEY; without it fingerprints carry no HMAC. */
+    readonly key?: string,
+  ) {}
+
+  write(fields: Record<string, unknown>, time: Date = new Date()): void {
+    this.logger.write({ type: "audit", time: time.toISOString(), ...fields });
+  }
+
+  /** An id another system chose, as plainOrFingerprint logs it. */
+  id(value: string | number): Id {
+    return plainOrFingerprint(value, this.key);
+  }
+
+  /** Counts a call as running until the returned function is called. */
+  begin(): () => void {
+    this.running++;
+    let ended = false;
+    return () => {
+      if (ended) return;
+      ended = true;
+      this.running--;
+      if (this.running === 0) {
+        for (const resolve of this.waiting.splice(0)) resolve();
+      }
+    };
+  }
+
+  /** Resolves when no call is running, or after `timeoutMs`. */
+  settled(timeoutMs: number): Promise<void> {
+    if (this.running === 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      const timer = setTimeout(resolve, timeoutMs);
+      this.waiting.push(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
   }
 }

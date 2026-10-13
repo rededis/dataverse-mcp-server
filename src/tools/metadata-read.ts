@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { DataverseClient } from "../client.js";
 import { isNotFound } from "../errors.js";
@@ -25,7 +24,7 @@ import {
   LOCATION_INPUT,
   validatePicklistLocation,
 } from "./shared/picklist-location.js";
-import type { ToolDeps } from "./types.js";
+import type { ToolDeps, ToolRegistrar } from "./types.js";
 
 const METADATA_ID_CHUNK_SIZE = 50;
 
@@ -94,7 +93,7 @@ const LIST_ENTITY_KEYS_INPUT = z.object({
 });
 
 export function registerMetadataReadTools(
-  server: McpServer,
+  server: ToolRegistrar,
   deps: ToolDeps,
 ): void {
   const {

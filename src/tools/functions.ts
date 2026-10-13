@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { allowsNothing, assertAllowed, NO_PERMISSIONS } from "./permissions.js";
 import {
@@ -7,7 +6,7 @@ import {
   qualifyOperationName,
   resolveBinding,
 } from "./shared/operations.js";
-import type { ToolDeps } from "./types.js";
+import type { ToolDeps, ToolRegistrar } from "./types.js";
 
 const INVOKE_FUNCTION_INPUT = z.object({
   name: z
@@ -35,7 +34,10 @@ const INVOKE_FUNCTION_INPUT = z.object({
     ),
 });
 
-export function registerFunctionTools(server: McpServer, deps: ToolDeps): void {
+export function registerFunctionTools(
+  server: ToolRegistrar,
+  deps: ToolDeps,
+): void {
   const { client } = deps;
   const allowed = (deps.permissions ?? NO_PERMISSIONS).functions;
   if (allowsNothing(allowed)) return;

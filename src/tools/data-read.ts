@@ -1,8 +1,7 @@
-import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { buildODataQuery } from "./shared/odata.js";
 import { assertEntitySetName, assertRecordId } from "./shared/paths.js";
-import type { ToolDeps } from "./types.js";
+import type { ToolDeps, ToolRegistrar } from "./types.js";
 
 const QUERY_RECORDS_INPUT = z.object({
   entity_set: z
@@ -39,7 +38,10 @@ const GET_RECORD_INPUT = z.object({
     .describe("Related entities to expand ($expand)"),
 });
 
-export function registerDataReadTools(server: McpServer, deps: ToolDeps): void {
+export function registerDataReadTools(
+  server: ToolRegistrar,
+  deps: ToolDeps,
+): void {
   const { client, entitySets } = deps;
   server.registerTool(
     "query_records",

@@ -38,4 +38,10 @@ export interface ToolDeps {
   entitySets?: EntitySetCatalog;
 }
 
-export type RegisterTools = (server: McpServer, deps: ToolDeps) => void;
+/**
+ * What a tool group needs of the server: only registerTool. The HTTP server
+ * passes a wrapper that writes the audit line of each call (#78).
+ */
+export type ToolRegistrar = Pick<McpServer, "registerTool">;
+
+export type RegisterTools = (server: ToolRegistrar, deps: ToolDeps) => void;
