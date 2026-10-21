@@ -589,14 +589,13 @@ const ADD_ENTITY_KEY_INPUT = z.object({
 // Both report only what this call itself sent and heard back. Whether
 // Dataverse finished the table, or kept part of it, is not known here, so
 // the agent is told how to find out rather than given a guess (#113).
-
 function tableTimedOut(
   table: string,
   attributes: AttributeInput[],
   err: DataverseTimeoutError,
 ): Error {
   const unsent = attributes.length
-    ? ` None of the additional columns were sent: ${names(attributes)}.`
+    ? ` None of the additional columns were sent: ${logicalNames(attributes)}.`
     : "";
   return new Error(
     `Dataverse did not answer within ${err.timeoutMs} ms while creating table '${table}'. The table may not exist, may exist in part, or may still be in progress: Dataverse keeps working on a request for up to 2 minutes.${unsent} Check with get_entity_schema before calling create_entity again.`,
@@ -607,29 +606,23 @@ function tableTimedOut(
 function columnFailed(
   table: string,
   attributes: AttributeInput[],
-  failed: number,
+  failedIndex: number,
   err: unknown,
 ): Error {
-  const created = attributes.slice(0, failed);
-  const unsent = attributes.slice(failed + 1);
+  const created = attributes.slice(0, failedIndex);
+  const unsent = attributes.slice(failedIndex + 1);
   const reason = err instanceof Error ? err.message : String(err);
+  const createdText = created.length
+    ? `Columns created: ${logicalNames(created)}.`
+    : "No additional columns were created.";
+  const unsentText = unsent.length ? ` Not sent: ${logicalNames(unsent)}.` : "";
   return new Error(
-    [
-      `Table '${table}' was created.`,
-      created.length
-        ? `Columns created: ${names(created)}.`
-        : "No additional columns were created.",
-      `Column '${attributes[failed].logical_name}' failed: ${reason}`,
-      unsent.length ? `Not sent: ${names(unsent)}.` : "",
-      "Missing columns can be added with add_attribute.",
-    ]
-      .filter(Boolean)
-      .join(" "),
+    `Table '${table}' was created. ${createdText} Column '${attributes[failedIndex].logical_name}' failed: ${reason}${unsentText} Missing columns can be added with add_attribute.`,
     { cause: err },
   );
 }
 
-function names(attributes: AttributeInput[]): string {
+function logicalNames(attributes: AttributeInput[]): string {
   return attributes.map((a) => a.logical_name).join(", ");
 }
 

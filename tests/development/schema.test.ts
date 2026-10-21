@@ -528,12 +528,14 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
 describe("create_entity", () => {
   // Dataverse answers CreateEntity with 204 and an OData-EntityId header,
   // which DataverseClient.post returns as @odata.entityId
+  const TABLE_CREATED = {
+    "@odata.entityId": `https://org.crm.dynamics.com/api/data/v9.2/EntityDefinitions(${GUID})`,
+  };
+
   function clientCreatingEntity() {
     return {
       get: vi.fn(),
-      post: vi.fn().mockResolvedValue({
-        "@odata.entityId": `https://org.crm.dynamics.com/api/data/v9.2/EntityDefinitions(${GUID})`,
-      }),
+      post: vi.fn().mockResolvedValue(TABLE_CREATED),
     } as any;
   }
 
@@ -617,7 +619,7 @@ describe("create_entity", () => {
       const err = await server.tools
         .get("create_entity")!
         .handler({ ...table, attributes: columns })
-        .catch((e: Error) => e);
+        .catch((e: unknown) => e as Error);
 
       expect(err.message).toContain(
         "Dataverse did not answer within 30000 ms while creating table 'contoso_adconversion'",
@@ -640,9 +642,7 @@ describe("create_entity", () => {
         '{"error":{"code":"0x80044363","message":"The schema name is not unique."}}',
       );
       client.post
-        .mockResolvedValueOnce({
-          "@odata.entityId": `https://org/api/data/v9.2/EntityDefinitions(${GUID})`,
-        })
+        .mockResolvedValueOnce(TABLE_CREATED)
         .mockResolvedValueOnce({})
         .mockRejectedValueOnce(refused);
       registerAllTools(server as any, { client, ...stdio() });
@@ -650,7 +650,7 @@ describe("create_entity", () => {
       const err = await server.tools
         .get("create_entity")!
         .handler({ ...table, attributes: columns })
-        .catch((e: Error) => e);
+        .catch((e: unknown) => e as Error);
 
       expect(err.message).toBe(
         `Table 'contoso_adconversion' was created. Columns created: contoso_a. Column 'contoso_b' failed: ${refused.message} Not sent: contoso_c. Missing columns can be added with add_attribute.`,
@@ -662,22 +662,60 @@ describe("create_entity", () => {
     it("says no column was created when the first one fails", async () => {
       const server = createMockServer();
       const client = clientCreatingEntity();
+      const timeout = new DataverseTimeoutError(30_000, request);
       client.post
-        .mockResolvedValueOnce({
-          "@odata.entityId": `https://org/api/data/v9.2/EntityDefinitions(${GUID})`,
-        })
-        .mockRejectedValueOnce(new DataverseTimeoutError(30_000, request));
+        .mockResolvedValueOnce(TABLE_CREATED)
+        .mockRejectedValueOnce(timeout);
       registerAllTools(server as any, { client, ...stdio() });
 
       const err = await server.tools
         .get("create_entity")!
         .handler({ ...table, attributes: columns.slice(0, 1) })
-        .catch((e: Error) => e);
+        .catch((e: unknown) => e as Error);
 
-      expect(err.message).toMatch(
-        /^Table 'contoso_adconversion' was created\. No additional columns were created\. Column 'contoso_a' failed: Dataverse request timed out/,
+      expect(err.message).toBe(
+        `Table 'contoso_adconversion' was created. No additional columns were created. Column 'contoso_a' failed: ${timeout.message} Missing columns can be added with add_attribute.`,
       );
-      expect(err.message).not.toContain("Not sent");
+      expect(err.cause).toBe(timeout);
+    });
+
+    it("leaves out the unsent list when the last column fails", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      const refused = new DataverseApiError(400, request, "{}");
+      client.post
+        .mockResolvedValueOnce(TABLE_CREATED)
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(refused);
+      registerAllTools(server as any, { client, ...stdio() });
+
+      const err = await server.tools
+        .get("create_entity")!
+        .handler({ ...table, attributes: columns })
+        .catch((e: unknown) => e as Error);
+
+      expect(err.message).toBe(
+        `Table 'contoso_adconversion' was created. Columns created: contoso_a, contoso_b. Column 'contoso_c' failed: ${refused.message} Missing columns can be added with add_attribute.`,
+      );
+    });
+
+    it("mentions no columns on a table timeout when none were asked for", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      client.post.mockRejectedValueOnce(
+        new DataverseTimeoutError(30_000, request),
+      );
+      registerAllTools(server as any, { client, ...stdio() });
+
+      const err = await server.tools
+        .get("create_entity")!
+        .handler(table)
+        .catch((e: unknown) => e as Error);
+
+      expect(err.message).toBe(
+        "Dataverse did not answer within 30000 ms while creating table 'contoso_adconversion'. The table may not exist, may exist in part, or may still be in progress: Dataverse keeps working on a request for up to 2 minutes. Check with get_entity_schema before calling create_entity again.",
+      );
     });
 
     it("passes any other failure of the table request through unchanged", async () => {
