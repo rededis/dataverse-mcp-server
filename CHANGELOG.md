@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `create_entity` takes `has_notes` and `has_activities`, to enable notes and attachments or activities on the new table. Neither can be turned off once enabled (#109).
+
+### Fixed
+
+- `create_entity` failed on every call: Dataverse requires `HasNotes` in `CreateEntity` and refused the request without it (`Required field 'HasNotes' is missing`). The tool now sends `HasNotes`, `false` by default; `HasActivities` was already sent as `false` (#109).
+
 ## [0.9.0] - 2026-10-02
 
 ### Changed

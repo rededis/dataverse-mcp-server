@@ -439,6 +439,18 @@ const CREATE_ENTITY_INPUT = z.object({
     .enum(["UserOwned", "OrganizationOwned"])
     .optional()
     .describe("Ownership type (default: UserOwned)"),
+  has_notes: z
+    .boolean()
+    .optional()
+    .describe(
+      "Enable notes and attachments on the table (default: false). Cannot be turned off once enabled.",
+    ),
+  has_activities: z
+    .boolean()
+    .optional()
+    .describe(
+      "Enable activities on the table (default: false). Cannot be turned off once enabled.",
+    ),
   attributes: z
     .array(AttributeSchema)
     .optional()
@@ -638,8 +650,11 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
             },
           ],
         },
-        OwnershipType: params.ownership_type || "UserOwned",
-        HasActivities: false,
+        OwnershipType: params.ownership_type ?? "UserOwned",
+        // CreateEntity refuses a request without HasNotes (#109); HasActivities
+        // goes with it so neither is left to a server-side default
+        HasNotes: params.has_notes ?? false,
+        HasActivities: params.has_activities ?? false,
         PrimaryNameAttribute: primaryAttrName,
         Attributes: [
           {

@@ -520,6 +520,97 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
   });
 });
 
+describe("create_entity", () => {
+  // Dataverse answers CreateEntity with 204 and an OData-EntityId header,
+  // which DataverseClient.post returns as @odata.entityId
+  function clientCreatingEntity() {
+    return {
+      get: vi.fn(),
+      post: vi.fn().mockResolvedValue({
+        "@odata.entityId": `https://org.crm.dynamics.com/api/data/v9.2/EntityDefinitions(${GUID})`,
+      }),
+    } as any;
+  }
+
+  // The repro from #109
+  const table = {
+    logical_name: "contoso_adconversion",
+    display_name: "Ad Conversion",
+    display_collection_name: "Ad Conversions",
+    ownership_type: "OrganizationOwned" as const,
+    primary_attribute_name: "contoso_name",
+  };
+
+  it("sends HasNotes and HasActivities as false by default", async () => {
+    const server = createMockServer();
+    const client = clientCreatingEntity();
+    registerAllTools(server as any, { client });
+
+    await server.tools.get("create_entity")!.handler(table);
+
+    const [path, body] = client.post.mock.calls[0];
+    expect(path).toBe("/EntityDefinitions");
+    expect(body.HasNotes).toBe(false);
+    expect(body.HasActivities).toBe(false);
+    expect(body.OwnershipType).toBe("OrganizationOwned");
+    expect(body.PrimaryNameAttribute).toBe("contoso_name");
+  });
+
+  it("sends HasNotes and HasActivities with attributes too, and posts the attributes to the created table", async () => {
+    const server = createMockServer();
+    const client = clientCreatingEntity();
+    registerAllTools(server as any, { client });
+
+    await server.tools.get("create_entity")!.handler({
+      ...table,
+      attributes: [
+        {
+          logical_name: "contoso_clicks",
+          type: "Integer",
+          display_name: "Clicks",
+        },
+      ],
+    });
+
+    const [entityPath, entityBody] = client.post.mock.calls[0];
+    expect(entityPath).toBe("/EntityDefinitions");
+    expect(entityBody.HasNotes).toBe(false);
+    expect(entityBody.HasActivities).toBe(false);
+
+    const [attrPath, attrBody] = client.post.mock.calls[1];
+    expect(attrPath).toBe(`/EntityDefinitions(${GUID})/Attributes`);
+    expect(attrBody.LogicalName).toBe("contoso_clicks");
+  });
+
+  it("defaults OwnershipType to UserOwned", async () => {
+    const server = createMockServer();
+    const client = clientCreatingEntity();
+    registerAllTools(server as any, { client });
+
+    const { ownership_type: _, ...withoutOwnership } = table;
+    await server.tools.get("create_entity")!.handler(withoutOwnership);
+
+    const [, body] = client.post.mock.calls[0];
+    expect(body.OwnershipType).toBe("UserOwned");
+  });
+
+  it("passes has_notes and has_activities through", async () => {
+    const server = createMockServer();
+    const client = clientCreatingEntity();
+    registerAllTools(server as any, { client });
+
+    await server.tools.get("create_entity")!.handler({
+      ...table,
+      has_notes: true,
+      has_activities: true,
+    });
+
+    const [, body] = client.post.mock.calls[0];
+    expect(body.HasNotes).toBe(true);
+    expect(body.HasActivities).toBe(true);
+  });
+});
+
 describe("update_attribute", () => {
   const existingAttribute = {
     "@odata.context": "https://org/api/data/v9.2/$metadata#EntityDefinitions(...)/Attributes/$entity",
