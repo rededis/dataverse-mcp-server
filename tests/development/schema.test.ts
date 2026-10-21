@@ -525,15 +525,13 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
 });
 
 describe("create_entity", () => {
-  const ENTITY_ID = "5f1c3d2e-7a8b-4c9d-8e0f-1a2b3c4d5e6f";
-
   // Dataverse answers CreateEntity with 204 and an OData-EntityId header,
   // which DataverseClient.post returns as @odata.entityId
   function clientCreatingEntity() {
     return {
       get: vi.fn(),
       post: vi.fn().mockResolvedValue({
-        "@odata.entityId": `https://org.crm.dynamics.com/api/data/v9.2/EntityDefinitions(${ENTITY_ID})`,
+        "@odata.entityId": `https://org.crm.dynamics.com/api/data/v9.2/EntityDefinitions(${GUID})`,
       }),
     } as any;
   }
@@ -584,8 +582,20 @@ describe("create_entity", () => {
     expect(entityBody.HasActivities).toBe(false);
 
     const [attrPath, attrBody] = client.post.mock.calls[1];
-    expect(attrPath).toBe(`/EntityDefinitions(${ENTITY_ID})/Attributes`);
+    expect(attrPath).toBe(`/EntityDefinitions(${GUID})/Attributes`);
     expect(attrBody.LogicalName).toBe("contoso_clicks");
+  });
+
+  it("defaults OwnershipType to UserOwned", async () => {
+    const server = createMockServer();
+    const client = clientCreatingEntity();
+    registerAllTools(server as any, { client, ...stdio() });
+
+    const { ownership_type: _, ...withoutOwnership } = table;
+    await server.tools.get("create_entity")!.handler(withoutOwnership);
+
+    const [, body] = client.post.mock.calls[0];
+    expect(body.OwnershipType).toBe("UserOwned");
   });
 
   it("passes has_notes and has_activities through", async () => {
