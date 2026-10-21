@@ -592,7 +592,7 @@ const ADD_ENTITY_KEY_INPUT = z.object({
 
 function tableTimedOut(
   table: string,
-  attributes: { logical_name: string }[],
+  attributes: AttributeInput[],
   err: DataverseTimeoutError,
 ): Error {
   const unsent = attributes.length
@@ -606,7 +606,7 @@ function tableTimedOut(
 
 function columnFailed(
   table: string,
-  attributes: { logical_name: string }[],
+  attributes: AttributeInput[],
   failed: number,
   err: unknown,
 ): Error {
@@ -629,7 +629,7 @@ function columnFailed(
   );
 }
 
-function names(attributes: { logical_name: string }[]): string {
+function names(attributes: AttributeInput[]): string {
   return attributes.map((a) => a.logical_name).join(", ");
 }
 
@@ -742,13 +742,14 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
         };
       }
 
-      const result = await client
-        .post("/EntityDefinitions", body)
-        .catch((err: unknown) => {
-          throw err instanceof DataverseTimeoutError
-            ? tableTimedOut(params.logical_name, attributes, err)
-            : err;
-        });
+      let result: unknown;
+      try {
+        result = await client.post("/EntityDefinitions", body);
+      } catch (err) {
+        throw err instanceof DataverseTimeoutError
+          ? tableTimedOut(params.logical_name, attributes, err)
+          : err;
+      }
 
       // Create additional attributes if specified
       if (params.attributes?.length) {
