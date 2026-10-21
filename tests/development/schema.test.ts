@@ -525,25 +525,52 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
 });
 
 describe("create_entity", () => {
-  function createClient() {
+  function clientCreatingEntity() {
     return {
       get: vi.fn(),
       post: vi.fn().mockResolvedValue({ MetadataId: "entity-id" }),
     } as any;
   }
 
+  // The repro from #109
   const table = {
     logical_name: "contoso_adconversion",
     display_name: "Ad Conversion",
     display_collection_name: "Ad Conversions",
+    ownership_type: "OrganizationOwned" as const,
+    primary_attribute_name: "contoso_name",
   };
 
   it("sends HasNotes and HasActivities as false by default", async () => {
     const server = createMockServer();
-    const client = createClient();
+    const client = clientCreatingEntity();
     registerAllTools(server as any, { client, ...stdio() });
 
     await server.tools.get("create_entity")!.handler(table);
+
+    const [path, body] = client.post.mock.calls[0];
+    expect(path).toBe("/EntityDefinitions");
+    expect(body.HasNotes).toBe(false);
+    expect(body.HasActivities).toBe(false);
+    expect(body.OwnershipType).toBe("OrganizationOwned");
+    expect(body.PrimaryNameAttribute).toBe("contoso_name");
+  });
+
+  it("sends the same flags when the table comes with attributes", async () => {
+    const server = createMockServer();
+    const client = clientCreatingEntity();
+    registerAllTools(server as any, { client, ...stdio() });
+
+    await server.tools.get("create_entity")!.handler({
+      ...table,
+      attributes: [
+        {
+          logical_name: "contoso_clicks",
+          type: "Integer",
+          display_name: "Clicks",
+        },
+      ],
+    });
 
     const [path, body] = client.post.mock.calls[0];
     expect(path).toBe("/EntityDefinitions");
@@ -553,7 +580,7 @@ describe("create_entity", () => {
 
   it("passes has_notes and has_activities through", async () => {
     const server = createMockServer();
-    const client = createClient();
+    const client = clientCreatingEntity();
     registerAllTools(server as any, { client, ...stdio() });
 
     await server.tools.get("create_entity")!.handler({
