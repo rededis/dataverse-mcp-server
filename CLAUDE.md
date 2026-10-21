@@ -5,7 +5,7 @@ Published to npm as `@rededis/dataverse-mcp-server`.
 
 ## Public repository
 
-This repository is public. Everything posted to GitHub — issues, PR descriptions, review comments, thread replies, commit messages — is readable by anyone and stays indexed after deletion. Never put Dataverse data there: record contents, org or environment URLs, tenant and client IDs, user names, emails or IDs, names of tables and records from a real org, tokens, log excerpts with any of these. Write "a test table in the dev org", "a contact", "the application user" instead. Check drafts for this before publishing them.
+This repository is public. Everything posted to GitHub — issues, PR descriptions, review comments, thread replies, commit messages — is readable by anyone and stays indexed after deletion. Never put Dataverse data there: record contents, org or environment URLs, tenant and client IDs, user names, emails or IDs, names of tables and records from a real org, tokens, log excerpts with any of these. Write "a test table in the dev org", "a contact", "the application user" instead. Check drafts for this before publishing them. Write everything posted to GitHub in English, the language of this repository.
 
 ## Agent skills
 
