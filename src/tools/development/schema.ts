@@ -652,8 +652,9 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
             },
           ],
         },
-        OwnershipType: params.ownership_type || "UserOwned",
-        // CreateEntity rejects the request when either is missing (#109)
+        OwnershipType: params.ownership_type ?? "UserOwned",
+        // CreateEntity refuses a request without HasNotes (#109); HasActivities
+        // goes with it so neither is left to a server-side default
         HasNotes: params.has_notes ?? false,
         HasActivities: params.has_activities ?? false,
         PrimaryNameAttribute: primaryAttrName,

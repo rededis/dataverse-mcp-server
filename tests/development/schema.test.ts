@@ -525,10 +525,16 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
 });
 
 describe("create_entity", () => {
+  const ENTITY_ID = "5f1c3d2e-7a8b-4c9d-8e0f-1a2b3c4d5e6f";
+
+  // Dataverse answers CreateEntity with 204 and an OData-EntityId header,
+  // which DataverseClient.post returns as @odata.entityId
   function clientCreatingEntity() {
     return {
       get: vi.fn(),
-      post: vi.fn().mockResolvedValue({ MetadataId: "entity-id" }),
+      post: vi.fn().mockResolvedValue({
+        "@odata.entityId": `https://org.crm.dynamics.com/api/data/v9.2/EntityDefinitions(${ENTITY_ID})`,
+      }),
     } as any;
   }
 
@@ -556,7 +562,7 @@ describe("create_entity", () => {
     expect(body.PrimaryNameAttribute).toBe("contoso_name");
   });
 
-  it("sends the same flags when the table comes with attributes", async () => {
+  it("sends the flags, then the attributes to the created table", async () => {
     const server = createMockServer();
     const client = clientCreatingEntity();
     registerAllTools(server as any, { client, ...stdio() });
@@ -572,10 +578,14 @@ describe("create_entity", () => {
       ],
     });
 
-    const [path, body] = client.post.mock.calls[0];
-    expect(path).toBe("/EntityDefinitions");
-    expect(body.HasNotes).toBe(false);
-    expect(body.HasActivities).toBe(false);
+    const [entityPath, entityBody] = client.post.mock.calls[0];
+    expect(entityPath).toBe("/EntityDefinitions");
+    expect(entityBody.HasNotes).toBe(false);
+    expect(entityBody.HasActivities).toBe(false);
+
+    const [attrPath, attrBody] = client.post.mock.calls[1];
+    expect(attrPath).toBe(`/EntityDefinitions(${ENTITY_ID})/Attributes`);
+    expect(attrBody.LogicalName).toBe("contoso_clicks");
   });
 
   it("passes has_notes and has_activities through", async () => {
