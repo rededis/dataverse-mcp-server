@@ -340,6 +340,14 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
           "description": "Display name",
           "type": "string",
         },
+        "has_activities": {
+          "description": "Enable activities on the table (default: false). Cannot be turned off once enabled.",
+          "type": "boolean",
+        },
+        "has_notes": {
+          "description": "Enable notes and attachments on the table (default: false). Cannot be turned off once enabled.",
+          "type": "boolean",
+        },
         "logical_name": {
           "description": "Logical name with publisher prefix (e.g. 'contoso_newtable')",
           "type": "string",
@@ -1309,6 +1317,14 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
         "display_name": {
           "description": "Display name",
           "type": "string",
+        },
+        "has_activities": {
+          "description": "Enable activities on the table (default: false). Cannot be turned off once enabled.",
+          "type": "boolean",
+        },
+        "has_notes": {
+          "description": "Enable notes and attachments on the table (default: false). Cannot be turned off once enabled.",
+          "type": "boolean",
         },
         "logical_name": {
           "description": "Logical name with publisher prefix (e.g. 'contoso_newtable')",

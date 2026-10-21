@@ -524,6 +524,50 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
   });
 });
 
+describe("create_entity", () => {
+  function createClient() {
+    return {
+      get: vi.fn(),
+      post: vi.fn().mockResolvedValue({ MetadataId: "entity-id" }),
+    } as any;
+  }
+
+  const table = {
+    logical_name: "contoso_adconversion",
+    display_name: "Ad Conversion",
+    display_collection_name: "Ad Conversions",
+  };
+
+  it("sends HasNotes and HasActivities as false by default", async () => {
+    const server = createMockServer();
+    const client = createClient();
+    registerAllTools(server as any, { client, ...stdio() });
+
+    await server.tools.get("create_entity")!.handler(table);
+
+    const [path, body] = client.post.mock.calls[0];
+    expect(path).toBe("/EntityDefinitions");
+    expect(body.HasNotes).toBe(false);
+    expect(body.HasActivities).toBe(false);
+  });
+
+  it("passes has_notes and has_activities through", async () => {
+    const server = createMockServer();
+    const client = createClient();
+    registerAllTools(server as any, { client, ...stdio() });
+
+    await server.tools.get("create_entity")!.handler({
+      ...table,
+      has_notes: true,
+      has_activities: true,
+    });
+
+    const [, body] = client.post.mock.calls[0];
+    expect(body.HasNotes).toBe(true);
+    expect(body.HasActivities).toBe(true);
+  });
+});
+
 describe("update_attribute", () => {
   const existingAttribute = {
     "@odata.context":
