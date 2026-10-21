@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { DataverseClient } from "../../client.js";
-import { isNotFound } from "../../errors.js";
+import { DataverseTimeoutError, isNotFound } from "../../errors.js";
 import { buildODataQuery, escapeODataString } from "../shared/odata.js";
 import { globalOptionSetNotFound } from "../shared/optionset.js";
 import type { ToolDeps } from "../types.js";
@@ -586,6 +586,53 @@ const ADD_ENTITY_KEY_INPUT = z.object({
     .describe("Solution unique name (defaults to the Default Solution)"),
 });
 
+// Both report only what this call itself sent and heard back. Whether
+// Dataverse finished the table, or kept part of it, is not known here, so
+// the agent is told how to find out rather than given a guess (#113).
+
+function tableTimedOut(
+  table: string,
+  attributes: { logical_name: string }[],
+  err: DataverseTimeoutError,
+): Error {
+  const unsent = attributes.length
+    ? ` None of the additional columns were sent: ${names(attributes)}.`
+    : "";
+  return new Error(
+    `Dataverse did not answer within ${err.timeoutMs} ms while creating table '${table}'. The table may not exist, may exist in part, or may still be in progress: Dataverse keeps working on a request for up to 2 minutes.${unsent} Check with get_entity_schema before calling create_entity again.`,
+    { cause: err },
+  );
+}
+
+function columnFailed(
+  table: string,
+  attributes: { logical_name: string }[],
+  failed: number,
+  err: unknown,
+): Error {
+  const created = attributes.slice(0, failed);
+  const unsent = attributes.slice(failed + 1);
+  const reason = err instanceof Error ? err.message : String(err);
+  return new Error(
+    [
+      `Table '${table}' was created.`,
+      created.length
+        ? `Columns created: ${names(created)}.`
+        : "No additional columns were created.",
+      `Column '${attributes[failed].logical_name}' failed: ${reason}`,
+      unsent.length ? `Not sent: ${names(unsent)}.` : "",
+      "Missing columns can be added with add_attribute.",
+    ]
+      .filter(Boolean)
+      .join(" "),
+    { cause: err },
+  );
+}
+
+function names(attributes: { logical_name: string }[]): string {
+  return attributes.map((a) => a.logical_name).join(", ");
+}
+
 export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
   const { client } = deps;
   // stdio only: the development tools delete all or nothing.
@@ -695,7 +742,13 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
         };
       }
 
-      const result = await client.post("/EntityDefinitions", body);
+      const result = await client
+        .post("/EntityDefinitions", body)
+        .catch((err: unknown) => {
+          throw err instanceof DataverseTimeoutError
+            ? tableTimedOut(params.logical_name, attributes, err)
+            : err;
+        });
 
       // Create additional attributes if specified
       if (params.attributes?.length) {
@@ -712,11 +765,15 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
           );
         }
 
-        for (const attrBody of attributeBodies) {
-          await client.post(
-            `/EntityDefinitions(${entityId})/Attributes`,
-            attrBody,
-          );
+        for (const [i, attrBody] of attributeBodies.entries()) {
+          try {
+            await client.post(
+              `/EntityDefinitions(${entityId})/Attributes`,
+              attrBody,
+            );
+          } catch (err) {
+            throw columnFailed(params.logical_name, attributes, i, err);
+          }
         }
       }
 

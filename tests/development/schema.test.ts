@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DataverseClient } from "../../src/client.js";
+import { DataverseApiError, DataverseTimeoutError } from "../../src/errors.js";
 import { registerAllTools } from "../../src/tools/all.js";
 import { buildAttributeBody } from "../../src/tools/development/schema.js";
 import { createMockServer, GUID, notFound, stdio } from "../helpers.js";
@@ -596,6 +597,100 @@ describe("create_entity", () => {
 
     const [, body] = client.post.mock.calls[0];
     expect(body.OwnershipType).toBe("UserOwned");
+  });
+
+  describe("when a request fails", () => {
+    const columns = ["contoso_a", "contoso_b", "contoso_c"].map((name) => ({
+      logical_name: name,
+      type: "Integer" as const,
+      display_name: name,
+    }));
+    const request = { method: "POST", url: "https://org/api/data/v9.2/x" };
+
+    it("says on a table timeout that the outcome is unknown and no column was sent", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      const timeout = new DataverseTimeoutError(30_000, request);
+      client.post.mockRejectedValueOnce(timeout);
+      registerAllTools(server as any, { client, ...stdio() });
+
+      const err = await server.tools
+        .get("create_entity")!
+        .handler({ ...table, attributes: columns })
+        .catch((e: Error) => e);
+
+      expect(err.message).toContain(
+        "Dataverse did not answer within 30000 ms while creating table 'contoso_adconversion'",
+      );
+      expect(err.message).toContain("may still be in progress");
+      expect(err.message).toContain(
+        "None of the additional columns were sent: contoso_a, contoso_b, contoso_c.",
+      );
+      expect(err.message).toContain("Check with get_entity_schema");
+      expect(err.cause).toBe(timeout);
+      expect(client.post).toHaveBeenCalledTimes(1);
+    });
+
+    it("says which columns were created, which failed and which were not sent", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      const refused = new DataverseApiError(
+        400,
+        request,
+        '{"error":{"code":"0x80044363","message":"The schema name is not unique."}}',
+      );
+      client.post
+        .mockResolvedValueOnce({
+          "@odata.entityId": `https://org/api/data/v9.2/EntityDefinitions(${GUID})`,
+        })
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(refused);
+      registerAllTools(server as any, { client, ...stdio() });
+
+      const err = await server.tools
+        .get("create_entity")!
+        .handler({ ...table, attributes: columns })
+        .catch((e: Error) => e);
+
+      expect(err.message).toBe(
+        `Table 'contoso_adconversion' was created. Columns created: contoso_a. Column 'contoso_b' failed: ${refused.message} Not sent: contoso_c. Missing columns can be added with add_attribute.`,
+      );
+      expect(err.cause).toBe(refused);
+      expect(client.post).toHaveBeenCalledTimes(3);
+    });
+
+    it("says no column was created when the first one fails", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      client.post
+        .mockResolvedValueOnce({
+          "@odata.entityId": `https://org/api/data/v9.2/EntityDefinitions(${GUID})`,
+        })
+        .mockRejectedValueOnce(new DataverseTimeoutError(30_000, request));
+      registerAllTools(server as any, { client, ...stdio() });
+
+      const err = await server.tools
+        .get("create_entity")!
+        .handler({ ...table, attributes: columns.slice(0, 1) })
+        .catch((e: Error) => e);
+
+      expect(err.message).toMatch(
+        /^Table 'contoso_adconversion' was created\. No additional columns were created\. Column 'contoso_a' failed: Dataverse request timed out/,
+      );
+      expect(err.message).not.toContain("Not sent");
+    });
+
+    it("passes any other failure of the table request through unchanged", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      const refused = new DataverseApiError(400, request, "{}");
+      client.post.mockRejectedValueOnce(refused);
+      registerAllTools(server as any, { client, ...stdio() });
+
+      await expect(
+        server.tools.get("create_entity")!.handler(table),
+      ).rejects.toBe(refused);
+    });
   });
 
   it("passes has_notes and has_activities through", async () => {
