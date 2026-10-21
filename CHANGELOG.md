@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `create_entity` says what it created when it fails part way. A timeout on the table request says the table may not exist, may exist in part or may still be in progress, that no additional column was sent, and to wait up to 2 minutes before checking with `get_entity_schema`; a timeout on a column request says the same of that column. A failed column request says that the table was created, which columns were created, which one failed and why, and which were not sent; so does a table whose id did not come back. Before, these surfaced as the bare timeout or Dataverse error (#113).
 - `create_entity` failed on every call: Dataverse requires `HasNotes` in `CreateEntity` and refused the request without it (`Required field 'HasNotes' is missing`). The tool now sends `HasNotes`, `false` by default; `HasActivities` was already sent as `false` (#109).
 
 ## [0.9.0] - 2026-10-02
