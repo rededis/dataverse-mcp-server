@@ -562,7 +562,7 @@ describe("create_entity", () => {
     expect(body.PrimaryNameAttribute).toBe("contoso_name");
   });
 
-  it("sends the flags, then the attributes to the created table", async () => {
+  it("sends HasNotes and HasActivities with attributes too, and posts the attributes to the created table", async () => {
     const server = createMockServer();
     const client = clientCreatingEntity();
     registerAllTools(server as any, { client, ...stdio() });
