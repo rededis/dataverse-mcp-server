@@ -608,6 +608,8 @@ describe("create_entity", () => {
       display_name: name,
     }));
     const request = { method: "POST", url: "https://org/api/data/v9.2/x" };
+    const CHECK_LATER =
+      "Dataverse keeps working on a request for up to 2 minutes: wait that long, then check with get_entity_schema. If the table exists, missing columns can be added with add_attribute; do not call create_entity again for it.";
 
     it("says on a table timeout that the outcome is unknown and no column was sent", async () => {
       const server = createMockServer();
@@ -621,14 +623,9 @@ describe("create_entity", () => {
         .handler({ ...table, attributes: columns })
         .catch((e: unknown) => e as Error);
 
-      expect(err.message).toContain(
-        "Dataverse did not answer within 30000 ms while creating table 'contoso_adconversion'",
+      expect(err.message).toBe(
+        `Dataverse did not answer within 30000 ms while creating table 'contoso_adconversion'. The table may not exist, may exist in part, or may still be in progress. None of the additional columns were sent: contoso_a, contoso_b, contoso_c. ${CHECK_LATER}`,
       );
-      expect(err.message).toContain("may still be in progress");
-      expect(err.message).toContain(
-        "None of the additional columns were sent: contoso_a, contoso_b, contoso_c.",
-      );
-      expect(err.message).toContain("Check with get_entity_schema");
       expect(err.cause).toBe(timeout);
       expect(client.post).toHaveBeenCalledTimes(1);
     });
@@ -659,7 +656,7 @@ describe("create_entity", () => {
       expect(client.post).toHaveBeenCalledTimes(3);
     });
 
-    it("says no column was created when the first one fails", async () => {
+    it("says on a column timeout that the column may exist", async () => {
       const server = createMockServer();
       const client = clientCreatingEntity();
       const timeout = new DataverseTimeoutError(30_000, request);
@@ -674,7 +671,7 @@ describe("create_entity", () => {
         .catch((e: unknown) => e as Error);
 
       expect(err.message).toBe(
-        `Table 'contoso_adconversion' was created. No additional columns were created. Column 'contoso_a' failed: ${timeout.message} Missing columns can be added with add_attribute.`,
+        `Table 'contoso_adconversion' was created. No additional columns were created. Dataverse did not answer within 30000 ms while creating column 'contoso_a': it may not exist or may still be in progress. ${CHECK_LATER}`,
       );
       expect(err.cause).toBe(timeout);
     });
@@ -714,8 +711,24 @@ describe("create_entity", () => {
         .catch((e: unknown) => e as Error);
 
       expect(err.message).toBe(
-        "Dataverse did not answer within 30000 ms while creating table 'contoso_adconversion'. The table may not exist, may exist in part, or may still be in progress: Dataverse keeps working on a request for up to 2 minutes. Check with get_entity_schema before calling create_entity again.",
+        `Dataverse did not answer within 30000 ms while creating table 'contoso_adconversion'. The table may not exist, may exist in part, or may still be in progress. ${CHECK_LATER}`,
       );
+    });
+
+    it("lists the unsent columns when the table id does not come back", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      client.post.mockResolvedValueOnce({});
+      registerAllTools(server as any, { client, ...stdio() });
+
+      await expect(
+        server.tools
+          .get("create_entity")!
+          .handler({ ...table, attributes: columns }),
+      ).rejects.toThrow(
+        "Table 'contoso_adconversion' was created, but Dataverse did not return its id, so none of the additional columns were sent: contoso_a, contoso_b, contoso_c. They can be added with add_attribute.",
+      );
+      expect(client.post).toHaveBeenCalledTimes(1);
     });
 
     it("passes any other failure of the table request through unchanged", async () => {
