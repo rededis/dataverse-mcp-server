@@ -752,7 +752,7 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
       }
 
       // Create additional attributes if specified
-      if (params.attributes?.length) {
+      if (attributes.length) {
         const entityMeta = result as { MetadataId?: string };
         const entityId =
           entityMeta.MetadataId ||
