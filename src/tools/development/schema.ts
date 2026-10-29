@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { DataverseClient } from "../../client.js";
-import { isNotFound } from "../../errors.js";
+import { DataverseTimeoutError, isNotFound } from "../../errors.js";
 import { buildODataQuery, escapeODataString } from "../shared/odata.js";
 import { globalOptionSetNotFound } from "../shared/optionset.js";
 import type { ToolDeps } from "../types.js";
@@ -439,6 +439,18 @@ const CREATE_ENTITY_INPUT = z.object({
     .enum(["UserOwned", "OrganizationOwned"])
     .optional()
     .describe("Ownership type (default: UserOwned)"),
+  has_notes: z
+    .boolean()
+    .optional()
+    .describe(
+      "Enable notes and attachments on the table (default: false). Cannot be turned off once enabled.",
+    ),
+  has_activities: z
+    .boolean()
+    .optional()
+    .describe(
+      "Enable activities on the table (default: false). Cannot be turned off once enabled.",
+    ),
   attributes: z
     .array(AttributeSchema)
     .optional()
@@ -574,6 +586,66 @@ const ADD_ENTITY_KEY_INPUT = z.object({
     .describe("Solution unique name (defaults to the Default Solution)"),
 });
 
+// These report only what this call itself sent and heard back. Whether
+// Dataverse finished the table, or kept part of it, is not known here, so
+// the agent is told how to find out rather than given a guess (#113).
+function tableTimedOut(
+  table: string,
+  attributes: AttributeInput[],
+  err: DataverseTimeoutError,
+): Error {
+  const unsent = attributes.length
+    ? ` None of the additional columns were sent: ${logicalNames(attributes)}.`
+    : "";
+  return new Error(
+    `Dataverse did not answer within ${err.timeoutMs} ms while creating table '${table}'. The table may not exist, may exist in part, or may still be in progress.${unsent} ${CHECK_LATER}`,
+    { cause: err },
+  );
+}
+
+function columnFailed(
+  table: string,
+  attributes: AttributeInput[],
+  failedIndex: number,
+  err: unknown,
+): Error {
+  const created = attributes.slice(0, failedIndex);
+  const unsent = attributes.slice(failedIndex + 1);
+  const column = attributes[failedIndex].logical_name;
+  const createdText = created.length
+    ? `Columns created: ${logicalNames(created)}.`
+    : "No additional columns were created.";
+  const failedText =
+    err instanceof DataverseTimeoutError
+      ? `Dataverse did not answer within ${err.timeoutMs} ms while creating column '${column}': it may not exist or may still be in progress.`
+      : `Column '${column}' failed: ${err instanceof Error ? err.message : String(err)}`;
+  const unsentText = unsent.length ? ` Not sent: ${logicalNames(unsent)}.` : "";
+  const next =
+    err instanceof DataverseTimeoutError
+      ? CHECK_LATER
+      : "Missing columns can be added with add_attribute.";
+  return new Error(
+    `Table '${table}' was created. ${createdText} ${failedText}${unsentText} ${next}`,
+    { cause: err },
+  );
+}
+
+function entityIdMissing(table: string, attributes: AttributeInput[]): Error {
+  return new Error(
+    `Table '${table}' was created, but Dataverse did not return its id, so none of the additional columns were sent: ${logicalNames(attributes)}. They can be added with add_attribute.`,
+  );
+}
+
+// Dataverse keeps working on a request for up to 2 minutes, and table
+// definitions read meanwhile may come from a cache that lags behind, so a
+// check made at once can miss what is still being created.
+const CHECK_LATER =
+  "Dataverse keeps working on a request for up to 2 minutes: wait that long, then check with get_entity_schema. If the table exists, missing columns can be added with add_attribute; do not call create_entity again for it.";
+
+function logicalNames(attributes: AttributeInput[]): string {
+  return attributes.map((a) => a.logical_name).join(", ");
+}
+
 export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
   const { client, allowDelete = false } = deps;
   server.registerTool(
@@ -638,8 +710,11 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
             },
           ],
         },
-        OwnershipType: params.ownership_type || "UserOwned",
-        HasActivities: false,
+        OwnershipType: params.ownership_type ?? "UserOwned",
+        // CreateEntity refuses a request without HasNotes (#109); HasActivities
+        // goes with it so neither is left to a server-side default
+        HasNotes: params.has_notes ?? false,
+        HasActivities: params.has_activities ?? false,
         PrimaryNameAttribute: primaryAttrName,
         Attributes: [
           {
@@ -678,10 +753,17 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
         };
       }
 
-      const result = await client.post("/EntityDefinitions", body);
+      let result: unknown;
+      try {
+        result = await client.post("/EntityDefinitions", body);
+      } catch (err) {
+        throw err instanceof DataverseTimeoutError
+          ? tableTimedOut(params.logical_name, attributes, err)
+          : err;
+      }
 
       // Create additional attributes if specified
-      if (params.attributes?.length) {
+      if (attributes.length) {
         const entityMeta = result as { MetadataId?: string };
         const entityId =
           entityMeta.MetadataId ||
@@ -690,16 +772,18 @@ export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
           )?.[1];
 
         if (!entityId) {
-          throw new Error(
-            "Entity was created but additional attributes could not be created because the entity ID was not returned by the create-entity response.",
-          );
+          throw entityIdMissing(params.logical_name, attributes);
         }
 
-        for (const attrBody of attributeBodies) {
-          await client.post(
-            `/EntityDefinitions(${entityId})/Attributes`,
-            attrBody,
-          );
+        for (const [i, attrBody] of attributeBodies.entries()) {
+          try {
+            await client.post(
+              `/EntityDefinitions(${entityId})/Attributes`,
+              attrBody,
+            );
+          } catch (err) {
+            throw columnFailed(params.logical_name, attributes, i, err);
+          }
         }
       }
 
