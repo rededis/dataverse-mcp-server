@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- `create_entity` takes `has_notes` and `has_activities`, to enable notes and attachments or activities on the new table. Neither can be turned off once enabled (#109).
-
 ### Changed
 
 - **BREAKING** — Node 24 or later is required. Node 20 reached end of life on 2026-04-30, and Node 22 is in maintenance until 2027-04-30 (#101).
@@ -21,12 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `create_entity` says what it created when it fails part way. A timeout on the table request says the table may not exist, may exist in part or may still be in progress, that no additional column was sent, and to wait up to 2 minutes before checking with `get_entity_schema`; a timeout on a column request says the same of that column. A failed column request says that the table was created, which columns were created, which one failed and why, and which were not sent; so does a table whose id did not come back. Before, these surfaced as the bare timeout or Dataverse error (#113).
-- `create_entity` failed on every call: Dataverse requires `HasNotes` in `CreateEntity` and refused the request without it (`Required field 'HasNotes' is missing`). The tool now sends `HasNotes`, `false` by default; `HasActivities` was already sent as `false` (#109).
 - Tool arguments can no longer change which resource a request reaches. Before, an `id` such as `<guid>)/../accounts(<guid>` reached a different table than the one named, and an `entity_logical_name` such as `/../contacts?$top=5#` turned `get_entity_schema` into a read of `contacts` (#77).
   - `entity_set` must be a plain name and `id` a GUID without braces (Dataverse rejects braces in a key), in `query_records`, `get_record`, `create_record`, `update_record`, `delete_record` and the bound forms of `invoke_action` and `invoke_function`.
   - Logical names must be plain names in `get_entity_schema`, `get_picklist_options` and `list_entity_keys`. A name with a quote, which used to be escaped and sent, is now refused.
   - Every request path is checked once more before it is sent: a `.` or `..` segment, an encoded dot, a backslash, a `#` or a control character before the query string is refused, whichever tool built the path.
+
+## [0.9.1] - 2026-10-29
+
+### Added
+
+- `create_entity` takes `has_notes` and `has_activities`, to enable notes and attachments or activities on the new table. Neither can be turned off once enabled (#109).
+
+### Fixed
+
+- `create_entity` says what it created when it fails part way. A timeout on the table request says the table may not exist, may exist in part or may still be in progress, that no additional column was sent, and to wait up to 2 minutes before checking with `get_entity_schema`; a timeout on a column request says the same of that column. A failed column request says that the table was created, which columns were created, which one failed and why, and which were not sent; so does a table whose id did not come back. Before, these surfaced as the bare timeout or Dataverse error (#113).
+- `create_entity` failed on every call: Dataverse requires `HasNotes` in `CreateEntity` and refused the request without it (`Required field 'HasNotes' is missing`). The tool now sends `HasNotes`, `false` by default; `HasActivities` was already sent as `false` (#109).
 
 ## [0.9.0] - 2026-10-02
 
@@ -267,7 +272,8 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.7.0...v0.7.1
