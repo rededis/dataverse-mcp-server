@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-29
+
 ### Added
 
 - `create_entity` takes `has_notes` and `has_activities`, to enable notes and attachments or activities on the new table. Neither can be turned off once enabled (#109).
@@ -255,7 +257,8 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.7.0...v0.7.1
