@@ -236,7 +236,7 @@ _Added 2026-10-08 with #76._ How the server does this:
   tokens (OAuth), not on its own. See Deferred.
 - HTTP is served through the SDK's Node adapter (`@modelcontextprotocol/node`),
   which bounds the request body while reading it and handles backpressure and
-  client disconnects. It requires `@modelcontextprotocol/server` 2.3 or later.
+  client disconnects. It requires `@modelcontextprotocol/server` 2.4 or later.
 
 *Why not OAuth now:* the clients in scope (Claude Code, `mcp-remote`, other
 programmatic clients) all send a static header. OAuth pays off only when people
