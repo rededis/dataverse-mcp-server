@@ -177,7 +177,7 @@ against the body only for requests, and a notification could otherwise fake a
 call's line (§12). This leans on the SDK, so an SDK upgrade checks it again:
 
 - With `parsedBody` the SDK must still check the headers against that body,
-  and read nothing more. Verified for SDK 2.3.1.
+  and read nothing more. Verified for SDK 2.4.0.
 - The SDK does not bound a body given as `parsedBody`; the server applies the
   SDK's own bound (`DEFAULT_MAX_REQUEST_BODY_SIZE`) when it reads.
 - A body the server cannot use (too large, not JSON, unreadable) is passed on

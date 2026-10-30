@@ -328,6 +328,19 @@ describe("the auth gate on /mcp", () => {
     expect(requests).toEqual([]);
   });
 
+  // ADR-0001 §6: the SDK checks the headers against the body given as
+  // parsedBody. Pinned, so an SDK upgrade that stops doing so is noticed.
+  it("refuses tools/call whose Mcp-Name is not the body's tool", async () => {
+    const res = await mcp(
+      "tools/call",
+      { name: "get_record", arguments: {} },
+      { ...AUTH, "Mcp-Name": "query_records" },
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe(-32020);
+    expect(requests).toEqual([]);
+  });
+
   it("refuses a 2025-era request (2026-07-28 only)", async () => {
     const res = await send("/mcp", {
       method: "POST",
