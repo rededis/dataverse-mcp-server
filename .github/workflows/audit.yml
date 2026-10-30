@@ -1,0 +1,25 @@
+name: Audit
+
+# Not on pull requests: a new advisory must not fail an unrelated change.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Reads package-lock.json, so nothing needs installing.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
