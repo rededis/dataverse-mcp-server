@@ -24,7 +24,7 @@ A `server-vX.Y.Z` tag needs a `## [X.Y.Z]` section here; a pre-release
 ### Changed
 
 - The startup and shutdown messages are written to stderr; stdout carries only audit lines (#78).
-- `@modelcontextprotocol/server` 2.4 and `@hono/node-server` 2.x (#119).
+- `@modelcontextprotocol/server` 2.4 instead of 2.3 (#119).
 
 ### Security
 
