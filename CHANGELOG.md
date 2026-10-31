@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **BREAKING** — Node 24 or later is required. Node 20 reached end of life on 2026-04-30, and Node 22 is in maintenance until 2027-04-30 (#101).
-- `@modelcontextprotocol/server` 2.3 instead of 2.2. The package now also depends on `@modelcontextprotocol/node` (which brings in `hono` and `@hono/node-server`) and contains the not yet released HTTP server under `dist/server/` (#76).
+- `@modelcontextprotocol/server` 2.4 instead of 2.2. The package now also depends on `@modelcontextprotocol/node` (which brings in `hono` and `@hono/node-server`) and contains the not yet released HTTP server under `dist/server/` (#76, #119).
 - The not yet released HTTP server gets roles, set in its config file: which tool groups a token may use, which entity sets it may create, update or delete in, and which actions and functions it may call. A token may also act on behalf of a Dataverse user (#77).
 - **BREAKING** — `invoke_action` and `invoke_function` accept an operation name with the `Microsoft.Dynamics.CRM.` namespace or without it, and refuse any other namespace. Before, a name with any dot was sent as given. An unbound call now goes to the bare name even when the namespace was given (#77).
 - **BREAKING** — `update_record` updates only a record that exists: it sends `If-Match: *`, so a missing id is a 404. Before, Dataverse treated the PATCH as an upsert and created the record (#77).
@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `entity_set` must be a plain name and `id` a GUID without braces (Dataverse rejects braces in a key), in `query_records`, `get_record`, `create_record`, `update_record`, `delete_record` and the bound forms of `invoke_action` and `invoke_function`.
   - Logical names must be plain names in `get_entity_schema`, `get_picklist_options` and `list_entity_keys`. A name with a quote, which used to be escaped and sent, is now refused.
   - Every request path is checked once more before it is sent: a `.` or `..` segment, an encoded dot, a backslash, a `#` or a control character before the query string is refused, whichever tool built the path.
+
+### Security
+
+- `zod` 4.6.7 or later, which fixes [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) (#119).
 
 ## [0.9.1] - 2026-10-29
 

@@ -455,7 +455,7 @@ describe("refusals and errors", () => {
     expect(JSON.stringify(lines)).not.toContain(CANARY);
   });
 
-  // In SDK 2.3.1 McpServer turns every throw into an error result, so a
+  // In SDK 2.4.0 McpServer turns every throw into an error result, so a
   // tool's error cannot reach the handler's onerror. Pinned, so an SDK that
   // starts forwarding them (with Dataverse's text) is noticed.
   it("does not pass a tool's Dataverse error to onerror", async () => {
