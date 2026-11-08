@@ -50,10 +50,11 @@ updates:
   # Both base images in the Dockerfile. A Node major arrives only for the
   # build stage: the runtime image carries the major in its name
   # (nodejs24-debian13), which Dependabot does not change. Such a PR is a
-  # prompt to move by hand, together: both FROM stages, node-version in the
-  # workflows, the esbuild target in scripts/build-server.mjs and the
-  # @types/node major (ignored in the npm entry above). engines in
-  # package.json is the npm package's floor and need not move.
+  # prompt to move by hand, together: both FROM stages, node-version in
+  # ci.yml, release.yml and server-release.yml, the esbuild target in
+  # scripts/build-server.mjs and the @types/node major (ignored in the npm
+  # entry above). engines in package.json is the npm package's floor and need
+  # not move (audit.yml reads it and already gets the newest Node).
   # The cooldown does not hold back the distroless digest: Dependabot has a
   # publish date only for Docker Hub images, not for gcr.io.
   - package-ecosystem: docker
