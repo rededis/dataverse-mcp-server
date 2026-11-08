@@ -18,8 +18,6 @@ jobs:
 
       - run: npm ci
 
-      # Lint, type check, test, build and the server bundle, which fails if it
-      # holds development tools or leaves a package for run time
-      # (scripts/build-server.mjs).
+      # The same command the pre-commit hook runs (check in package.json).
       - name: Check
         run: npm run check
