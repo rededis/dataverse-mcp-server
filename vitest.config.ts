@@ -5,14 +5,17 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**"],
-      reporter: ["text-summary"],
+      // The entry points run only as child processes in the tests, which
+      // v8 coverage in the test process does not see.
+      exclude: ["src/index.ts", "src/server/index.ts"],
+      reporter: [["text", { skipFull: true }], "text-summary"],
       // About two points below the measured coverage, so noise does not
       // fail a build. Raise these when coverage rises; never lower them.
       thresholds: {
-        lines: 90,
-        branches: 87,
-        functions: 91,
-        statements: 89,
+        lines: 95,
+        branches: 89,
+        functions: 96,
+        statements: 95,
       },
     },
   },
