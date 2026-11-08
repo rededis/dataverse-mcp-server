@@ -6,18 +6,13 @@ import type { ToolDeps } from "../src/tools/types.js";
 // A stand-in for McpServer that records each tool registered through
 // `server.registerTool(name, config, handler)`, so tests can look a tool up by
 // name and call its handler directly.
+type Handler = (...args: any[]) => any;
+
 export function createMockServer() {
-  const tools = new Map<
-    string,
-    { description: string; handler: (...args: any[]) => any }
-  >();
+  const tools = new Map<string, { description: string; handler: Handler }>();
   return {
     registerTool: vi.fn(
-      (
-        name: string,
-        config: { description: string },
-        handler: (...args: any[]) => any,
-      ) => {
+      (name: string, config: { description: string }, handler: Handler) => {
         tools.set(name, { description: config.description, handler });
       },
     ),

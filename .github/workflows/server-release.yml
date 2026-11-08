@@ -87,7 +87,7 @@ jobs:
 
       - run: npm ci --no-audit --no-fund
 
-      # The image's esbuild bundle does not type-check; the check does.
+      # The image's esbuild bundle does not type-check; tsc in the check does.
       - name: Check
         run: npm run check
 
