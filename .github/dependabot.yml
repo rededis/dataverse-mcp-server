@@ -2,7 +2,6 @@
 # action SHAs in the workflows, npm packages in package-lock.json.
 # Monthly and grouped, so a run opens a few PRs. The cooldown holds a new
 # release back for a week, which limits exposure to compromised releases.
-# Research: docs/research/dependabot.md.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -24,6 +23,8 @@ updates:
         dependency-type: production
       development:
         dependency-type: development
+        # The same two names as the vitest group; keep them in sync. Without
+        # this, the development group claims the pair as well.
         exclude-patterns:
           - vitest
           - "@vitest/coverage-v8"
@@ -31,7 +32,11 @@ updates:
   # Both base images in the Dockerfile. A Node major arrives only for the
   # build stage: the runtime image carries the major in its name
   # (nodejs24-debian13), which Dependabot does not change. Such a PR is a
-  # prompt to move both stages, CI and the esbuild target by hand.
+  # prompt to move by hand, together: both FROM stages, node-version in the
+  # workflows and the esbuild target in scripts/build-server.mjs. engines in
+  # package.json is the npm package's floor and need not move.
+  # The cooldown does not hold back the distroless digest: Dependabot has a
+  # publish date only for Docker Hub images, not for gcr.io.
   - package-ecosystem: docker
     directory: /
     schedule:
