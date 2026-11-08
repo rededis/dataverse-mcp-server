@@ -3,10 +3,7 @@
   "compilerOptions": {
     "noEmit": true,
     "rootDir": "..",
-    "allowJs": true,
-    // The tests compile as CommonJS and import scripts/build-server.mjs, an
-    // ES module; Node20 allows that (TypeScript 5.9 or later).
-    "module": "Node20"
+    "allowJs": true
   },
   "include": ["../src/**/*", "**/*"]
 }
