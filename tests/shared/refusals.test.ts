@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { DataverseAuth } from "../../src/auth.js";
+import type { DataverseAuth } from "../../src/auth.js";
 import { DataverseClient } from "../../src/client.js";
-import { RefusedError, type RefusalCheck } from "../../src/errors.js";
+import { type RefusalCheck, RefusedError } from "../../src/errors.js";
 import { assertAllowed } from "../../src/tools/permissions.js";
 import {
   bareOperationName,

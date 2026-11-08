@@ -52,6 +52,7 @@ describe("server bundle check", () => {
   });
 
   it("refuses to bundle without a version", async () => {
+    // @ts-expect-error: the version is missing on purpose
     await expect(bundleServer({})).rejects.toThrow("version is required");
   });
 });

@@ -28,6 +28,8 @@ const OUTDIR = "build/server";
  * Bundles a server entry point in memory: nothing is written, so a bundle
  * the checks refuse never reaches build/server/. Metafile paths are relative
  * to the repo root.
+ *
+ * @param {{ entryPoint?: string, version: string, external?: string[] }} options
  */
 export async function bundleServer({
   entryPoint = "src/server/index.ts",

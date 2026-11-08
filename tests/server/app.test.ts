@@ -428,7 +428,11 @@ describe("roles", () => {
     return tools.map((t) => t.name);
   }
 
-  async function call(token: string, name: string, args: object) {
+  async function call(
+    token: string,
+    name: string,
+    args: Record<string, unknown>,
+  ) {
     const client = await connect(token);
     const result = await client.callTool({ name, arguments: args });
     await client.close();

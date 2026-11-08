@@ -347,7 +347,9 @@ describe("get_entity_schema", () => {
       .get("get_entity_schema")!
       .handler({ entity_logical_name: "opportunity" });
 
-    const urls = client.get.mock.calls.map((c: unknown[]) => c[0] as string);
+    const urls: string[] = client.get.mock.calls.map(
+      (c: unknown[]) => c[0] as string,
+    );
     const baseUrl = urls.find(
       (u) => !u.includes("Microsoft.Dynamics.CRM."),
     ) as string;
@@ -678,7 +680,9 @@ describe("get_picklist_options", () => {
       attribute_logical_name: "fundai_status",
     });
 
-    const urls = client.get.mock.calls.map((c: unknown[]) => c[0] as string);
+    const urls: string[] = client.get.mock.calls.map(
+      (c: unknown[]) => c[0] as string,
+    );
     // Dataverse rejects a cast to the abstract EnumAttributeMetadata base (HTTP 500),
     // so the lookup fans out over every concrete choice type instead — otherwise
     // Status/State/MultiSelect columns would be unreachable.

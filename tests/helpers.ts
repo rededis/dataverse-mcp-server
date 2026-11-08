@@ -7,10 +7,17 @@ import type { ToolDeps } from "../src/tools/types.js";
 // `server.registerTool(name, config, handler)`, so tests can look a tool up by
 // name and call its handler directly.
 export function createMockServer() {
-  const tools = new Map<string, { description: string; handler: Function }>();
+  const tools = new Map<
+    string,
+    { description: string; handler: (...args: any[]) => any }
+  >();
   return {
     registerTool: vi.fn(
-      (name: string, config: { description: string }, handler: Function) => {
+      (
+        name: string,
+        config: { description: string },
+        handler: (...args: any[]) => any,
+      ) => {
         tools.set(name, { description: config.description, handler });
       },
     ),
