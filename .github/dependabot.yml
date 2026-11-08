@@ -1,0 +1,59 @@
+# Moves the pinned versions (#103): base image digests in the Dockerfile,
+# action SHAs in the workflows, npm packages in package-lock.json.
+# Monthly and grouped, so a run opens a few PRs. The cooldown holds a new
+# release back for a week, which limits exposure to compromised releases.
+# Research: docs/research/dependabot.md.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      # @vitest/coverage-v8 requires the exact Vitest as a peer: bumped apart,
+      # npm ci fails with ERESOLVE. Listed by name, not as @vitest/*: a
+      # wildcard loses to the development group below, and coverage-v8 would
+      # land there.
+      vitest:
+        patterns:
+          - vitest
+          - "@vitest/coverage-v8"
+      production:
+        dependency-type: production
+      development:
+        dependency-type: development
+        exclude-patterns:
+          - vitest
+          - "@vitest/coverage-v8"
+
+  # Both base images in the Dockerfile. A Node major arrives only for the
+  # build stage: the runtime image carries the major in its name
+  # (nodejs24-debian13), which Dependabot does not change. Such a PR is a
+  # prompt to move both stages, CI and the esbuild target by hand.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+
+  # Updates the SHA and the "# vX.Y.Z" comment after it. Every action the
+  # workflows use, by name: a new one outside this list still gets updates,
+  # in a PR of its own.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns:
+          - actions/checkout
+          - actions/setup-node
+          - docker/build-push-action
+          - docker/login-action
+          - docker/metadata-action
+          - docker/setup-buildx-action
