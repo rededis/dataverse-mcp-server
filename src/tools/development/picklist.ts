@@ -1,11 +1,10 @@
-import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import {
   LOCATION_SHAPE,
   type PicklistLocation,
   validatePicklistLocation,
 } from "../shared/picklist-location.js";
-import type { ToolDeps } from "../types.js";
+import type { ToolDeps, ToolRegistrar } from "../types.js";
 
 function buildLabel(label: string, languageCode: number) {
   return {
@@ -88,7 +87,7 @@ const UPDATE_PICKLIST_OPTION_INPUT = z.object({
 });
 
 export function registerPicklistWriteTools(
-  server: McpServer,
+  server: ToolRegistrar,
   deps: ToolDeps,
 ): void {
   const { client } = deps;

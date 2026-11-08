@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DataverseClient } from "../../src/client.js";
 import { DataverseApiError, DataverseTimeoutError } from "../../src/errors.js";
 import { registerAllTools } from "../../src/tools/all.js";
 import { buildAttributeBody } from "../../src/tools/development/schema.js";
 import { createMockServer, GUID, notFound, stdio } from "../helpers.js";
-
-const mockClient = {} as DataverseClient;
 
 describe("buildAttributeBody", () => {
   it("builds String attribute body", () => {

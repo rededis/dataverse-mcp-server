@@ -43,14 +43,9 @@ jobs:
             exit 1
           fi
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        run: npm test
-
-      - name: Build
-        run: npm run build
+      # Leaves dist/ in place for npm publish.
+      - name: Check
+        run: npm run check
 
       - name: Publish to npm
         run: npm publish --provenance --access public

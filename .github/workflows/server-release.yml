@@ -87,15 +87,11 @@ jobs:
 
       - run: npm ci --no-audit --no-fund
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        run: npm test
-
-      # The image's esbuild bundle does not type-check; tsc does.
-      - name: Build
-        run: npm run build
+      # The image's esbuild bundle does not type-check; tsc in the check does.
+      # The check's own server bundle is a gate only: the image build below
+      # bundles again with SERVER_VERSION.
+      - name: Check
+        run: npm run check
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 

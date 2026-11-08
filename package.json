@@ -22,13 +22,15 @@
     "start:server": "node dist/server/index.js",
     "dev": "tsx src/index.ts",
     "dev:server": "tsx src/server/index.ts",
-    "lint": "biome check src/ scripts/",
-    "lint:fix": "biome check --write src/ scripts/",
+    "lint": "biome check --error-on-warnings src/ scripts/ tests/",
+    "lint:fix": "biome check --write src/ scripts/ tests/",
+    "typecheck": "tsc -p tests",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepare": "husky",
-    "prepublishOnly": "npm run lint && npm test && npm run build",
-    "build:server": "node scripts/build-server.mjs"
+    "prepublishOnly": "npm run check",
+    "build:server": "node scripts/build-server.mjs",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build && npm run build:server"
   },
   "keywords": [
     "mcp",
@@ -64,7 +66,7 @@
     "esbuild": "0.28.2",
     "husky": "^9.1.7",
     "tsx": "^4.21.0",
-    "typescript": "^5.7.0",
+    "typescript": "^5.9.0",
     "vitest": "^4.1.2"
   }
 }

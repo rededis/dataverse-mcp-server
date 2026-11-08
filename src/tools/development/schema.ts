@@ -1,10 +1,9 @@
-import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { DataverseClient } from "../../client.js";
 import { DataverseTimeoutError, isNotFound } from "../../errors.js";
 import { buildODataQuery, escapeODataString } from "../shared/odata.js";
 import { globalOptionSetNotFound } from "../shared/optionset.js";
-import type { ToolDeps } from "../types.js";
+import type { ToolDeps, ToolRegistrar } from "../types.js";
 
 const ATTRIBUTE_ODATA_TYPE_MAP: Record<string, string> = {
   String: "Microsoft.Dynamics.CRM.StringAttributeMetadata",
@@ -646,7 +645,10 @@ function logicalNames(attributes: AttributeInput[]): string {
   return attributes.map((a) => a.logical_name).join(", ");
 }
 
-export function registerSchemaTools(server: McpServer, deps: ToolDeps): void {
+export function registerSchemaTools(
+  server: ToolRegistrar,
+  deps: ToolDeps,
+): void {
   const { client } = deps;
   // stdio only: the development tools delete all or nothing.
   const allowDelete = deps.permissions?.delete === "*";
