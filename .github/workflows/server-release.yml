@@ -88,6 +88,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
 
       # The image's esbuild bundle does not type-check; tsc in the check does.
+      # The check's own server bundle is a gate only: the image build below
+      # bundles again with SERVER_VERSION.
       - name: Check
         run: npm run check
 
