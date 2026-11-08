@@ -22,15 +22,16 @@
     "start:server": "node dist/server/index.js",
     "dev": "tsx src/index.ts",
     "dev:server": "tsx src/server/index.ts",
-    "lint": "biome check --error-on-warnings src/ scripts/ tests/",
-    "lint:fix": "biome check --write src/ scripts/ tests/",
+    "lint": "biome check --error-on-warnings src/ scripts/ tests/ vitest.config.ts",
+    "lint:fix": "biome check --write src/ scripts/ tests/ vitest.config.ts",
     "typecheck": "tsc -p tests",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "prepare": "husky",
     "prepublishOnly": "npm run check",
     "build:server": "node scripts/build-server.mjs",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build && npm run build:server"
+    "check": "npm run lint && npm run typecheck && npm run test:coverage && npm run build && npm run build:server"
   },
   "keywords": [
     "mcp",
@@ -63,10 +64,11 @@
     "@biomejs/biome": "^2.4.10",
     "@modelcontextprotocol/client": "^2.4.0",
     "@types/node": "^24.19.2",
+    "@vitest/coverage-v8": "4.1.2",
     "esbuild": "0.28.2",
     "husky": "^9.1.7",
     "tsx": "^4.21.0",
     "typescript": "^5.9.0",
-    "vitest": "^4.1.2"
+    "vitest": "4.1.2"
   }
 }
