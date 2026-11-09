@@ -3,7 +3,8 @@
   "compilerOptions": {
     "noEmit": true,
     "rootDir": "..",
-    "allowJs": true
+    "allowJs": true,
+    "checkJs": true
   },
   "include": ["../src/**/*", "../vitest.config.ts", "**/*"]
 }

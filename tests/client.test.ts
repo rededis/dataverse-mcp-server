@@ -34,7 +34,7 @@ describe("DataverseClient", () => {
     const result = await client.get("/accounts?$top=1");
 
     expect(fetchSpy).toHaveBeenCalledOnce();
-    const [url, options] = fetchSpy.mock.calls[0];
+    const [url, options] = fetchSpy.mock.calls[0]!;
     expect(url).toBe(
       "https://org.crm.dynamics.com/api/data/v9.2/accounts?$top=1",
     );
@@ -57,7 +57,7 @@ describe("DataverseClient", () => {
 
     const result = await client.post("/accounts", { name: "Test" });
 
-    const [, options] = fetchSpy.mock.calls[0];
+    const [, options] = fetchSpy.mock.calls[0]!;
     expect(options?.method).toBe("POST");
     expect(options?.body).toBe(JSON.stringify({ name: "Test" }));
     expect(result).toEqual({
@@ -177,8 +177,8 @@ describe("DataverseClient with an injected executor", () => {
 
     await client.get(next);
 
-    expect(requests[0].url).toBe(next);
-    expect(requests[0].body).toBeUndefined();
+    expect(requests[0]!.url).toBe(next);
+    expect(requests[0]!.body).toBeUndefined();
   });
 
   it("reports a 2xx body that is not JSON as a DataverseError", async () => {
@@ -233,11 +233,11 @@ describe("DataverseClient on behalf of a user", () => {
     await user.post("/emails", { subject: "Hi" });
     await base.get("/WhoAmI");
 
-    expect(requests[0].headers.CallerObjectId).toBe(USER);
-    expect(requests[0].url).toBe(
+    expect(requests[0]!.headers.CallerObjectId).toBe(USER);
+    expect(requests[0]!.url).toBe(
       "https://org.crm.dynamics.com/api/data/v9.2/emails",
     );
-    expect(requests[1].headers).not.toHaveProperty("CallerObjectId");
+    expect(requests[1]!.headers).not.toHaveProperty("CallerObjectId");
   });
 
   // No header passed to request() may change who makes the request: not the
@@ -266,7 +266,7 @@ describe("DataverseClient on behalf of a user", () => {
     await base
       .onBehalfOf(caller)
       .patch("/accounts(1)", {}, { "If-Match": "*" });
-    expect(requests[0].headers).toMatchObject({
+    expect(requests[0]!.headers).toMatchObject({
       "If-Match": "*",
       CallerObjectId: USER,
       Authorization: "Bearer t",
@@ -457,7 +457,7 @@ describe("DataverseClient observed", () => {
   it("puts the observer on each request for the executors", async () => {
     const { base, requests, observer } = setup([]);
     await base.observed(observer).get("/accounts");
-    expect(requests[0].observer).toBe(observer);
+    expect(requests[0]!.observer).toBe(observer);
   });
 
   it("keeps it when acting on behalf of a user, and the base client has none", async () => {

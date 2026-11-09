@@ -40,7 +40,7 @@ const UNSAFE_PATH = /(^|\/)\.{1,2}(\/|$)|%2e|\\|#|[\x00-\x1f\x7f]/i;
  * (`@odata.nextLink`) and pass.
  */
 function assertPathStaysPut(path: string): void {
-  const beforeQuery = path.split("?", 1)[0];
+  const [beforeQuery = ""] = path.split("?", 1);
   if (UNSAFE_PATH.test(beforeQuery)) {
     throw new RefusedError(
       "path",

@@ -30,7 +30,7 @@ describe("DataverseAuth", () => {
     expect(token).toBe("mock-token-123");
     expect(fetchSpy).toHaveBeenCalledOnce();
 
-    const [url, options] = fetchSpy.mock.calls[0];
+    const [url, options] = fetchSpy.mock.calls[0]!;
     expect(url).toBe(
       "https://login.microsoftonline.com/tenant-id/oauth2/v2.0/token",
     );

@@ -96,17 +96,15 @@ export interface ChoiceAttributeRow {
   OptionSet?: RawOptionSet;
 }
 
-function castRequests(
+function castRequest(
   client: { get(path: string): Promise<unknown> },
   attributesPath: string,
+  cast: string,
   query: string,
 ) {
-  return CHOICE_ATTRIBUTE_CASTS.map(
-    (cast) =>
-      client.get(`${attributesPath}/${cast}${query}`) as Promise<{
-        value?: ChoiceAttributeRow[];
-      }>,
-  );
+  return client.get(`${attributesPath}/${cast}${query}`) as Promise<{
+    value?: ChoiceAttributeRow[];
+  }>;
 }
 
 // Fans the same query out across every concrete choice cast and concatenates the
@@ -122,7 +120,9 @@ export async function fetchChoiceAttributes(
   query: string,
 ): Promise<ChoiceAttributeRow[]> {
   const responses = await Promise.all(
-    castRequests(client, attributesPath, query),
+    CHOICE_ATTRIBUTE_CASTS.map((cast) =>
+      castRequest(client, attributesPath, cast, query),
+    ),
   );
   return responses.flatMap((r) => r.value ?? []);
 }
@@ -143,23 +143,28 @@ export async function fetchChoiceAttributesSettled(
   attributesPath: string,
   query: string,
 ): Promise<ChoiceAttributeFanOut> {
-  const results = await Promise.allSettled(
-    castRequests(client, attributesPath, query),
+  const results = await Promise.all(
+    CHOICE_ATTRIBUTE_CASTS.map((cast) =>
+      castRequest(client, attributesPath, cast, query).then(
+        (response) => ({ cast, rows: response.value ?? [] }),
+        (reason: unknown) => ({ cast, reason }),
+      ),
+    ),
   );
   const rows: ChoiceAttributeRow[] = [];
   const failed: ChoiceAttributeFanOut["failed"] = [];
-  results.forEach((result, i) => {
-    if (result.status === "fulfilled") {
-      rows.push(...(result.value.value ?? []));
+  for (const result of results) {
+    if ("rows" in result) {
+      rows.push(...result.rows);
     } else {
       failed.push({
-        cast: CHOICE_ATTRIBUTE_CASTS[i].replace("Microsoft.Dynamics.CRM.", ""),
+        cast: result.cast.replace("Microsoft.Dynamics.CRM.", ""),
         message:
           result.reason instanceof Error
             ? result.reason.message
             : String(result.reason),
       });
     }
-  });
+  }
   return { rows, failed };
 }

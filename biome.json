@@ -34,6 +34,19 @@
   },
   "overrides": [
     {
+      "includes": ["src/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": {
+              "level": "error",
+              "options": { "allow": ["error", "warn", "trace", "assert"] }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["tests/**"],
       "linter": {
         "rules": {

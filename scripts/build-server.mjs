@@ -56,8 +56,12 @@ export async function bundleServer({
     outdir: OUTDIR,
     write: false,
   });
-  const text = (ext) =>
-    result.outputFiles.find((f) => f.path.endsWith(ext)).text;
+  /** @param {string} ext */
+  const text = (ext) => {
+    const file = result.outputFiles.find((f) => f.path.endsWith(ext));
+    if (!file) throw new Error(`esbuild wrote no ${ext} file`);
+    return file.text;
+  };
   return {
     metafile: result.metafile,
     outputFiles: result.outputFiles,
@@ -76,7 +80,10 @@ const FORBIDDEN = [
   /^package\.json$/,
 ];
 
-/** What is wrong with a server bundle, from its metafile; empty if nothing. */
+/**
+ * What is wrong with a server bundle, from its metafile; empty if nothing.
+ * @param {import("esbuild").Metafile} metafile
+ */
 export function bundleProblems(metafile) {
   const problems = Object.keys(metafile.inputs)
     .filter((path) => FORBIDDEN.some((re) => re.test(path)))
@@ -110,12 +117,17 @@ const COVERED_BY_SDK = new Set(["@modelcontextprotocol/core-internal"]);
  * node_modules, and the source map also names what those packages had
  * already bundled into their own dist/ (the MCP SDK inlines Ajv and others).
  * Those are not installed, so their texts are kept in scripts/licenses/.
+ *
+ * @param {import("esbuild").Metafile} metafile
+ * @param {string} sourcemap the source map, as JSON text
  */
 export function licenceTexts(metafile, sourcemap) {
+  /** @type {Map<string, string>} */
   const dirs = new Map();
   for (const path of Object.keys(metafile.inputs)) {
-    const match = path.match(/^(.*node_modules\/((?:@[^/]+\/)?[^/]+))\//);
-    if (match) dirs.set(match[2], join(ROOT, match[1]));
+    const [, dir, name] =
+      path.match(/^(.*node_modules\/((?:@[^/]+\/)?[^/]+))\//) ?? [];
+    if (dir && name) dirs.set(name, join(ROOT, dir));
   }
   // Every package a source map entry comes from, by its innermost
   // node_modules/ segment, whatever tool built the package that inlined it.
@@ -127,14 +139,19 @@ export function licenceTexts(metafile, sourcemap) {
       dirs.set(name, join(ROOT, "scripts/licenses", name));
     }
   }
+  /** @type {Map<string, string[]>} */
   const texts = new Map();
+  /** @type {string[]} */
   const missing = [];
   for (const [name, dir] of [...dirs].sort()) {
+    /** @type {string[]} */
     let files = [];
     try {
       files = readdirSync(dir).filter((f) => LICENCE_FILE.test(f));
     } catch (err) {
-      if (err.code !== "ENOENT") throw err;
+      if (/** @type {NodeJS.ErrnoException} */ (err).code !== "ENOENT") {
+        throw err;
+      }
     }
     if (files.length === 0) missing.push(name);
     else
@@ -146,6 +163,10 @@ export function licenceTexts(metafile, sourcemap) {
   return { texts, missing };
 }
 
+/**
+ * @param {Map<string, string[]>} texts
+ * @param {string} outdir
+ */
 function copyLicences(texts, outdir) {
   for (const [name, files] of texts) {
     const target = join(ROOT, outdir, "licenses", name);

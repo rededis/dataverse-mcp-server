@@ -184,10 +184,13 @@ async function globalOptionSetIdsByName(
         .filter((n): n is string => n !== undefined),
     ),
   ];
-  const ids = await Promise.all(
-    names.map((name) => resolveGlobalOptionSetId(client, name)),
+  const pairs = await Promise.all(
+    names.map(
+      async (name) =>
+        [name, await resolveGlobalOptionSetId(client, name)] as const,
+    ),
   );
-  return new Map(names.map((name, i) => [name, ids[i]]));
+  return new Map(pairs);
 }
 
 function buildAttributeBodyBound(
@@ -610,7 +613,7 @@ function columnFailed(
 ): Error {
   const created = attributes.slice(0, failedIndex);
   const unsent = attributes.slice(failedIndex + 1);
-  const column = attributes[failedIndex].logical_name;
+  const column = attributes[failedIndex]?.logical_name;
   const createdText = created.length
     ? `Columns created: ${logicalNames(created)}.`
     : "No additional columns were created.";

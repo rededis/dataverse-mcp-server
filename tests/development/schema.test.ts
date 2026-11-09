@@ -68,7 +68,7 @@ describe("buildAttributeBody", () => {
     expect(body.Description).toBeDefined();
     const labels = (body.Description as Record<string, unknown>)
       .LocalizedLabels as Array<{ Label: string }>;
-    expect(labels[0].Label).toBe("A description");
+    expect(labels[0]!.Label).toBe("A description");
   });
 
   it("omits optional fields when not provided", () => {

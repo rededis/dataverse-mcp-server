@@ -202,7 +202,7 @@ async function call(
 /** The only line written; fails if there is not exactly one. */
 function theLine(): AuditLine {
   expect(lines).toHaveLength(1);
-  return lines[0];
+  return lines[0]!;
 }
 
 describe("a tool call's line", () => {
@@ -356,7 +356,7 @@ describe("the JSON-RPC id and the proxy's request id", () => {
       fingerprint(`${CANARY}/with spaces`, KEY),
       undefined,
     ]);
-    expect("requestId" in lines[2]).toBe(false);
+    expect("requestId" in lines[2]!).toBe(false);
   });
 });
 

@@ -310,14 +310,14 @@ describe("ConcurrencyLimitExecutor", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(sentPaths(inner)).toEqual(["a", "b"]);
 
-    inner.open[1].answer(response(200, {}, "b"));
+    inner.open[1]!.answer(response(200, {}, "b"));
     await vi.advanceTimersByTimeAsync(0);
     expect(sentPaths(inner)).toEqual(["a", "b", "c"]);
 
-    inner.open[0].answer(response(200, {}, "a"));
+    inner.open[0]!.answer(response(200, {}, "a"));
     await vi.advanceTimersByTimeAsync(0);
-    inner.open[2].answer(response(200, {}, "c"));
-    inner.open[3].answer(response(200, {}, "d"));
+    inner.open[2]!.answer(response(200, {}, "c"));
+    inner.open[3]!.answer(response(200, {}, "d"));
     expect((await Promise.all(results)).map((r) => r.body)).toEqual([
       "a",
       "b",
@@ -335,12 +335,12 @@ describe("ConcurrencyLimitExecutor", () => {
     const first = executor.execute(get("a")).catch((e: unknown) => e);
     const second = executor.execute(get("b"));
     await vi.advanceTimersByTimeAsync(0);
-    inner.open[0].fail(failure);
+    inner.open[0]!.fail(failure);
     await vi.advanceTimersByTimeAsync(0);
 
     expect(await first).toBe(failure);
     expect(inner.execute).toHaveBeenCalledTimes(2);
-    inner.open[1].answer();
+    inner.open[1]!.answer();
     expect((await second).status).toBe(200);
   });
 
@@ -363,7 +363,7 @@ describe("ConcurrencyLimitExecutor", () => {
     // The ones admitted before it are unaffected.
     for (let i = 0; i < 3; i++) {
       await vi.advanceTimersByTimeAsync(0);
-      inner.open[i].answer();
+      inner.open[i]!.answer();
     }
     expect((await Promise.all(admitted)).map((r) => r.status)).toEqual([
       200, 200, 200,
@@ -385,7 +385,7 @@ describe("ConcurrencyLimitExecutor", () => {
     expect(((await second) as Error).message).toBe(
       "Dataverse is busy: the request waited 1.5 s for its turn and was not sent. Retry later.",
     );
-    inner.open[0].answer();
+    inner.open[0]!.answer();
     await first;
   });
 
@@ -409,10 +409,10 @@ describe("ConcurrencyLimitExecutor", () => {
     );
 
     // The freed slot goes to the request still waiting, not the one that left.
-    inner.open[0].answer();
+    inner.open[0]!.answer();
     await vi.advanceTimersByTimeAsync(0);
     expect(sentPaths(inner)).toEqual(["a", "c"]);
-    inner.open[1].answer();
+    inner.open[1]!.answer();
     expect((await first).status).toBe(200);
     expect((await third).status).toBe(200);
     expect(vi.getTimerCount()).toBe(0);
@@ -473,13 +473,13 @@ describe("observing a request", () => {
 
     const first = executor.execute(a.req);
     await vi.advanceTimersByTimeAsync(0);
-    inner.open[0].answer(throttled("2"));
+    inner.open[0]!.answer(throttled("2"));
     await vi.advanceTimersByTimeAsync(0);
     // Sent while the first waits out its 429: held back, not throttled.
     const second = executor.execute(b.req);
     await vi.advanceTimersByTimeAsync(2_000);
-    inner.open[1].answer();
-    inner.open[2].answer();
+    inner.open[1]!.answer();
+    inner.open[2]!.answer();
     await Promise.all([first, second]);
 
     expect(a.seen).toEqual({ sent: 2, throttled: 1, heldBack: 0, retried: 1 });
@@ -511,7 +511,7 @@ describe("observing a request", () => {
     );
     expect(b.seen).toEqual({ sent: 0, throttled: 0, heldBack: 0, retried: 0 });
     await vi.advanceTimersByTimeAsync(0);
-    inner.open[0].answer();
+    inner.open[0]!.answer();
     await first;
   });
 });
