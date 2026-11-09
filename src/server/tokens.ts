@@ -38,11 +38,11 @@ export function callerOf(authInfo: AuthInfo | undefined): Caller {
 
 // The config loader already refuses a token whose role is not in `roles`;
 // this keeps a config built some other way from serving a caller without one.
-function roleOf(config: ServerConfig, token: string, name: string): Role {
+function roleOf(config: ServerConfig, tokenName: string, name: string): Role {
   const role = config.roles[name];
   if (!role) {
     throw new Error(
-      `Token "${token}" has the role "${name}", which is not in roles`,
+      `Token "${tokenName}" has the role "${name}", which is not in roles`,
     );
   }
   return role;
