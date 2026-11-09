@@ -304,17 +304,16 @@ describe("the auth gate on /mcp", () => {
 
   // Any Origin means a browser, and no browser origin is allowed: a page
   // holding a valid token is refused all the same.
-  it.each([
-    "https://evil.example",
-    "http://127.0.0.1:8080",
-    "null",
-  ])("refuses a request with Origin: %s, token or not", async (origin) => {
-    for (const headers of [{ ...AUTH, Origin: origin }, { Origin: origin }]) {
-      const res = await mcp("tools/list", {}, headers);
-      expect(res.status).toBe(403);
-      expect(res.headers.get("WWW-Authenticate")).toBeNull();
-    }
-  });
+  it.each(["https://evil.example", "http://127.0.0.1:8080", "null"])(
+    "refuses a request with Origin: %s, token or not",
+    async (origin) => {
+      for (const headers of [{ ...AUTH, Origin: origin }, { Origin: origin }]) {
+        const res = await mcp("tools/list", {}, headers);
+        expect(res.status).toBe(403);
+        expect(res.headers.get("WWW-Authenticate")).toBeNull();
+      }
+    },
+  );
 
   // ADR-0001 §6: a proxy that drops Mcp-Name breaks every tool call.
   it("refuses tools/call without Mcp-Name", async () => {

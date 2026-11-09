@@ -621,19 +621,19 @@ describe("get_entity_schema", () => {
 
   // Escaping the quote is not enough: fetch resolves the `..` and drops the
   // rest after `#`, so this name used to read /contacts.
-  it.each([
-    "/../contacts?$select=fullname&$top=5#",
-    "o'brien",
-  ])("refuses the name %j before any request", async (entity_logical_name) => {
-    const server = createMockServer();
-    const client = schemaClient([]);
-    registerAllTools(server as any, { client, ...stdio() });
+  it.each(["/../contacts?$select=fullname&$top=5#", "o'brien"])(
+    "refuses the name %j before any request",
+    async (entity_logical_name) => {
+      const server = createMockServer();
+      const client = schemaClient([]);
+      registerAllTools(server as any, { client, ...stdio() });
 
-    await expect(
-      server.tools.get("get_entity_schema")!.handler({ entity_logical_name }),
-    ).rejects.toThrow(/Invalid entity logical name/);
-    expect(client.get).not.toHaveBeenCalled();
-  });
+      await expect(
+        server.tools.get("get_entity_schema")!.handler({ entity_logical_name }),
+      ).rejects.toThrow(/Invalid entity logical name/);
+      expect(client.get).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("get_picklist_options", () => {
