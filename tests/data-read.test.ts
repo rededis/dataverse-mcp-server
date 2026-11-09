@@ -14,17 +14,16 @@ function readTools(client: unknown, entitySets?: EntitySetCatalog) {
 }
 
 describe("path arguments of the read tools", () => {
-  it.each([
-    "accounts/../WhoAmI",
-    "accounts(1)",
-    "accounts?$top=1",
-  ])("query_records refuses the entity set %j", async (entity_set) => {
-    const client = { get: vi.fn() };
-    await expect(
-      readTools(client).get("query_records")!.handler({ entity_set }),
-    ).rejects.toThrow(/Invalid entity set name/);
-    expect(client.get).not.toHaveBeenCalled();
-  });
+  it.each(["accounts/../WhoAmI", "accounts(1)", "accounts?$top=1"])(
+    "query_records refuses the entity set %j",
+    async (entity_set) => {
+      const client = { get: vi.fn() };
+      await expect(
+        readTools(client).get("query_records")!.handler({ entity_set }),
+      ).rejects.toThrow(/Invalid entity set name/);
+      expect(client.get).not.toHaveBeenCalled();
+    },
+  );
 
   it("get_record refuses an id that is not a GUID", async () => {
     const client = { get: vi.fn() };

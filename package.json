@@ -22,8 +22,8 @@
     "start:server": "node dist/server/index.js",
     "dev": "tsx src/index.ts",
     "dev:server": "tsx src/server/index.ts",
-    "lint": "biome check --error-on-warnings src/ scripts/ tests/ vitest.config.ts",
-    "lint:fix": "biome check --write src/ scripts/ tests/ vitest.config.ts",
+    "lint": "biome check --error-on-warnings src/ scripts/ tests/ vitest.config.ts biome.json package.json",
+    "lint:fix": "biome check --write src/ scripts/ tests/ vitest.config.ts biome.json package.json",
     "typecheck": "tsc -p tests",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -61,14 +61,14 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.10",
+    "@biomejs/biome": "^2.6.4",
     "@modelcontextprotocol/client": "^2.4.0",
     "@types/node": "^24.19.2",
     "@vitest/coverage-v8": "5.0.5",
     "esbuild": "0.28.2",
     "husky": "^9.1.7",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
     "vitest": "5.0.5"
   }
 }

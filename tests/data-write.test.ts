@@ -161,22 +161,20 @@ describe("path arguments", () => {
     expect(client.patch).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "emails/../accounts",
-    "emails(1)",
-    "emails?$x=1",
-    "",
-  ])("refuses the entity set %j, even with create allowed for any", async (entity_set) => {
-    const client = writingClient();
-    const tools = writeTools(
-      { create: "*" },
-      client as unknown as DataverseClient,
-    );
-    await expect(
-      tools.get("create_record")!.handler({ entity_set, data: {} }),
-    ).rejects.toThrow(/Invalid entity set name/);
-    expect(client.post).not.toHaveBeenCalled();
-  });
+  it.each(["emails/../accounts", "emails(1)", "emails?$x=1", ""])(
+    "refuses the entity set %j, even with create allowed for any",
+    async (entity_set) => {
+      const client = writingClient();
+      const tools = writeTools(
+        { create: "*" },
+        client as unknown as DataverseClient,
+      );
+      await expect(
+        tools.get("create_record")!.handler({ entity_set, data: {} }),
+      ).rejects.toThrow(/Invalid entity set name/);
+      expect(client.post).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("nested records (deep insert)", () => {
@@ -334,32 +332,27 @@ describe("what a body may do, by the other operation's list", () => {
     }
   }
 
-  it.each(
-    cases,
-  )("$tool with create $create and update $update: $body is allowed: $ok", async ({
-    tool,
-    create,
-    update,
-    data,
-    ok,
-  }) => {
-    const client = writingClient();
-    const tools = writeTools(
-      { create, update },
-      client as unknown as DataverseClient,
-    );
-    const call = tools
-      .get(tool)!
-      .handler({ entity_set: "accounts", id: GUID, data });
-    if (ok) {
-      await call;
-      expect(
-        tool === "create_record" ? client.post : client.patch,
-      ).toHaveBeenCalledOnce();
-    } else {
-      await expect(call).rejects.toThrow(/not permitted for this token/);
-      expect(client.post).not.toHaveBeenCalled();
-      expect(client.patch).not.toHaveBeenCalled();
-    }
-  });
+  it.each(cases)(
+    "$tool with create $create and update $update: $body is allowed: $ok",
+    async ({ tool, create, update, data, ok }) => {
+      const client = writingClient();
+      const tools = writeTools(
+        { create, update },
+        client as unknown as DataverseClient,
+      );
+      const call = tools
+        .get(tool)!
+        .handler({ entity_set: "accounts", id: GUID, data });
+      if (ok) {
+        await call;
+        expect(
+          tool === "create_record" ? client.post : client.patch,
+        ).toHaveBeenCalledOnce();
+      } else {
+        await expect(call).rejects.toThrow(/not permitted for this token/);
+        expect(client.post).not.toHaveBeenCalled();
+        expect(client.patch).not.toHaveBeenCalled();
+      }
+    },
+  );
 });
