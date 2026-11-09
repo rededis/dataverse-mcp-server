@@ -38,7 +38,7 @@ describe("DataverseClient", () => {
     expect(url).toBe(
       "https://org.crm.dynamics.com/api/data/v9.2/accounts?$top=1",
     );
-    expect(options?.method).toBe("GET");
+    expect(options!.method).toBe("GET");
     expect((options!.headers as Record<string, string>).Authorization).toBe(
       "Bearer test-token",
     );
