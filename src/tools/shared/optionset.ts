@@ -96,15 +96,17 @@ export interface ChoiceAttributeRow {
   OptionSet?: RawOptionSet;
 }
 
-function castRequest(
+function castRequests(
   client: { get(path: string): Promise<unknown> },
   attributesPath: string,
-  cast: string,
   query: string,
 ) {
-  return client.get(`${attributesPath}/${cast}${query}`) as Promise<{
-    value?: ChoiceAttributeRow[];
-  }>;
+  return CHOICE_ATTRIBUTE_CASTS.map((cast) => ({
+    cast,
+    request: client.get(`${attributesPath}/${cast}${query}`) as Promise<{
+      value?: ChoiceAttributeRow[];
+    }>,
+  }));
 }
 
 // Fans the same query out across every concrete choice cast and concatenates the
@@ -120,9 +122,7 @@ export async function fetchChoiceAttributes(
   query: string,
 ): Promise<ChoiceAttributeRow[]> {
   const responses = await Promise.all(
-    CHOICE_ATTRIBUTE_CASTS.map((cast) =>
-      castRequest(client, attributesPath, cast, query),
-    ),
+    castRequests(client, attributesPath, query).map((r) => r.request),
   );
   return responses.flatMap((r) => r.value ?? []);
 }
@@ -144,8 +144,8 @@ export async function fetchChoiceAttributesSettled(
   query: string,
 ): Promise<ChoiceAttributeFanOut> {
   const results = await Promise.all(
-    CHOICE_ATTRIBUTE_CASTS.map((cast) =>
-      castRequest(client, attributesPath, cast, query).then(
+    castRequests(client, attributesPath, query).map(({ cast, request }) =>
+      request.then(
         (response) => ({ ok: true as const, cast, rows: response.value ?? [] }),
         (reason: unknown) => ({ ok: false as const, cast, reason }),
       ),
