@@ -78,7 +78,9 @@ updates:
         patterns:
           - actions/checkout
           - actions/setup-node
+          - crate-ci/typos
           - docker/build-push-action
           - docker/login-action
           - docker/metadata-action
           - docker/setup-buildx-action
+          - hadolint/hadolint-action
