@@ -11,12 +11,18 @@ on:
 permissions:
   contents: read
 
+# A second run for the same tag waits; a release is never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   IMAGE: ghcr.io/rededis/dataverse-mcp-server-http
 
 jobs:
   publish:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: write # the GitHub Release
       packages: write # GHCR
@@ -83,7 +89,6 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          cache: npm
 
       - run: npm ci --no-audit --no-fund
 
