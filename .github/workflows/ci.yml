@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Spelling in every tracked file, by _typos.toml (#127). The action's
+      # Spelling in every file git does not ignore, by _typos.toml (#127). The action's
       # SHA pins the typos version: it downloads the release it was tagged
       # with.
       - name: Spelling
