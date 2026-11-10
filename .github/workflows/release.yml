@@ -14,6 +14,8 @@ concurrency:
 
 jobs:
   publish:
+    # Only v* tags: server-v* is the image's line (ADR-0001 §13).
+    if: ${{ startsWith(github.event.release.tag_name, 'v') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
