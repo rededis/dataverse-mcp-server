@@ -3,6 +3,8 @@
 # or a binary from the GitHub release), then: typos
 [files]
 # By default typos skips hidden files, and with them .github/ and .husky/.
-# Checking them walks .git/ too: exclude it.
+# Checking them walks .git too (a directory, or a file in a worktree):
+# exclude it. Third-party text the repo cannot correct is excluded as well:
+# the licence texts copied into the bundle and the npm lockfile.
 ignore-hidden = false
-extend-exclude = [".git/"]
+extend-exclude = [".git", "scripts/licenses/", "package-lock.json"]
