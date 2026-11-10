@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `zod` 4.6.7 or later, which fixes [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5) (#119).
 
+## [0.9.2] - 2026-11-10
+
+### Changed
+
+- Published from GitHub Actions through npm trusted publishing (OIDC) instead of a stored npm token. The package and its provenance are unchanged (#121).
+
 ## [0.9.1] - 2026-10-29
 
 ### Added
@@ -276,7 +282,8 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.7.1...v0.8.0

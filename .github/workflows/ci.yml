@@ -2,15 +2,21 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, "maint/**"]
 
 # The job runs third-party actions: the token only reads.
 permissions:
   contents: read
 
+# A new push to a pull request cancels its older runs, not those of others.
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,3 +49,22 @@ jobs:
       - name: Dockerfile lint
         if: ${{ !cancelled() }}
         uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+
+      # jactionlint on the workflows (#121), default profile, offline. The
+      # release binary is checked against its sha256 here, not by an action
+      # or image (ADR-0003). Dependabot does not bump it: change the version
+      # and the digest together, from the release's checksums file. The
+      # digest is the PLATFORM archive's: an arm64 runner needs another.
+      - name: Workflow lint
+        if: ${{ !cancelled() }}
+        env:
+          VERSION: 2.5.0
+          PLATFORM: linux_amd64
+          SHA256: 5ac307b0499bb0eab45ae99c23e8e0790874fbc667c75224410954e0e3c6e0f5
+        run: |
+          ARCHIVE="jactionlint_${VERSION}_${PLATFORM}.tar.gz"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$ARCHIVE" \
+            "https://github.com/jdx/jactionlint/releases/download/v${VERSION}/${ARCHIVE}"
+          echo "${SHA256}  $RUNNER_TEMP/$ARCHIVE" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$ARCHIVE" -C "$RUNNER_TEMP" jactionlint
+          "$RUNNER_TEMP/jactionlint" --no-online --format github
