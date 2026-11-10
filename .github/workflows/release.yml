@@ -4,22 +4,32 @@ on:
   release:
     types: [published]
 
-permissions:
-  contents: read
-  id-token: write
+# Each job asks for what it needs.
+permissions: {}
+
+# A second run for the same tag waits: a running release is not cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
 
 jobs:
   publish:
+    # Only v* tags: server-v* is the image's line (ADR-0001 §13).
+    if: ${{ startsWith(github.event.release.tag_name, 'v') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing (#121)
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v4
+      # No npm cache: a poisoned cache entry would end up in what is published.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-          cache: npm
 
       - run: npm install --no-audit --no-fund
 
@@ -49,7 +59,8 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Trusted publishing: npm exchanges the job's OIDC token, no secret.
+      # npmjs.com trusts this file by name: renaming it breaks publishing.
+      # Provenance is added on its own; access comes from publishConfig.
       - name: Publish to npm
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish
