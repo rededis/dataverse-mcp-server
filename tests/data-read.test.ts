@@ -68,7 +68,7 @@ describe("EntitySetCatalog", () => {
       tools.get("query_records")!.handler({ entity_set: "WhoAmI" }),
     ).rejects.toThrow("Unknown entity set: 'WhoAmI'");
     expect(client.get).toHaveBeenCalledTimes(1);
-    expect(client.get.mock.calls[0][0]).toMatch(/^\/EntityDefinitions\?/);
+    expect(client.get.mock.calls[0]![0]).toMatch(/^\/EntityDefinitions\?/);
   });
 
   it("looks a found entity set up once, and a missing one each time", async () => {

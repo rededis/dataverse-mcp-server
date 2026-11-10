@@ -108,7 +108,7 @@ describe("import boundary", () => {
     const specifiers = [
       // `from "./x.js"`, side-effect `import "./x.js"`, dynamic `import("./x.js")`.
       ...source.matchAll(/(?:\bfrom|\bimport)\s*\(?\s*"(\.[^"]+)"/g),
-    ].map((m) => m[1]);
+    ].map((m) => m[1]!);
     return specifiers.map((spec) => {
       const ts = resolve(dirname(file), spec.replace(/\.js$/, ".ts"));
       if (!existsSync(ts))

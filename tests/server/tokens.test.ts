@@ -80,4 +80,26 @@ describe("ConfigTokenVerifier", () => {
       "Invalid token",
     );
   });
+
+  it("refuses a token whose role is not in roles", () => {
+    expect(
+      () =>
+        new ConfigTokenVerifier(
+          serverConfig([
+            { name: "erin", sha256: sha256("erin-token"), role: "writer" },
+          ]),
+        ),
+    ).toThrow('Token "erin" has the role "writer", which is not in roles');
+  });
+
+  it("does not take an inherited key for a role", () => {
+    expect(
+      () =>
+        new ConfigTokenVerifier(
+          serverConfig([
+            { name: "erin", sha256: sha256("erin-token"), role: "toString" },
+          ]),
+        ),
+    ).toThrow('Token "erin" has the role "toString", which is not in roles');
+  });
 });

@@ -367,7 +367,7 @@ describe("get_entity_schema", () => {
     expect(urls.some((u) => u.includes("EnumAttributeMetadata"))).toBe(false);
 
     const qs = new URLSearchParams(
-      castUrls[0].slice(castUrls[0].indexOf("?") + 1),
+      castUrls[0]!.slice(castUrls[0]!.indexOf("?") + 1),
     );
     expect(qs.get("$select")).toBe("LogicalName");
     expect(qs.get("$expand")).toBe(
@@ -693,7 +693,7 @@ describe("get_picklist_options", () => {
         "/EntityDefinitions(LogicalName='fundai_x')/Attributes/",
       );
     }
-    const url = urls[0];
+    const url = urls[0]!;
     const qs = new URLSearchParams(url.slice(url.indexOf("?") + 1));
     expect(qs.get("$filter")).toBe("LogicalName eq 'fundai_status'");
     expect(qs.get("$select")).toBe("LogicalName");

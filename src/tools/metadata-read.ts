@@ -46,12 +46,13 @@ async function getEntityIdsInSolution(
   const solutionsResult = (await client.get(`/solutions${solutionsQuery}`)) as {
     value: Array<{ solutionid: string }>;
   };
-  if (solutionsResult.value.length === 0) {
+  const [solution] = solutionsResult.value;
+  if (!solution) {
     throw new Error(
       `Solution not found: '${solutionUniqueName}'. Use list_solutions to see available solutions.`,
     );
   }
-  const solutionId = solutionsResult.value[0].solutionid;
+  const solutionId = solution.solutionid;
 
   // componenttype = 1 is Entity (table)
   const componentsQuery = buildODataQuery({
@@ -317,7 +318,8 @@ export function registerMetadataReadTools(
           `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes`,
           query,
         );
-        if (rows.length === 0) {
+        const [row] = rows;
+        if (!row) {
           throw new Error(
             `Choice attribute not found: ${entity}.${attr} — no Choice, Status, State or MultiSelect column with that logical name`,
           );
@@ -326,12 +328,12 @@ export function registerMetadataReadTools(
         // is_global: false, reporting a local set with full confidence on data that
         // never arrived. is_global is the entire point of this tool, so an unknown
         // answer has to fail rather than guess.
-        if (!rows[0].OptionSet) {
+        if (!row.OptionSet) {
           throw new Error(
             `OptionSet metadata missing for ${entity}.${attr} — cannot tell whether it is Local or Global`,
           );
         }
-        optionSet = rows[0].OptionSet;
+        optionSet = row.OptionSet;
       }
       const payload = {
         option_set: flattenOptionSet(optionSet),

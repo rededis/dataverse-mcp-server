@@ -36,6 +36,20 @@ export function callerOf(authInfo: AuthInfo | undefined): Caller {
   return caller;
 }
 
+// The config loader already refuses a token whose role is not in `roles`;
+// this keeps a config built some other way from serving a caller without one.
+function roleOf(config: ServerConfig, tokenName: string, name: string): Role {
+  const role = Object.hasOwn(config.roles, name)
+    ? config.roles[name]
+    : undefined;
+  if (!role) {
+    throw new Error(
+      `Token "${tokenName}" has the role "${name}", which is not in roles`,
+    );
+  }
+  return role;
+}
+
 /**
  * Accepts the tokens listed in the config file, by their SHA-256.
  *
@@ -51,7 +65,7 @@ export class ConfigTokenVerifier implements TokenVerifier {
       caller: {
         name: t.name,
         roleName: t.role,
-        role: config.roles[t.role],
+        role: roleOf(config, t.name, t.role),
         actAs: t.actAs,
       },
       hash: Buffer.from(t.sha256, "hex"),
