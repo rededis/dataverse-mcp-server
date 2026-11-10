@@ -613,7 +613,16 @@ function columnFailed(
 ): Error {
   const created = attributes.slice(0, failedIndex);
   const unsent = attributes.slice(failedIndex + 1);
-  const column = attributes[failedIndex]?.logical_name;
+  const failed = attributes[failedIndex];
+  if (!failed) {
+    throw new Error(
+      `No column at index ${failedIndex} of ${attributes.length}`,
+      {
+        cause: err,
+      },
+    );
+  }
+  const column = failed.logical_name;
   const createdText = created.length
     ? `Columns created: ${logicalNames(created)}.`
     : "No additional columns were created.";

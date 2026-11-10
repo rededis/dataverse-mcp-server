@@ -6,5 +6,5 @@
     "allowJs": true,
     "checkJs": true
   },
-  "include": ["../src/**/*", "../vitest.config.ts", "**/*"]
+  "include": ["../src/**/*", "../scripts/**/*", "../vitest.config.ts", "**/*"]
 }
