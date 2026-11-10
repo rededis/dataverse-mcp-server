@@ -85,6 +85,16 @@ jobs:
           node-version: 24
           cache: npm
 
+      # The image's bundle is built from the lockfile (npm ci, then esbuild).
+      # The audit sees the lockfile's production packages, dotenv too, though
+      # the bundle leaves it out. It does not see what the SDK inlines into
+      # its own dist/ (Ajv and others, listed in the image's licenses/); they
+      # change only with the SDK version. audit.yml's schedule covers only
+      # the default branch; this stops a tag before anything is built. An
+      # unreachable registry fails the step too.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - run: npm ci --no-audit --no-fund
 
       # The image's esbuild bundle does not type-check; tsc in the check does.

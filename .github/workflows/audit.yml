@@ -10,6 +10,7 @@ permissions:
   contents: read
 
 jobs:
+  # server-release.yml runs the same command before it builds the image.
   audit:
     runs-on: ubuntu-latest
 
@@ -18,7 +19,8 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: package.json
+          # The same Node, so the same npm, as server-release.yml's audit.
+          node-version: 24
 
       # Reads package-lock.json, so nothing needs installing.
       - name: Audit production dependencies
