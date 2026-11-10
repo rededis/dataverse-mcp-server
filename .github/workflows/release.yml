@@ -32,6 +32,9 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
+      # No audit gate here, unlike server-release.yml: the package ships no
+      # lockfile, so users install whatever the ranges in package.json resolve
+      # to, and the lockfile's advisories say little about that.
       - run: npm ci --no-audit --no-fund
 
       - name: Verify package.json version matches release tag

@@ -492,6 +492,9 @@ in the workflow:
   itself as its last step, not marked latest, so the repo's releases page
   stays on the npm package. A tag whose Release exists is refused: a re-run
   would push the image again under the same tags.
+- A tag whose lockfile has a high or critical production advisory
+  (`npm audit --omit=dev --audit-level=high`) is refused before anything is
+  built; so is one pushed while the registry cannot be reached (#129).
 - The CHANGELOG is `CHANGELOG-server.md`. A release needs its `## [X.Y.Z]`
   section; a pre-release may use `## [Unreleased]`. The section becomes the
   Release notes.
