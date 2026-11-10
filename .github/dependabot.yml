@@ -1,7 +1,5 @@
 # Moves the pinned versions (#103): base image digests in the Dockerfile,
-# action SHAs in the workflows, npm packages in package-lock.json. Not the
-# Hadolint image in ci.yml: Dependabot does not read run steps, it moves by
-# hand.
+# action SHAs in the workflows, npm packages in package-lock.json.
 # Monthly and grouped, so a run opens a few PRs. The cooldown holds a new
 # release back for a week, which limits exposure to compromised releases.
 version: 2
@@ -85,3 +83,4 @@ updates:
           - docker/login-action
           - docker/metadata-action
           - docker/setup-buildx-action
+          - hadolint/hadolint-action

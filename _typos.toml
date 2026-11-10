@@ -3,6 +3,6 @@
 # or a binary from the GitHub release), then: typos
 [files]
 # By default typos skips hidden files, and with them .github/ and .husky/.
-# Checking them walks .git/ too: exclude it, and the IDE's .idea/.
+# Checking them walks .git/ too: exclude it.
 ignore-hidden = false
-extend-exclude = [".git/", ".idea/"]
+extend-exclude = [".git/"]

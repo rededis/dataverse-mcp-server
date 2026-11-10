@@ -140,3 +140,6 @@ vite.config.ts.timestamp-*
 
 # Server bundle for the image (scripts/build-server.mjs)
 /build/
+
+# JetBrains IDE settings
+.idea/
