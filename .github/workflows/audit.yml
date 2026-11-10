@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  # server-release.yml runs the same audit before it builds the image.
+  # server-release.yml runs the same command before it builds the image.
   audit:
     runs-on: ubuntu-latest
 
