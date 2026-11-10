@@ -24,9 +24,15 @@ on:
 permissions:
   contents: read
 
+# A new push to the PR makes the running check obsolete.
+concurrency:
+  group: image-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   image:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     env:
       IMAGE: image-check
       VERSION: 0.0.0-ci
