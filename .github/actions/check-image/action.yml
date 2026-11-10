@@ -45,5 +45,12 @@ runs:
         echo "$logs"
         curl -sf --max-time 5 "http://127.0.0.1:${port}/health" ||
           { echo "::error::The image does not answer /health"; exit 1; }
+        # The image's own HEALTHCHECK, run once inside the container: the probe
+        # Docker runs in production, which /health from outside does not cover.
+        mapfile -t probe < <(docker inspect -f '{{json .Config.Healthcheck.Test}}' "$IMAGE" | jq -r '.[]')
+        [ "${probe[0]:-}" = CMD ] ||
+          { echo "::error::The image has no exec-form HEALTHCHECK"; exit 1; }
+        docker exec "$name" "${probe[@]:1}" ||
+          { echo "::error::The image's HEALTHCHECK fails"; exit 1; }
         grep -Fq "Dataverse MCP server ${VERSION} listening" <<<"$logs" ||
           { echo "::error::The image does not report ${VERSION}"; exit 1; }
