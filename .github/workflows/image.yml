@@ -27,6 +27,9 @@ permissions:
 jobs:
   image:
     runs-on: ubuntu-24.04
+    env:
+      IMAGE: image-check
+      VERSION: 0.0.0-ci
 
     steps:
       # Actions are pinned by full commit SHA, the tag in a comment; the same
@@ -41,12 +44,12 @@ jobs:
           context: .
           platforms: linux/amd64
           load: true
-          tags: image-check
-          build-args: SERVER_VERSION=0.0.0-ci
+          tags: ${{ env.IMAGE }}
+          build-args: SERVER_VERSION=${{ env.VERSION }}
           provenance: false
 
       - name: The image starts and reports its version
         uses: ./.github/actions/check-image
         with:
-          image: image-check
-          version: 0.0.0-ci
+          image: ${{ env.IMAGE }}
+          version: ${{ env.VERSION }}
