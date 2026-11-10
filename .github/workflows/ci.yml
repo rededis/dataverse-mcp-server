@@ -30,6 +30,6 @@ jobs:
 
       - run: npm ci
 
-      # The same command the pre-commit hook runs (check in package.json).
+      # The same comand the pre-commit hook runs (check in package.json).
       - name: Check
         run: npm run check
