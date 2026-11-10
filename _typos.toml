@@ -1,0 +1,6 @@
+# typos (#127), run by the ci job. Locally: brew install typos-cli, then typos.
+[files]
+# By default typos skips hidden files, and with them .github/ and .husky/.
+# Checking them walks .git/ too: exclude it, and the IDE's .idea/.
+ignore-hidden = false
+extend-exclude = [".git/", ".idea/"]
