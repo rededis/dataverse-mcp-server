@@ -27,14 +27,14 @@ runs:
         name=check port=3000
         printf '{"roles":{"r":{"groups":["data-read"]}},"tokens":[{"name":"check","sha256":"%064d","role":"r"}]}' 0 > "$RUNNER_TEMP/check-config.json"
         chmod 644 "$RUNNER_TEMP/check-config.json"
+        # Removed however the check ends: the release job goes on to push.
+        trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
         docker run -d --name "$name" -p "127.0.0.1:${port}:3000" \
           -e DATAVERSE_TENANT_ID=check -e DATAVERSE_CLIENT_ID=check \
           -e DATAVERSE_CLIENT_SECRET=check -e DATAVERSE_RESOURCE_URL=https://check.invalid \
           -e DATAVERSE_SERVER_CONFIG=/config/server.json \
           -v "$RUNNER_TEMP/check-config.json:/config/server.json:ro" \
           "$IMAGE"
-        # Removed however the check ends: the release job goes on to push.
-        trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
         for _ in $(seq 30); do
           curl -sf "http://127.0.0.1:${port}/health" >/dev/null && break
           sleep 1
