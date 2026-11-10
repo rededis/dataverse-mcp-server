@@ -33,7 +33,8 @@ runs:
           -e DATAVERSE_SERVER_CONFIG=/config/server.json \
           -v "$RUNNER_TEMP/check-config.json:/config/server.json:ro" \
           "$IMAGE"
-        # Up to 30 s for /health; stops early once the container has exited.
+        # 30 tries at /health, a second apart (each up to 5 s if it hangs);
+        # stops early once the container has exited.
         for _ in $(seq 30); do
           curl -sf --max-time 5 "http://127.0.0.1:${port}/health" >/dev/null && break
           [ "$(docker inspect -f '{{.State.Running}}' "$name")" = true ] || break
@@ -42,6 +43,7 @@ runs:
         # Read once: grep -q on a pipe can SIGPIPE docker logs under pipefail.
         logs=$(docker logs "$name" 2>&1)
         echo "$logs"
-        curl -sf --max-time 5 "http://127.0.0.1:${port}/health"
+        curl -sf --max-time 5 "http://127.0.0.1:${port}/health" ||
+          { echo "::error::The image does not answer /health"; exit 1; }
         grep -Fq "Dataverse MCP server ${VERSION} listening" <<<"$logs" ||
           { echo "::error::The image does not report ${VERSION}"; exit 1; }
