@@ -65,6 +65,10 @@ tokens and the `NPM_TOKEN` secret is removed.
 
 - Updating jactionlint is a manual edit of two values; nothing reminds
   anyone to do it.
+- `id-token: write` used to give the publishing job only provenance; now it
+  also gives a credential that publishes. Every step of the job can request
+  it, `npm ci` and the tests included, until #156 moves the build to a job
+  without it.
 - A release from a maintenance branch runs that branch's `release.yml`. Each
   `maint/**` branch that may still release needs the trusted-publishing
   `release.yml` before the token is removed.
