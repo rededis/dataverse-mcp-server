@@ -7,7 +7,7 @@ on:
 # Each job asks for what it needs.
 permissions: {}
 
-# A second run for the same tag waits; a release is never cancelled.
+# A second run for the same tag waits: a running release is not cancelled.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.release.tag_name }}
   cancel-in-progress: false
@@ -26,6 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # No npm cache: a poisoned cache entry would end up in what is published.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24

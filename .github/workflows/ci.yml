@@ -10,7 +10,7 @@ permissions:
 
 # A new push to a pull request cancels its older runs, not those of others.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  group: ci-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:

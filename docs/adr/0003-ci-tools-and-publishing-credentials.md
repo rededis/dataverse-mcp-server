@@ -66,7 +66,7 @@ tokens and the `NPM_TOKEN` secret is removed.
 - Updating jactionlint is a manual edit of two values; nothing reminds
   anyone to do it.
 - A release from a maintenance branch runs that branch's `release.yml`. Each
-  `maint/*` branch that may still release needs the trusted-publishing
+  `maint/**` branch that may still release needs the trusted-publishing
   `release.yml` before the token is removed.
 - Typos still runs from an action that does not verify its download. It is
   left as is here; changing it is a separate issue.
