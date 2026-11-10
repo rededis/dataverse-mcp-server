@@ -32,4 +32,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
   CMD ["/nodejs/bin/node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 # The server handles SIGTERM and SIGINT itself and starts no child processes,
 # so it runs as PID 1 without an init.
-ENTRYPOINT ["/nodejs/bin/node", "--enable-source-maps", "/app/missing.js"]
+ENTRYPOINT ["/nodejs/bin/node", "--enable-source-maps", "/app/server.js"]
