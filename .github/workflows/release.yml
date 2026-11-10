@@ -18,10 +18,9 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      id-token: write # npm trusted publishing (ADR-0003 on main)
+      id-token: write # npm trusted publishing (#121)
 
     steps:
-      # Actions are pinned by full commit SHA: the repository requires it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # No npm cache: a poisoned cache entry would end up in what is published.
