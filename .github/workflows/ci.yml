@@ -54,14 +54,15 @@ jobs:
       # release binary is checked against its sha256 here, not by an action
       # or image (ADR-0003). Dependabot does not bump it: change the version
       # and the digest together, from the release's checksums file. The
-      # digest is the linux_amd64 archive's: an arm64 runner needs another.
+      # digest is the PLATFORM archive's: an arm64 runner needs another.
       - name: Workflow lint
         if: ${{ !cancelled() }}
         env:
           VERSION: 2.5.0
+          PLATFORM: linux_amd64
           SHA256: 5ac307b0499bb0eab45ae99c23e8e0790874fbc667c75224410954e0e3c6e0f5
         run: |
-          ARCHIVE="jactionlint_${VERSION}_linux_amd64.tar.gz"
+          ARCHIVE="jactionlint_${VERSION}_${PLATFORM}.tar.gz"
           curl -fsSL --retry 3 -o "$RUNNER_TEMP/$ARCHIVE" \
             "https://github.com/jdx/jactionlint/releases/download/v${VERSION}/${ARCHIVE}"
           echo "${SHA256}  $RUNNER_TEMP/$ARCHIVE" | sha256sum --check --strict

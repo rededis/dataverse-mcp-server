@@ -23,7 +23,7 @@ A SHA-pinned action fixes which release is fetched, not the bytes that
 arrive. Typos in `ci.yml` (#127) has the same gap, noted in the comment above
 its step.
 
-The same review flagged `release.yml`: it publishes to npm with a long-lived
+jactionlint's first run also flagged `release.yml` (`use-trusted-publishing`): it publishes to npm with a long-lived
 `NPM_TOKEN` secret, while the job can already request an OIDC token.
 
 ## Decision
@@ -59,7 +59,7 @@ The trusted publisher on npmjs.com names this repository and the file
 npmjs.com is changed to match.
 
 After the first release published this way, the package is set to disallow
-tokens and the `NPM_TOKEN` secret is removed.
+tokens and the npm token secrets are removed from the repository.
 
 ## Consequences
 
@@ -74,3 +74,12 @@ tokens and the `NPM_TOKEN` secret is removed.
   `release.yml` before the token is removed.
 - Typos still runs from an action that does not verify its download. It is
   left as is here; changing it is a separate issue.
+
+## Evidence
+
+- jactionlint v2.5.0 release, `docs/ci.md` in its archive: the install
+  methods and what each verifies; `docs/cli.md`: online checks run only when
+  turned on. <https://github.com/jdx/jactionlint/releases/tag/v2.5.0>
+- npm, [Trusted publishing](https://docs.npmjs.com/trusted-publishers):
+  npm CLI 11.5.1 or later and Node 22.14.0 or later, `id-token: write`,
+  provenance generated automatically when publishing from GitHub Actions.
