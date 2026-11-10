@@ -85,6 +85,13 @@ jobs:
           node-version: 24
           cache: npm
 
+      # The image is built from the lockfile (npm ci, then the bundle), so its
+      # production advisories are the image's. audit.yml only scans the default
+      # branch; this stops a tag before anything is built. An unreachable
+      # registry fails the step too.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - run: npm ci --no-audit --no-fund
 
       # The image's esbuild bundle does not type-check; tsc in the check does.
