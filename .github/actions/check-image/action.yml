@@ -2,12 +2,10 @@ name: Check the server image
 description: >-
   Starts a locally loaded server image with placeholder settings, waits for
   /health and checks that the startup line reports the expected version.
-  Used by server-release.yml before publishing and by image.yml on pull
-  requests.
 
 inputs:
   image:
-    description: The local image to start (built with load true)
+    description: The image to start, loaded into the local Docker daemon (build-push-action load true)
     required: true
   version:
     description: The SERVER_VERSION the image was built with
@@ -18,7 +16,7 @@ runs:
   steps:
     # Placeholder settings: the server reads them but calls Dataverse only
     # when a tool is used, so no secrets are needed.
-    - name: The image starts and reports its version
+    - name: Run, wait for /health, check the version
       shell: bash
       env:
         IMAGE: ${{ inputs.image }}
