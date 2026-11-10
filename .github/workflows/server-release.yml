@@ -123,29 +123,11 @@ jobs:
           build-args: SERVER_VERSION=${{ steps.version.outputs.version }}
           provenance: false
 
-      # Placeholder settings: the server reads them but calls Dataverse only
-      # when a tool is used.
       - name: The image starts and reports the tag's version
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          printf '{"roles":{"r":{"groups":["data-read"]}},"tokens":[{"name":"check","sha256":"%064d","role":"r"}]}' 0 > check-config.json
-          chmod 644 check-config.json
-          docker run -d --name check -p 127.0.0.1:3000:3000 \
-            -e DATAVERSE_TENANT_ID=check -e DATAVERSE_CLIENT_ID=check \
-            -e DATAVERSE_CLIENT_SECRET=check -e DATAVERSE_RESOURCE_URL=https://check.invalid \
-            -e DATAVERSE_SERVER_CONFIG=/config/server.json \
-            -v "$PWD/check-config.json:/config/server.json:ro" \
-            server-release-check
-          for _ in $(seq 30); do
-            curl -sf http://127.0.0.1:3000/health >/dev/null && break
-            sleep 1
-          done
-          docker logs check
-          curl -sf http://127.0.0.1:3000/health
-          docker logs check 2>&1 | grep -Fq "Dataverse MCP server ${VERSION} listening" ||
-            { echo "::error::The image does not report ${VERSION}"; exit 1; }
-          docker rm -f check
+        uses: ./.github/actions/check-image
+        with:
+          image: server-release-check
+          version: ${{ steps.version.outputs.version }}
 
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:

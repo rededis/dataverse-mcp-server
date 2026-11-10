@@ -1,0 +1,56 @@
+name: Check the server image
+description: >-
+  Starts a locally loaded server image with placeholder settings, waits for
+  /health and checks that the startup line reports the expected version.
+
+inputs:
+  image:
+    description: The image to start, loaded into the local Docker daemon (build-push-action load true)
+    required: true
+  version:
+    description: The SERVER_VERSION the image was built with
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Placeholder settings: the server reads them but calls Dataverse only
+    # when a tool is used, so no secrets are needed.
+    - name: Run, wait for /health, check the version
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        name=check port=3000
+        printf '{"roles":{"r":{"groups":["data-read"]}},"tokens":[{"name":"check","sha256":"%064d","role":"r"}]}' 0 > "$RUNNER_TEMP/check-config.json"
+        chmod 644 "$RUNNER_TEMP/check-config.json"
+        # Removed however the check ends: the release job goes on to push.
+        trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
+        docker run -d --name "$name" -p "127.0.0.1:${port}:3000" \
+          -e DATAVERSE_TENANT_ID=check -e DATAVERSE_CLIENT_ID=check \
+          -e DATAVERSE_CLIENT_SECRET=check -e DATAVERSE_RESOURCE_URL=https://check.invalid \
+          -e DATAVERSE_SERVER_CONFIG=/config/server.json \
+          -v "$RUNNER_TEMP/check-config.json:/config/server.json:ro" \
+          "$IMAGE"
+        # 30 tries at /health, a second apart (each up to 5 s if it hangs);
+        # stops early once the container has exited.
+        for _ in $(seq 30); do
+          curl -sf --max-time 5 "http://127.0.0.1:${port}/health" >/dev/null && break
+          [ "$(docker inspect -f '{{.State.Running}}' "$name")" = true ] || break
+          sleep 1
+        done
+        # Read once: grep -q on a pipe can SIGPIPE docker logs under pipefail.
+        logs=$(docker logs "$name" 2>&1)
+        echo "$logs"
+        curl -sf --max-time 5 "http://127.0.0.1:${port}/health" ||
+          { echo "::error::The image does not answer /health"; exit 1; }
+        # The image's own HEALTHCHECK, run once inside the container: the probe
+        # Docker runs in production, which /health from outside does not cover.
+        mapfile -t probe < <(docker inspect -f '{{json .Config.Healthcheck.Test}}' "$IMAGE" | jq -r '.[]')
+        [ "${probe[0]:-}" = CMD ] ||
+          { echo "::error::The image has no exec-form HEALTHCHECK"; exit 1; }
+        docker exec "$name" "${probe[@]:1}" ||
+          { echo "::error::The image's HEALTHCHECK fails"; exit 1; }
+        grep -Fq "Dataverse MCP server ${VERSION} listening" <<<"$logs" ||
+          { echo "::error::The image does not report ${VERSION}"; exit 1; }
