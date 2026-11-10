@@ -617,9 +617,7 @@ function columnFailed(
   if (!failed) {
     throw new Error(
       `No column at index ${failedIndex} of ${attributes.length}`,
-      {
-        cause: err,
-      },
+      { cause: err },
     );
   }
   const column = failed.logical_name;

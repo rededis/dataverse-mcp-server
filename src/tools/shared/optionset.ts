@@ -146,15 +146,15 @@ export async function fetchChoiceAttributesSettled(
   const results = await Promise.all(
     CHOICE_ATTRIBUTE_CASTS.map((cast) =>
       castRequest(client, attributesPath, cast, query).then(
-        (response) => ({ cast, rows: response.value ?? [] }),
-        (reason: unknown) => ({ cast, reason }),
+        (response) => ({ ok: true as const, cast, rows: response.value ?? [] }),
+        (reason: unknown) => ({ ok: false as const, cast, reason }),
       ),
     ),
   );
   const rows: ChoiceAttributeRow[] = [];
   const failed: ChoiceAttributeFanOut["failed"] = [];
   for (const result of results) {
-    if ("rows" in result) {
+    if (result.ok) {
       rows.push(...result.rows);
     } else {
       failed.push({
