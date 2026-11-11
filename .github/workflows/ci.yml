@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      # The whole history, for the environment host scan below.
+      # The whole history, for the Betterleaks scan below.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -91,9 +91,8 @@ jobs:
       # A merge commit is diffed against its first parent, so a conflict
       # resolution is scanned too. Findings show the file, commit and line,
       # the match itself redacted. Both scans run; either fails the step.
-      # The release binary is checked
-      # against its sha256 by scripts/fetch-verified.sh, like typos and
-      # jactionlint (ADR-0003).
+      # The release binary is checked against its sha256 by
+      # scripts/fetch-verified.sh, like typos and jactionlint (ADR-0003).
       # Dependabot does not bump it: change the version and the digest
       # together, from the release's checksums.txt, confirmed with gh release
       # verify-asset (ADR-0003). The digest is the PLATFORM archive's: an
@@ -108,8 +107,8 @@ jobs:
           bash scripts/fetch-verified.sh \
             "https://github.com/betterleaks/betterleaks/releases/download/v${VERSION}/betterleaks_${VERSION}_${PLATFORM}.tar.gz" \
             "$SHA256" betterleaks "$RUNNER_TEMP"
-          bl=("$RUNNER_TEMP/betterleaks" --config .betterleaks.toml --redact --verbose --no-banner)
+          scan=("$RUNNER_TEMP/betterleaks" --config .betterleaks.toml --redact --verbose --no-banner)
           status=0
-          "${bl[@]}" git . --log-opts="--diff-merges=first-parent HEAD" || status=1
-          git log --format=%B HEAD | "${bl[@]}" stdin || status=1
+          "${scan[@]}" git . --log-opts="--diff-merges=first-parent HEAD" || status=1
+          git log --format=%B HEAD | "${scan[@]}" stdin || status=1
           exit "$status"

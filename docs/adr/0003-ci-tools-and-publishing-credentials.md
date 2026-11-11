@@ -37,7 +37,7 @@ verifies nothing. Not the image: the step would work, but the project does
 not use mise or this image anywhere else, and a binary plus a hash is the
 smallest thing to read and to update.
 
-typos (#157) is installed the same way. Both steps call
+typos (#157) is installed the same way. Each step calls
 `scripts/fetch-verified.sh`, which downloads the archive, checks it and
 extracts the binary. The typos release has no checksums file: the digest is
 the sha256 GitHub shows for the release asset. The release is immutable and

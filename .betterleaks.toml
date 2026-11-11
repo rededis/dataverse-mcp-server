@@ -1,8 +1,6 @@
 # Betterleaks rules for this repository (#124), run by the ci job over the
 # git history and the commit messages, at the version pinned there. Locally,
-# the release binary of that version, then:
-#   betterleaks git . --config .betterleaks.toml --redact --log-opts=HEAD
-#   git log --format=%B | betterleaks stdin --config .betterleaks.toml --redact
+# the release binary of that version and the two commands of that step.
 #
 # They enforce the rule in CLAUDE.md: the repository is public and holds no
 # environment URLs or tenant and client IDs. Token formats are left to GitHub
@@ -19,9 +17,10 @@ title = "dataverse-mcp-server"
 [[rules]]
 id = "dataverse-environment-host"
 description = "Dataverse environment host"
-# The host is group 1: it may follow any character that cannot be part of a
-# host name, `_` included (DEV_<org>.crm4...), where \b would not match.
-regex = '''(?i)(?:^|[^a-z0-9.-])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+crm[0-9]{0,2}\.(?:dynamics\.com|dynamics\.cn|microsoftdynamics\.us|microsoftdynamics\.de|appsplatform\.us))\b'''
+# The host is group 1: it may follow any character but a letter or digit,
+# `_` included (DEV_<org>.crm4...), where \b would not match. Every host
+# suffix in the regex needs a keyword, or the rule never runs on it.
+regex = '''(?i)(?:^|[^a-z0-9])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+crm[0-9]{0,2}\.(?:dynamics\.com|dynamics\.cn|microsoftdynamics\.us|microsoftdynamics\.de|appsplatform\.us))\b'''
 secretGroup = 1
 keywords = ["dynamics.com", "dynamics.cn", "microsoftdynamics", "appsplatform"]
 # Allowed: the placeholder hosts of the tests and docs, and Microsoft's shared
@@ -41,9 +40,10 @@ lower(finding["secret"]) in [
 # (env files, JSON, YAML), or in an Entra authority URL of any cloud. It
 # misses an ID under another name, such as `const TENANT = "..."`, after a
 # command-line flag, such as `--tenant <guid>`, or under a token claim name
-# (tid, azp, oid) in a decoded token. Placeholders built from repeated digit blocks
-# (00000000-0000-..., 11111111-2222-3333-...) have low entropy and are
-# skipped; `12345678-1234-...` does not, and is flagged.
+# (tid, azp, oid) in a decoded token. Placeholders built from repeated digit
+# blocks (00000000-0000-..., 11111111-2222-3333-...) have low entropy and are
+# skipped; `12345678-1234-...` does not, and is flagged. Every authority host
+# in the regex needs a keyword.
 [[rules]]
 id = "entra-tenant-or-client-id"
 description = "Tenant or client ID"
