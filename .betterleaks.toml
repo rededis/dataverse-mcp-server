@@ -1,6 +1,8 @@
 # Betterleaks rules for this repository (#124), run by the ci job over the
-# whole git history at the version pinned there. Locally, the release binary
-# of that version, then: betterleaks git . --config .betterleaks.toml --redact
+# git history and the commit messages, at the version pinned there. Locally,
+# the release binary of that version, then:
+#   betterleaks git . --config .betterleaks.toml --redact --log-opts=HEAD
+#   git log --format=%B | betterleaks stdin --config .betterleaks.toml --redact
 #
 # They enforce the rule in CLAUDE.md: the repository is public and holds no
 # environment URLs or tenant and client IDs. Token formats are left to GitHub
@@ -17,7 +19,10 @@ title = "dataverse-mcp-server"
 [[rules]]
 id = "dataverse-environment-host"
 description = "Dataverse environment host"
-regex = '''(?i)\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+crm[0-9]{0,2}\.(?:dynamics\.com|dynamics\.cn|microsoftdynamics\.us|microsoftdynamics\.de|appsplatform\.us)\b'''
+# The host is group 1: it may follow any character that cannot be part of a
+# host name, `_` included (DEV_<org>.crm4...), where \b would not match.
+regex = '''(?i)(?:^|[^a-z0-9.-])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+crm[0-9]{0,2}\.(?:dynamics\.com|dynamics\.cn|microsoftdynamics\.us|microsoftdynamics\.de|appsplatform\.us))\b'''
+secretGroup = 1
 keywords = ["dynamics.com", "dynamics.cn", "microsoftdynamics", "appsplatform"]
 # Allowed: the placeholder hosts of the tests and docs, and Microsoft's shared
 # discovery endpoints. Exact hosts only; a new placeholder goes on this list.
@@ -33,15 +38,16 @@ lower(finding["secret"]) in [
 # A tenant or client ID. A bare GUID cannot be told apart from the record and
 # metadata IDs this code and its tests are full of, so the rule only looks at
 # a GUID after a tenant/client/app/object/directory ID name and `:` or `=`
-# (env files, JSON, YAML), or in an Entra authority URL. It misses an ID under
-# another name, such as `const TENANT = "..."`, or after a command-line flag,
-# such as `--tenant <guid>`. Placeholders built from repeated digit blocks
+# (env files, JSON, YAML), or in an Entra authority URL of any cloud. It
+# misses an ID under another name, such as `const TENANT = "..."`, after a
+# command-line flag, such as `--tenant <guid>`, or under a token claim name
+# (tid, azp, oid) in a decoded token. Placeholders built from repeated digit blocks
 # (00000000-0000-..., 11111111-2222-3333-...) have low entropy and are
 # skipped; `12345678-1234-...` does not, and is flagged.
 [[rules]]
 id = "entra-tenant-or-client-id"
 description = "Tenant or client ID"
-regex = '''(?i)(?:(?:tenant|client|app|application|object|directory)[_ .-]?id[\w"']{0,4}\s*[:=]\s*["'`]?|login\.microsoftonline\.(?:com|us)/|login\.partner\.microsoftonline\.cn/|sts\.windows\.net/)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b'''
+regex = '''(?i)(?:(?:tenant|client|app|application|object|directory)[_ .-]?id[\w"']{0,4}\s*[:=]\s*["'`]?|login\.microsoftonline\.(?:com|us|de)/|login\.partner\.microsoftonline\.cn/|login\.chinacloudapi\.cn/|login\.windows\.net/|sts\.windows\.net/)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b'''
 secretGroup = 1
-keywords = ["tenant", "client", "app", "object", "directory", "microsoftonline", "sts.windows.net"]
+keywords = ["tenant", "client", "app", "object", "directory", "microsoftonline", "chinacloudapi", "windows.net"]
 filter = '''filter.entropy(replace(finding["secret"], "-", "")) < 3.0'''
