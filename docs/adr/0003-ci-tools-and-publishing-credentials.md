@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-10
-- **Issue:** #121; amended by #157 (typos)
+- **Issue:** #121; amended by #157 (typos) and #124 (Betterleaks)
 - **Relates to:** [ADR-0001](0001-local-and-remote-variants.md) §13 (release lines)
 
 ## Context
@@ -45,6 +45,9 @@ attested, so a new digest is confirmed with `gh release verify-asset
 v<version> <archive> -R crate-ci/typos` on a downloaded copy before it goes
 into the workflow.
 
+Betterleaks (#124) is installed the same way. Its release has a
+`checksums.txt`, signed with Sigstore, and the digest comes from there.
+
 The step runs inside the `ci` job, because `ci` is the required check on
 `main`: a separate job would not block a merge without changing branch
 protection.
@@ -71,8 +74,8 @@ tokens and the npm token secrets are removed from the repository.
 
 ## Consequences
 
-- Updating jactionlint or typos (#157) is a manual edit of two values;
-  nothing reminds anyone to do it.
+- Updating jactionlint, typos (#157) or Betterleaks (#124) is a manual
+  edit of two values; nothing reminds anyone to do it.
 - `id-token: write` used to give the publishing job only provenance; now it
   also gives a credential that publishes. Every step of the job can request
   it, `npm ci` and the tests included, until #156 moves the build to a job
@@ -92,3 +95,7 @@ tokens and the npm token secrets are removed from the repository.
 - typos v1.52.0 release: archives only, no checksums file; immutable, with
   a release attestation that `gh release verify-asset` checks.
   <https://github.com/crate-ci/typos/releases/tag/v1.52.0>
+- Betterleaks v1.10.0 release: archives with `checksums.txt` and its
+  Sigstore bundle; immutable. Since v1.10.0 a config file in the scanned
+  directory is read only with `--unsafe-auto-load-config`, so the workflow
+  passes `--config`. <https://github.com/betterleaks/betterleaks/releases/tag/v1.10.0>

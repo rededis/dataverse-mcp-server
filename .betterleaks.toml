@@ -1,0 +1,45 @@
+# Betterleaks rules for this repository (#124). CI runs them on the whole git
+# history: `betterleaks git . -c .betterleaks.toml --redact` (ci.yml).
+#
+# They enforce the rule in CLAUDE.md: the repository is public and holds no
+# environment URLs or tenant and client IDs. Token formats are left to GitHub
+# secret scanning, so the default Betterleaks rules are not loaded.
+#
+# This file is public too. Never put a real environment host or ID here, not
+# even on an allowlist: rewrite the commit instead.
+title = "dataverse-mcp-server"
+
+# A Dataverse / Dynamics 365 environment host: <org>[.api].crm[N].dynamics.com,
+# and the sovereign clouds: crm.dynamics.cn (China), crm.microsoftdynamics.us
+# (GCC High), crm.microsoftdynamics.de (former Germany cloud),
+# crm.appsplatform.us (DoD). GCC is crm9.dynamics.com.
+[[rules]]
+id = "dataverse-environment-host"
+description = "Dataverse environment host"
+regex = '''(?i)\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+crm[0-9]{0,2}\.(?:dynamics\.com|dynamics\.cn|microsoftdynamics\.us|microsoftdynamics\.de|appsplatform\.us)\b'''
+keywords = ["dynamics.com", "dynamics.cn", "microsoftdynamics", "appsplatform"]
+# Allowed: the placeholder hosts of the tests and docs, and Microsoft's shared
+# discovery endpoints. Exact hosts only; a new placeholder goes on this list.
+filter = '''
+lower(finding["secret"]) in [
+  "org.crm.dynamics.com",
+  "your-org.crm.dynamics.com",
+  "globaldisco.crm.dynamics.com",
+  "disco.crm.dynamics.com"
+]
+'''
+
+# A tenant or client ID. A bare GUID cannot be told apart from the record and
+# metadata IDs this code and its tests are full of, so the rule only looks at
+# a GUID after a tenant/client/app/object/directory ID name and `:` or `=`
+# (env files, JSON, YAML), or in an Entra authority URL. It misses an ID under
+# another name, such as `const TENANT = "..."`. Placeholders made of repeated
+# or sequential digits (11111111-1111-..., 11111111-2222-...) have low entropy
+# and are skipped.
+[[rules]]
+id = "entra-tenant-or-client-id"
+description = "Tenant or client ID"
+regex = '''(?i)(?:(?:tenant|client|app(?:lication)?|object|directory)[_ .-]?id[\w"']{0,4}\s*[:=]\s*["'`]?|login\.microsoftonline\.(?:com|us)/|login\.partner\.microsoftonline\.cn/|sts\.windows\.net/)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b'''
+secretGroup = 1
+keywords = ["tenant", "client", "app", "object", "directory", "microsoftonline", "sts.windows.net"]
+filter = '''filter.entropy(replace(finding["secret"], "-", "")) < 3.0'''
