@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      # The whole history, for the secret scan below.
+      # The whole history, for the environment host scan below.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -91,9 +91,10 @@ jobs:
       # against its sha256 by scripts/fetch-verified.sh, like typos and
       # jactionlint (ADR-0003).
       # Dependabot does not bump it: change the version and the digest
-      # together, from the release's checksums.txt. The digest is the
-      # PLATFORM archive's: an arm64 runner needs another.
-      - name: Secret scan
+      # together, from the release's checksums.txt, confirmed with gh release
+      # verify-asset (ADR-0003). The digest is the PLATFORM archive's: an
+      # arm64 runner needs another.
+      - name: Environment host and tenant ID scan
         if: ${{ !cancelled() }}
         env:
           VERSION: 1.10.0

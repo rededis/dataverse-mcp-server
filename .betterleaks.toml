@@ -1,5 +1,6 @@
-# Betterleaks rules for this repository (#124). CI runs them on the whole git
-# history: `betterleaks git . -c .betterleaks.toml --redact` (ci.yml).
+# Betterleaks rules for this repository (#124), run by the ci job over the
+# whole git history at the version pinned there. Locally, the release binary
+# of that version, then: betterleaks git . --config .betterleaks.toml --redact
 #
 # They enforce the rule in CLAUDE.md: the repository is public and holds no
 # environment URLs or tenant and client IDs. Token formats are left to GitHub
@@ -33,9 +34,10 @@ lower(finding["secret"]) in [
 # metadata IDs this code and its tests are full of, so the rule only looks at
 # a GUID after a tenant/client/app/object/directory ID name and `:` or `=`
 # (env files, JSON, YAML), or in an Entra authority URL. It misses an ID under
-# another name, such as `const TENANT = "..."`. Placeholders made of repeated
-# or sequential digits (11111111-1111-..., 11111111-2222-...) have low entropy
-# and are skipped.
+# another name, such as `const TENANT = "..."`, or after a command-line flag,
+# such as `--tenant <guid>`. Placeholders built from repeated digit blocks
+# (00000000-0000-..., 11111111-2222-3333-...) have low entropy and are
+# skipped; `12345678-1234-...` does not, and is flagged.
 [[rules]]
 id = "entra-tenant-or-client-id"
 description = "Tenant or client ID"

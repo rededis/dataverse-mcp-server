@@ -46,7 +46,9 @@ v<version> <archive> -R crate-ci/typos` on a downloaded copy before it goes
 into the workflow.
 
 Betterleaks (#124) is installed the same way. Its release has a
-`checksums.txt`, signed with Sigstore, and the digest comes from there.
+`checksums.txt`, and the digest comes from there; the release is immutable
+too, and a new digest is confirmed with `gh release verify-asset` the same
+way (`-R betterleaks/betterleaks`).
 
 The step runs inside the `ci` job, because `ci` is the required check on
 `main`: a separate job would not block a merge without changing branch
