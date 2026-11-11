@@ -20,8 +20,8 @@ which of them verify what they download:
 | mise | `mise.lock` | checksum and provenance in the lock file |
 
 A SHA-pinned action fixes which release is fetched, not the bytes that
-arrive. Typos in `ci.yml` (#127) has the same gap, noted in the comment above
-its step.
+arrive. Typos in `ci.yml` (#127) ran from such an action; #157 moved it to
+a checked download as well.
 
 jactionlint's first run also flagged `release.yml` (`use-trusted-publishing`): it publishes to npm with a long-lived
 `NPM_TOKEN` secret, while the job can already request an OIDC token.
@@ -63,8 +63,8 @@ tokens and the npm token secrets are removed from the repository.
 
 ## Consequences
 
-- Updating jactionlint is a manual edit of two values; nothing reminds
-  anyone to do it.
+- Updating jactionlint or typos (#157) is a manual edit of two values;
+  nothing reminds anyone to do it.
 - `id-token: write` used to give the publishing job only provenance; now it
   also gives a credential that publishes. Every step of the job can request
   it, `npm ci` and the tests included, until #156 moves the build to a job
@@ -72,8 +72,6 @@ tokens and the npm token secrets are removed from the repository.
 - A release from a maintenance branch runs that branch's `release.yml`. Each
   `maint/**` branch that may still release needs the trusted-publishing
   `release.yml` before the token is removed.
-- Typos still runs from an action that does not verify its download. It is
-  left as is here; changing it is a separate issue.
 
 ## Evidence
 
