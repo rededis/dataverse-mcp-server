@@ -90,7 +90,9 @@ jobs:
       # --all: a finding on another fetched branch does not fail this one.
       # A merge commit is diffed against its first parent, so a conflict
       # resolution is scanned too. Findings show the file, commit and line,
-      # the match itself redacted. Both scans run; either fails the step.
+      # the match itself redacted; a finding in a message is printed under
+      # the line `commit <sha>` that precedes it. Both scans run; either
+      # fails the step, as does a failing git log.
       # The release binary is checked against its sha256 by
       # scripts/fetch-verified.sh, like typos and jactionlint (ADR-0003).
       # Dependabot does not bump it: change the version and the digest
@@ -107,8 +109,9 @@ jobs:
           bash scripts/fetch-verified.sh \
             "https://github.com/betterleaks/betterleaks/releases/download/v${VERSION}/betterleaks_${VERSION}_${PLATFORM}.tar.gz" \
             "$SHA256" betterleaks "$RUNNER_TEMP"
+          set -o pipefail
           scan=("$RUNNER_TEMP/betterleaks" --config .betterleaks.toml --redact --verbose --no-banner)
           status=0
           "${scan[@]}" git . --log-opts="--diff-merges=first-parent HEAD" || status=1
-          git log --format=%B HEAD | "${scan[@]}" stdin || status=1
+          git log --format='commit %H%n%B' HEAD | "${scan[@]}" stdin || status=1
           exit "$status"
