@@ -36,12 +36,12 @@ jobs:
       # failure does not skip them: one red run shows every problem.
 
       # Spelling in every file git does not ignore, by _typos.toml (#127).
-      # The release binary is checked against its sha256 here, like
-      # jactionlint below (ADR-0003, #157). Dependabot does not bump it:
-      # change the version and the digest together, from the release asset's
-      # sha256 on its GitHub release page, confirmed with gh release
-      # verify-asset (ADR-0003). The digest is the PLATFORM archive's: an
-      # arm64 runner needs another.
+      # The release binary is checked against its sha256 by
+      # scripts/fetch-verified.sh, like jactionlint below (ADR-0003, #157).
+      # Dependabot does not bump it: change the version and the digest
+      # together, from the release asset's sha256 on its GitHub release page,
+      # confirmed with gh release verify-asset (ADR-0003). The digest is the
+      # PLATFORM archive's: an arm64 runner needs another.
       - name: Spell check
         if: ${{ !cancelled() }}
         env:
@@ -49,11 +49,9 @@ jobs:
           PLATFORM: x86_64-unknown-linux-musl
           SHA256: 6155d4114f9a0f5b8f6d4fda96266c9d5f6add71df80da7f684ee5e72eb14588
         run: |
-          ARCHIVE="typos-v${VERSION}-${PLATFORM}.tar.gz"
-          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$ARCHIVE" \
-            "https://github.com/crate-ci/typos/releases/download/v${VERSION}/${ARCHIVE}"
-          echo "${SHA256}  $RUNNER_TEMP/$ARCHIVE" | sha256sum --check --strict
-          tar -xzf "$RUNNER_TEMP/$ARCHIVE" -C "$RUNNER_TEMP" ./typos
+          bash scripts/fetch-verified.sh \
+            "https://github.com/crate-ci/typos/releases/download/v${VERSION}/typos-v${VERSION}-${PLATFORM}.tar.gz" \
+            "$SHA256" ./typos "$RUNNER_TEMP"
           "$RUNNER_TEMP/typos"
 
       # Hadolint on the Dockerfile (#127), default rules and threshold. The
@@ -65,11 +63,11 @@ jobs:
         uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
 
       # jactionlint on the workflows (#121), default profile, offline. The
-      # release binary is checked against its sha256 here, like typos above,
-      # not by an action or image (ADR-0003). Dependabot does not bump it:
-      # change the version and the digest together, from the release's
-      # checksums file. The digest is the PLATFORM archive's: an arm64 runner
-      # needs another.
+      # release binary is checked against its sha256 by
+      # scripts/fetch-verified.sh, like typos above, not by an action or image
+      # (ADR-0003). Dependabot does not bump it: change the version and the
+      # digest together, from the release's checksums file. The digest is the
+      # PLATFORM archive's: an arm64 runner needs another.
       - name: Workflow lint
         if: ${{ !cancelled() }}
         env:
@@ -77,9 +75,7 @@ jobs:
           PLATFORM: linux_amd64
           SHA256: 5ac307b0499bb0eab45ae99c23e8e0790874fbc667c75224410954e0e3c6e0f5
         run: |
-          ARCHIVE="jactionlint_${VERSION}_${PLATFORM}.tar.gz"
-          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$ARCHIVE" \
-            "https://github.com/jdx/jactionlint/releases/download/v${VERSION}/${ARCHIVE}"
-          echo "${SHA256}  $RUNNER_TEMP/$ARCHIVE" | sha256sum --check --strict
-          tar -xzf "$RUNNER_TEMP/$ARCHIVE" -C "$RUNNER_TEMP" jactionlint
+          bash scripts/fetch-verified.sh \
+            "https://github.com/jdx/jactionlint/releases/download/v${VERSION}/jactionlint_${VERSION}_${PLATFORM}.tar.gz" \
+            "$SHA256" jactionlint "$RUNNER_TEMP"
           "$RUNNER_TEMP/jactionlint" --no-online --format github

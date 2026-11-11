@@ -37,11 +37,13 @@ verifies nothing. Not the image: the step would work, but the project does
 not use mise or this image anywhere else, and a binary plus a hash is the
 smallest thing to read and to update.
 
-typos (#157) is installed by the same kind of step. Its release has no
-checksums file: the digest is the sha256 GitHub shows for the release asset.
-The release is immutable and attested, so a new digest is confirmed with
-`gh release verify-asset v<version> <archive> -R crate-ci/typos` on a
-downloaded copy before it goes into the workflow.
+typos (#157) is installed the same way. Both steps call
+`scripts/fetch-verified.sh`, which downloads the archive, checks it and
+extracts the binary. The typos release has no checksums file: the digest is
+the sha256 GitHub shows for the release asset. The release is immutable and
+attested, so a new digest is confirmed with `gh release verify-asset
+v<version> <archive> -R crate-ci/typos` on a downloaded copy before it goes
+into the workflow.
 
 The step runs inside the `ci` job, because `ci` is the required check on
 `main`: a separate job would not block a merge without changing branch
