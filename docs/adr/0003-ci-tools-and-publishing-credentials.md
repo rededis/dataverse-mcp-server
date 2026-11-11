@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-10
-- **Issue:** #121
+- **Issue:** #121; amended by #157 (typos)
 - **Relates to:** [ADR-0001](0001-local-and-remote-variants.md) §13 (release lines)
 
 ## Context
@@ -36,6 +36,9 @@ workflow, taken from the release's checksums file. Not the action: it
 verifies nothing. Not the image: the step would work, but the project does
 not use mise or this image anywhere else, and a binary plus a hash is the
 smallest thing to read and to update.
+
+typos (#157) is installed by the same kind of step. Its release has no
+checksums file: the digest is the sha256 GitHub shows for the release asset.
 
 The step runs inside the `ci` job, because `ci` is the required check on
 `main`: a separate job would not block a merge without changing branch
