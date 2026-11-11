@@ -6,9 +6,11 @@ on:
   # Commits pushed straight to these branches (docs and ADRs) are checked
   # where they land, not by the next pull request (#164). The check goes on
   # the pushed tip, not on each commit of the push; a finding then fails every
-  # later run too, until the history is rewritten. A [skip ci] in the tip's
-  # message skips the run. A merged pull request runs again here: only this
-  # run sees the commit that lands and its final message.
+  # later run too, until the history is rewritten. A skip instruction in the
+  # tip's message ([skip ci] and its variants, or a skip-checks: true
+  # trailer) skips the run, also one a squash merge takes over from the pull
+  # request's commits or body. A merged pull request runs again here: only
+  # this run sees the commit that lands and its final message.
   push:
     branches: [main, "maint/**"]
 
