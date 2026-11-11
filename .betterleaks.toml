@@ -13,7 +13,9 @@ title = "dataverse-mcp-server"
 # A Dataverse / Dynamics 365 environment host: <org>[.api].crm[N].dynamics.com,
 # and the sovereign clouds: crm.dynamics.cn (China), crm.microsoftdynamics.us
 # (GCC High), crm.microsoftdynamics.de (former Germany cloud),
-# crm.appsplatform.us (DoD). GCC is crm9.dynamics.com.
+# crm.appsplatform.us (DoD). GCC is crm9.dynamics.com. Power Platform
+# environment IDs (make.powerapps.com/environments/<id>, the admin center,
+# <id>.environment.api.powerplatform.com) are not covered.
 [[rules]]
 id = "dataverse-environment-host"
 description = "Dataverse environment host"
@@ -38,7 +40,8 @@ lower(finding["secret"]) in [
 # A tenant or client ID. A bare GUID cannot be told apart from the record and
 # metadata IDs this code and its tests are full of, so the rule only looks at
 # a GUID after a tenant/client/app/object/directory ID name and `:` or `=`
-# (env files, JSON, YAML), or in an Entra authority URL of any cloud. It
+# (env files, JSON, YAML; the name may run on, as in CLIENT_ID_PROD, and the
+# GUID may be in braces), or in an Entra authority URL of any cloud. It
 # misses an ID under another name, such as `const TENANT = "..."`, after a
 # command-line flag, such as `--tenant <guid>`, or under a token claim name
 # (tid, azp, oid) in a decoded token. Placeholders built from repeated digit
@@ -48,7 +51,7 @@ lower(finding["secret"]) in [
 [[rules]]
 id = "entra-tenant-or-client-id"
 description = "Tenant or client ID"
-regex = '''(?i)(?:(?:tenant|client|app|application|object|directory)[_ .-]?id[\w"']{0,4}\s*[:=]\s*["'`]?|login\.microsoftonline\.(?:com|us|de)/|login\.partner\.microsoftonline\.cn/|login\.chinacloudapi\.cn/|login\.windows\.net/|sts\.windows\.net/)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b'''
+regex = '''(?i)(?:(?:tenant|client|app|application|object|directory)[_ .-]?id[\w"']{0,12}\s*[:=]\s*["'`]?\{?|login\.microsoft\.com/|login\.microsoftonline\.(?:com|us|de)/|login\.partner\.microsoftonline\.cn/|login\.chinacloudapi\.cn/|login\.windows\.net/|sts\.windows\.net/)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b'''
 secretGroup = 1
-keywords = ["tenant", "client", "app", "object", "directory", "microsoftonline", "chinacloudapi", "windows.net"]
+keywords = ["tenant", "client", "app", "object", "directory", "login.microsoft.com", "microsoftonline", "chinacloudapi", "windows.net"]
 filter = '''filter.entropy(replace(finding["secret"], "-", "")) < 3.0'''
