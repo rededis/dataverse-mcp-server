@@ -4,9 +4,11 @@ on:
   pull_request:
     branches: [main, "maint/**"]
   # Commits pushed straight to these branches (docs and ADRs) are checked
-  # where they land, not by the next pull request (#164). A merged pull
-  # request runs again here: only this run sees the commit that lands and its
-  # final message.
+  # where they land, not by the next pull request (#164). The check goes on
+  # the pushed tip, not on each commit of the push; a finding then fails every
+  # later run too, until the history is rewritten. A [skip ci] in the tip's
+  # message skips the run. A merged pull request runs again here: only this
+  # run sees the commit that lands and its final message.
   push:
     branches: [main, "maint/**"]
 
@@ -23,8 +25,8 @@ concurrency:
 
 jobs:
   ci:
-    # Deleting a maint branch is a push too: its ref is gone, and checkout
-    # would fail on it and mark an unrelated commit red.
+    # Deleting a maint branch is a push too: the run falls back to the default
+    # branch's tip and would report on a commit the push did not touch.
     if: ${{ !github.event.deleted }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -97,9 +99,7 @@ jobs:
       # Betterleaks with the project rules in .betterleaks.toml (#124):
       # environment hosts and tenant or client IDs in every commit reachable
       # from the checked-out one, so one added and removed within a pull
-      # request still fails, and in their messages. On a push the checked-out
-      # commit is the pushed one, so a finding fails the check of the push
-      # that brought it in. HEAD, not the default
+      # request still fails, and in their messages. HEAD, not the default
       # --all: a finding on another fetched branch does not fail this one.
       # A merge commit is diffed against its first parent, so a conflict
       # resolution is scanned too. Findings show the file, commit and line,
