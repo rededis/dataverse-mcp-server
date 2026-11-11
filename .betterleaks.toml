@@ -39,7 +39,7 @@ lower(finding["secret"]) in [
 [[rules]]
 id = "entra-tenant-or-client-id"
 description = "Tenant or client ID"
-regex = '''(?i)(?:(?:tenant|client|app(?:lication)?|object|directory)[_ .-]?id[\w"']{0,4}\s*[:=]\s*["'`]?|login\.microsoftonline\.(?:com|us)/|login\.partner\.microsoftonline\.cn/|sts\.windows\.net/)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b'''
+regex = '''(?i)(?:(?:tenant|client|app|application|object|directory)[_ .-]?id[\w"']{0,4}\s*[:=]\s*["'`]?|login\.microsoftonline\.(?:com|us)/|login\.partner\.microsoftonline\.cn/|sts\.windows\.net/)([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b'''
 secretGroup = 1
 keywords = ["tenant", "client", "app", "object", "directory", "microsoftonline", "sts.windows.net"]
 filter = '''filter.entropy(replace(finding["secret"], "-", "")) < 3.0'''
