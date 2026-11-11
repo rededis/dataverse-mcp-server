@@ -39,6 +39,9 @@ smallest thing to read and to update.
 
 typos (#157) is installed by the same kind of step. Its release has no
 checksums file: the digest is the sha256 GitHub shows for the release asset.
+The release is immutable and attested, so a new digest is confirmed with
+`gh release verify-asset v<version> <archive> -R crate-ci/typos` on a
+downloaded copy before it goes into the workflow.
 
 The step runs inside the `ci` job, because `ci` is the required check on
 `main`: a separate job would not block a merge without changing branch
@@ -84,3 +87,6 @@ tokens and the npm token secrets are removed from the repository.
 - npm, [Trusted publishing](https://docs.npmjs.com/trusted-publishers):
   npm CLI 11.5.1 or later and Node 22.14.0 or later, `id-token: write`,
   provenance generated automatically when publishing from GitHub Actions.
+- typos v1.52.0 release: archives only, no checksums file; immutable, with
+  a release attestation that `gh release verify-asset` checks.
+  <https://github.com/crate-ci/typos/releases/tag/v1.52.0>
