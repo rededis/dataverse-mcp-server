@@ -19,7 +19,10 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      # The whole history, for the Betterleaks scan below.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -79,3 +82,36 @@ jobs:
             "https://github.com/jdx/jactionlint/releases/download/v${VERSION}/jactionlint_${VERSION}_${PLATFORM}.tar.gz" \
             "$SHA256" jactionlint "$RUNNER_TEMP"
           "$RUNNER_TEMP/jactionlint" --no-online --format github
+
+      # Betterleaks with the project rules in .betterleaks.toml (#124):
+      # environment hosts and tenant or client IDs in every commit reachable
+      # from the checked-out one, so one added and removed within a pull
+      # request still fails, and in their messages. HEAD, not the default
+      # --all: a finding on another fetched branch does not fail this one.
+      # A merge commit is diffed against its first parent, so a conflict
+      # resolution is scanned too. Findings show the file, commit and line,
+      # the match itself redacted; a finding in a message is printed under
+      # the line `commit <sha>` that precedes it. Both scans run; either
+      # fails the step, as does a failing git log.
+      # The release binary is checked against its sha256 by
+      # scripts/fetch-verified.sh, like typos and jactionlint (ADR-0003).
+      # Dependabot does not bump it: change the version and the digest
+      # together, from the release's checksums.txt, confirmed with gh release
+      # verify-asset (ADR-0003). The digest is the PLATFORM archive's: an
+      # arm64 runner needs another.
+      - name: Environment host and tenant ID scan
+        if: ${{ !cancelled() }}
+        env:
+          VERSION: 1.10.0
+          PLATFORM: linux_x64
+          SHA256: 9d9ad503cd5d80d18a939352266c3fcca52f10da9b83cd5cfe646989b13940fe
+        run: |
+          bash scripts/fetch-verified.sh \
+            "https://github.com/betterleaks/betterleaks/releases/download/v${VERSION}/betterleaks_${VERSION}_${PLATFORM}.tar.gz" \
+            "$SHA256" betterleaks "$RUNNER_TEMP"
+          set -o pipefail
+          scan=("$RUNNER_TEMP/betterleaks" --config .betterleaks.toml --redact --verbose --no-banner)
+          status=0
+          "${scan[@]}" git . --log-opts="--diff-merges=first-parent HEAD" || status=1
+          git log --format='commit %H%n%B' HEAD | "${scan[@]}" stdin || status=1
+          exit "$status"
