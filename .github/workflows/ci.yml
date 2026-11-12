@@ -3,18 +3,33 @@ name: CI
 on:
   pull_request:
     branches: [main, "maint/**"]
+  # Commits pushed straight to these branches (docs and ADRs) are checked
+  # where they land, not by the next pull request (#164). The check goes on
+  # the pushed tip, not on each commit of the push; a finding then fails every
+  # later run too, until the history is rewritten. A skip instruction in the
+  # tip's message ([skip ci] and its variants, or a skip-checks: true
+  # trailer) skips the run, also one a squash merge takes over from the pull
+  # request's commits or body. A merged pull request runs again here: only
+  # this run sees the commit that lands and its final message.
+  push:
+    branches: [main, "maint/**"]
 
 # The job runs third-party actions: the token only reads.
 permissions:
   contents: read
 
 # A new push to a pull request cancels its older runs, not those of others.
+# A push to a branch has no pull request number: it gets a group of its own,
+# so a later push does not cancel the check of an earlier commit.
 concurrency:
-  group: ci-${{ github.event.pull_request.number }}
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   ci:
+    # Deleting a maint branch is a push too: the run falls back to the default
+    # branch's tip and would report on a commit the push did not touch.
+    if: ${{ !github.event.deleted }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
