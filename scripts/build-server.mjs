@@ -104,7 +104,10 @@ const LICENCE_FILE = /^(licen[cs]e|copying|notice)/i;
 
 // The SDK's internal workspace package, inlined into @modelcontextprotocol/core
 // and /server and published under their licence. Named exactly, so any other
-// package the SDK starts to inline still needs a licence text.
+// package the SDK starts to inline still needs a licence text. The audit of
+// inlined packages (scripts/audit-inlined.mjs) leaves it out as well: it is
+// the SDK's own code, and advisories for it are filed against the SDK
+// packages the lockfile lists. A name added here leaves both checks.
 export const COVERED_BY_SDK = new Set(["@modelcontextprotocol/core-internal"]);
 
 /**

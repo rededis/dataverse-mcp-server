@@ -25,8 +25,9 @@ const metafile = (...inputs: string[]) =>
 const sourcemap = (...sources: string[]) => JSON.stringify({ sources });
 
 describe("inlined packages", () => {
-  // Which packages, and whether any, is the SDK's business: an SDK that
-  // inlines fewer is not a failure of this repository's check.
+  // Which packages is the SDK's business: an SDK that inlines fewer must not
+  // fail npm run check. One that inlines none fails the audit itself, not
+  // this test (see "refuses an empty list").
   it("reads a version for whatever the real bundle has inlined, and lists no installed package", () => {
     const packages = inlinedPackages(server.metafile, server.sourcemap);
     const names = packages.map(({ name }) => name);
