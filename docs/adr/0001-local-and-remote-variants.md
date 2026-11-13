@@ -494,7 +494,10 @@ in the workflow:
   would push the image again under the same tags.
 - A tag whose lockfile has a high or critical production advisory
   (`npm audit --omit=dev --audit-level=high`) is refused before anything is
-  built; so is one pushed while the registry cannot be reached (#129).
+  built; so is one pushed while the registry cannot be reached (#129). The
+  packages the MCP SDK inlined into its own `dist/` are not in the lockfile;
+  `scripts/audit-inlined.mjs` reads them from the bundle's source map and
+  refuses the tag on the same terms (#130).
 - The CHANGELOG is `CHANGELOG-server.md`. A release needs its `## [X.Y.Z]`
   section; a pre-release may use `## [Unreleased]`. The section becomes the
   Release notes.

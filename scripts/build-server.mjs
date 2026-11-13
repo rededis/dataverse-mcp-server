@@ -105,7 +105,7 @@ const LICENCE_FILE = /^(licen[cs]e|copying|notice)/i;
 // The SDK's internal workspace package, inlined into @modelcontextprotocol/core
 // and /server and published under their licence. Named exactly, so any other
 // package the SDK starts to inline still needs a licence text.
-const COVERED_BY_SDK = new Set(["@modelcontextprotocol/core-internal"]);
+export const COVERED_BY_SDK = new Set(["@modelcontextprotocol/core-internal"]);
 
 /**
  * Where to find the licence texts of every package the bundle holds code
