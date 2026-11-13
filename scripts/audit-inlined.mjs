@@ -9,7 +9,10 @@
 // or critical advisory, like npm audit --audit-level=high, and when it cannot
 // tell: no inlined package found, one without a readable version, a registry
 // that does not answer, or one that no longer reports an advisory known to
-// exist.
+// exist, or reports a severity this script does not know.
+// It sees what the source map shows: a dependency that ships its dist/
+// without source maps hides whatever it inlined, from this audit and from the
+// licence check alike.
 // Run by audit.yml on its schedule and by server-release.yml before the image
 // is built. Not part of npm run check: a new advisory must not fail an
 // unrelated change.
@@ -26,11 +29,16 @@ import { bundleServer, COVERED_BY_SDK, packageOf } from "./build-server.mjs";
 const ADVISORIES_URL =
   "https://registry.npmjs.org/-/npm/v1/security/advisories/bulk";
 
+// npm's severities. One it does not know is an error: it must not be read as
+// "below high".
+const SEVERITIES = new Set(["info", "low", "moderate", "high", "critical"]);
 const FAILING_SEVERITIES = new Set(["high", "critical"]);
 
-// A version with high advisories that will not go away (GHSA-qw65-cvwx-89v3
-// and others). Asked about first: an endpoint that stopped answering in the
-// expected shape would otherwise read as "no advisories" forever.
+// A version with several high advisories (GHSA-qw65-cvwx-89v3 and others).
+// Asked about first: an endpoint that stopped answering in the expected
+// shape would otherwise read as "no advisories" forever. If the registry
+// ever withdraws or downgrades all of them, the audit fails on every branch
+// until another version known to be vulnerable is put here.
 export const CANARY = { name: "fast-uri", version: "3.1.5" };
 
 // What the registry can be asked about. Anything else in the place of a
@@ -150,13 +158,17 @@ export async function advisoriesFor(packages, request = fetch) {
         throw new Error(`the advisory response for ${name} is not a list`);
       }
       for (const { severity, title, url } of list) {
-        if (typeof severity !== "string") {
-          throw new Error(`an advisory for ${name} has no severity`);
+        const level =
+          typeof severity === "string" ? severity.toLowerCase() : "";
+        if (!SEVERITIES.has(level)) {
+          throw new Error(
+            `an advisory for ${name} has an unknown severity: ${severity}`,
+          );
         }
         advisories.push({
           name,
           version,
-          severity,
+          severity: level,
           title: String(title),
           url: String(url),
         });

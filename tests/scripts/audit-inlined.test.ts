@@ -25,11 +25,11 @@ const metafile = (...inputs: string[]) =>
 const sourcemap = (...sources: string[]) => JSON.stringify({ sources });
 
 describe("inlined packages", () => {
-  it("finds inlined packages in the real bundle, with versions, and no installed one", () => {
+  // Which packages, and whether any, is the SDK's business: an SDK that
+  // inlines fewer is not a failure of this repository's check.
+  it("reads a version for whatever the real bundle has inlined, and lists no installed package", () => {
     const packages = inlinedPackages(server.metafile, server.sourcemap);
     const names = packages.map(({ name }) => name);
-    // Not the whole list: it changes with the SDK.
-    expect(names).toEqual(expect.arrayContaining(["ajv", "fast-uri"]));
     // Installed packages are in the lockfile: npm audit has them.
     expect(names).not.toContain("zod");
     expect(names).not.toContain("@modelcontextprotocol/server");
@@ -274,6 +274,20 @@ describe("inlined package audit", () => {
     }) as typeof fetch;
     await expect(auditInlined(packages, stranger)).rejects.toThrow(
       "not asked about",
+    );
+  });
+
+  it("reads a severity in any case", async () => {
+    const { request } = registry({ ajv: [{ ...high, severity: "HIGH" }] });
+    expect((await auditInlined(packages, request)).failing).toEqual([
+      { name: "ajv", version: "8.18.0", ...high },
+    ]);
+  });
+
+  it("refuses a severity it does not know", async () => {
+    const { request } = registry({ ajv: [{ ...high, severity: "severe" }] });
+    await expect(auditInlined(packages, request)).rejects.toThrow(
+      "unknown severity: severe",
     );
   });
 

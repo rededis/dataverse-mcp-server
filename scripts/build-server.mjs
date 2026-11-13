@@ -113,7 +113,9 @@ export const COVERED_BY_SDK = new Set(["@modelcontextprotocol/core-internal"]);
  * (node_modules/.pnpm/<name>@<version>/node_modules/<name>/), is itself.
  * `dir` is the package's directory, as far as the path gives it. Shared with
  * scripts/audit-inlined.mjs, so the licence check and the audit agree on
- * what a package is.
+ * which package a file belongs to. They differ on purpose in what they do
+ * with a package that is both installed and inlined: licence texts are kept
+ * by name, the audit lists the inlined version.
  *
  * @param {string} path a metafile input or a source map source
  * @returns {{ name: string, dir: string } | undefined} undefined outside node_modules
