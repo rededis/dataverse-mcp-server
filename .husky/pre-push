@@ -3,7 +3,10 @@
 # ID (#167): the scan the ci job runs, before the commits reach GitHub, where
 # they stay indexed. It reads the commits the remote does not have yet, by
 # its remote-tracking branches; a commit already on any branch there is
-# public and left to CI.
+# public and left to CI. The branches are the local copies: after the
+# remote's URL is changed, or with a pushurl of its own, they describe
+# another repository and hide commits from the scan until the next fetch.
+# The message of an annotated tag is not read, here or in CI.
 # Betterleaks is not an npm package. Without it on PATH the push goes through
 # with a warning, and CI stays the gate. CI pins the version (ci.yml); the
 # hook runs whichever is installed.

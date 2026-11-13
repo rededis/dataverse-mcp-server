@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 // The pre-push hook (#167) against a real git push to a local bare
@@ -17,21 +17,31 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 // was given: the tests cover which commits the hook hands over and what it
 // does with the result, not the rules, which CI runs for real.
 
-// Without the directories a package manager installs into: a betterleaks
-// installed on this machine must not answer for the stub.
+const REPO = resolve(__dirname, "../..");
+
+// Where git, sh, bash and cat are expected, and a betterleaks installed by
+// Homebrew or by hand is not: the stub, or its absence, must be what the
+// hook finds. A machine with betterleaks in /usr/bin fails the last test.
 const SYSTEM_PATH = "/usr/bin:/bin";
 
 const STUB = `#!/bin/sh
 # Stands in for betterleaks: appends its arguments and, for the stdin scan,
-# its input to $STUB_LOG, and exits with $STUB_EXIT.
+# its input to $STUB_LOG. Exits 1 for the scan named in $STUB_FAILS (git,
+# stdin or both).
 echo "args: $*" >> "$STUB_LOG"
+scan=git
 for arg in "$@"; do
-  [ "$arg" = stdin ] && cat >> "$STUB_LOG"
+  [ "$arg" = stdin ] && scan=stdin && cat >> "$STUB_LOG"
 done
-exit "\${STUB_EXIT:-0}"
+case "$STUB_FAILS" in
+  "$scan" | both) exit 1 ;;
+esac
+exit 0
 `;
 
-let root: string;
+type Scan = "git" | "stdin" | "both" | "none";
+
+let tmp: string;
 let work: string;
 let stubDir: string;
 let log: string;
@@ -44,19 +54,19 @@ let log: string;
 function git(
   args: string[],
   {
-    stub = true,
-    exit = "0",
+    betterleaksInstalled = true,
+    failingScan = "none",
     cwd = work,
-  }: { stub?: boolean; exit?: string; cwd?: string } = {},
+  }: { betterleaksInstalled?: boolean; failingScan?: Scan; cwd?: string } = {},
 ): { status: number; stdout: string; stderr: string } {
   const result = spawnSync("git", args, {
     cwd,
     env: {
-      PATH: stub ? `${stubDir}:${SYSTEM_PATH}` : SYSTEM_PATH,
-      HOME: root,
+      PATH: betterleaksInstalled ? `${stubDir}:${SYSTEM_PATH}` : SYSTEM_PATH,
+      HOME: tmp,
       GIT_CONFIG_NOSYSTEM: "1",
       STUB_LOG: log,
-      STUB_EXIT: exit,
+      STUB_FAILS: failingScan,
     },
     encoding: "utf8",
   });
@@ -67,18 +77,39 @@ function git(
   };
 }
 
+/** git for the steps a test only prepares with: a failure stops the test. */
+function mustGit(args: string[], cwd = work): string {
+  const { status, stdout, stderr } = git(args, { cwd });
+  if (status !== 0) {
+    throw new Error(`git ${args.join(" ")} failed (${status}): ${stderr}`);
+  }
+  return stdout;
+}
+
 /** An empty commit; returns its sha. */
 function commit(message: string): string {
-  git(["commit", "--allow-empty", "-m", message]);
-  return git(["rev-parse", "HEAD"]).stdout.trim();
+  mustGit(["commit", "--allow-empty", "-m", message]);
+  return mustGit(["rev-parse", "HEAD"]).trim();
+}
+
+/**
+ * A first commit on main, pushed, and the stub's record of that push thrown
+ * away; returns the commit's sha.
+ */
+function pushedMain(): string {
+  const first = commit("first");
+  mustGit(["push", "origin", "main"]);
+  rmSync(log);
+  return first;
 }
 
 /** The branches of the bare repository. */
 function remoteBranches(): string[] {
-  return git(["for-each-ref", "--format=%(refname:short)", "refs/heads"], {
-    cwd: join(root, "remote.git"),
-  })
-    .stdout.split("\n")
+  return mustGit(
+    ["for-each-ref", "--format=%(refname:short)", "refs/heads"],
+    join(tmp, "remote.git"),
+  )
+    .split("\n")
     .filter(Boolean);
 }
 
@@ -91,50 +122,69 @@ function stubLog(): string {
   }
 }
 
+/** The stub's argument lines for the commit diff scan. */
+function diffScans(): string[] {
+  return stubLog()
+    .split("\n")
+    .filter((line) => line.startsWith("args: ") && line.includes(" git . "));
+}
+
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), "pre-push-"));
-  work = join(root, "work");
-  stubDir = join(root, "bin");
-  log = join(root, "stub.log");
+  tmp = mkdtempSync(join(tmpdir(), "dataverse-mcp-pre-push-"));
+  work = join(tmp, "work");
+  stubDir = join(tmp, "bin");
+  log = join(tmp, "stub.log");
 
   mkdirSync(stubDir);
   writeFileSync(join(stubDir, "betterleaks"), STUB);
   chmodSync(join(stubDir, "betterleaks"), 0o755);
 
-  git(["init", "--quiet", "--bare", join(root, "remote.git")], { cwd: root });
-  git(["init", "--quiet", "--initial-branch=main", work], { cwd: root });
-  // The hook and the script it calls, as the repository has them.
+  mustGit(["init", "--quiet", "--bare", join(tmp, "remote.git")], tmp);
+  mustGit(["init", "--quiet", "--initial-branch=main", work], tmp);
+  // The hook and the script it calls, as the repository has them. Here git
+  // runs the hook itself, not through husky's wrapper, so the copy must be
+  // executable whatever mode the file is committed with.
   mkdirSync(join(work, "hooks"));
-  cpSync(".husky/pre-push", join(work, "hooks/pre-push"));
+  cpSync(join(REPO, ".husky/pre-push"), join(work, "hooks/pre-push"));
+  chmodSync(join(work, "hooks/pre-push"), 0o755);
   mkdirSync(join(work, "scripts"));
-  cpSync("scripts/scan-commits.sh", join(work, "scripts/scan-commits.sh"));
-  cpSync(".betterleaks.toml", join(work, ".betterleaks.toml"));
+  cpSync(
+    join(REPO, "scripts/scan-commits.sh"),
+    join(work, "scripts/scan-commits.sh"),
+  );
+  cpSync(join(REPO, ".betterleaks.toml"), join(work, ".betterleaks.toml"));
   for (const setting of [
     ["user.name", "Test"],
     ["user.email", "test@example.com"],
     ["core.hooksPath", "hooks"],
   ]) {
-    git(["config", ...setting]);
+    mustGit(["config", ...setting]);
   }
-  git(["remote", "add", "origin", join(root, "remote.git")]);
+  mustGit(["remote", "add", "origin", join(tmp, "remote.git")]);
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  rmSync(tmp, { recursive: true, force: true });
 });
 
 describe("pre-push hook", () => {
-  it("refuses the push when the scan fails", () => {
-    commit("first");
+  // Each scan on its own: a finding in a diff, or in a message, is enough.
+  for (const failingScan of ["git", "stdin"] as const) {
+    it(`refuses the push when the ${failingScan} scan fails`, () => {
+      commit("first");
 
-    const push = git(["push", "origin", "main"], { exit: "1" });
+      const push = git(["push", "origin", "main"], { failingScan });
 
-    expect(push.status).not.toBe(0);
-    expect(push.stderr).toContain("pre-push: the push is refused");
-    expect(remoteBranches()).toEqual([]);
-  });
+      expect(push.status).not.toBe(0);
+      expect(push.stderr).toContain("pre-push: the push is refused");
+      expect(remoteBranches()).toEqual([]);
+      // The other scan still ran.
+      expect(stubLog()).toMatch(/args: .* git \./);
+      expect(stubLog()).toMatch(/args: .* stdin/);
+    });
+  }
 
-  it("lets the push through when the scan passes", () => {
+  it("lets the push through when the scans pass", () => {
     commit("first");
 
     expect(git(["push", "origin", "main"]).status).toBe(0);
@@ -145,55 +195,62 @@ describe("pre-push hook", () => {
   });
 
   it("scans every commit of a new branch the remote does not have", () => {
-    const first = commit("first");
-    git(["push", "origin", "main"]);
-    rmSync(log);
-    git(["switch", "--quiet", "-c", "feature"]);
+    const first = pushedMain();
+    mustGit(["switch", "--quiet", "-c", "feature"]);
     const second = commit("second");
     const third = commit("third");
 
-    git(["push", "origin", "feature"]);
+    expect(git(["push", "origin", "feature"]).status).toBe(0);
 
+    // The messages, by the commits git log printed for the stdin scan.
     expect(stubLog()).toContain(`commit ${second}`);
     expect(stubLog()).toContain(`commit ${third}`);
     expect(stubLog()).not.toContain(`commit ${first}`);
+    // The diffs, by the revisions handed to the git scan.
+    expect(diffScans()).toEqual([
+      expect.stringContaining(
+        `--log-opts=--diff-merges=first-parent ${third} --not --remotes=origin`,
+      ),
+    ]);
   });
 
   it("scans only the new commits of a branch the remote has", () => {
-    const first = commit("first");
-    git(["push", "origin", "main"]);
-    rmSync(log);
+    const first = pushedMain();
     const second = commit("second");
 
-    git(["push", "origin", "main"]);
+    expect(git(["push", "origin", "main"]).status).toBe(0);
 
     expect(stubLog()).toContain(`commit ${second}`);
     expect(stubLog()).not.toContain(`commit ${first}`);
+    expect(diffScans()).toEqual([
+      expect.stringContaining(
+        `--log-opts=--diff-merges=first-parent ${second} --not --remotes=origin`,
+      ),
+    ]);
   });
 
   it("scans each branch of one push", () => {
-    commit("first");
-    git(["push", "origin", "main"]);
-    rmSync(log);
-    git(["switch", "--quiet", "-c", "one"]);
+    pushedMain();
+    mustGit(["switch", "--quiet", "-c", "one"]);
     const one = commit("one");
-    git(["switch", "--quiet", "-c", "two", "main"]);
+    mustGit(["switch", "--quiet", "-c", "two", "main"]);
     const two = commit("two");
 
-    git(["push", "origin", "one", "two"]);
+    expect(git(["push", "origin", "one", "two"]).status).toBe(0);
 
     expect(stubLog()).toContain(`commit ${one}`);
     expect(stubLog()).toContain(`commit ${two}`);
+    expect(diffScans()).toHaveLength(2);
   });
 
   it("does not scan a branch deletion", () => {
-    commit("first");
-    git(["push", "origin", "main"]);
-    git(["push", "origin", "main:gone"]);
+    pushedMain();
+    mustGit(["push", "origin", "main:gone"]);
     rmSync(log);
 
     expect(
-      git(["push", "origin", "--delete", "gone"], { exit: "1" }).status,
+      git(["push", "origin", "--delete", "gone"], { failingScan: "both" })
+        .status,
     ).toBe(0);
     expect(stubLog()).toBe("");
     expect(remoteBranches()).toEqual(["main"]);
@@ -202,7 +259,9 @@ describe("pre-push hook", () => {
   it("lets the push through with a warning when betterleaks is missing", () => {
     commit("first");
 
-    const push = git(["push", "origin", "main"], { stub: false });
+    const push = git(["push", "origin", "main"], {
+      betterleaksInstalled: false,
+    });
 
     expect(push.status).toBe(0);
     expect(push.stderr).toContain("pre-push: betterleaks is not installed");

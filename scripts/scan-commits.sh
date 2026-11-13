@@ -9,6 +9,8 @@
 # The revisions are what git log takes: HEAD for the whole history, or
 # <commit> --not --remotes=origin for the commits a push adds. They go to
 # Betterleaks as one string, so none may contain a space.
+# It runs from the root of the repository, wherever it is called from: the
+# rules file is read from there.
 # Findings show the file, commit and line, the match itself redacted; a
 # finding in a message is printed under the line `commit <sha>` that
 # precedes it. Both scans run; either fails the script, as does a failing
