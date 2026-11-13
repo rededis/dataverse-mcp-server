@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const OUTDIR = "build/server";
+export const OUTDIR = "build/server";
 
 /**
  * Bundles a server entry point in memory: nothing is written, so a bundle
@@ -125,7 +125,11 @@ export const COVERED_BY_SDK = new Set(["@modelcontextprotocol/core-internal"]);
  */
 export function packageOf(path) {
   const match = [
-    ...path.matchAll(/node_modules\/((?:@[^/]+\/)?[^/.][^/]*)\//g),
+    // A node_modules directly inside another is a directory, not a package
+    // of that name.
+    ...path.matchAll(
+      /node_modules\/(?!node_modules\/)((?:@[^/]+\/)?[^/.][^/]*)\//g,
+    ),
   ].at(-1);
   if (!match?.[1]) return undefined;
   return {

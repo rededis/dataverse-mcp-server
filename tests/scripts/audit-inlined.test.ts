@@ -126,6 +126,24 @@ describe("inlined packages", () => {
     ).toEqual([{ name: "pkg", version: "2.0.0" }]);
   });
 
+  it("does not take a file outside the repository for the installed package of that name", () => {
+    expect(() =>
+      inlinedPackages(
+        metafile("node_modules/ajv/dist/ajv.js"),
+        sourcemap("../../../../node_modules/ajv/lib/ajv.js"),
+      ),
+    ).toThrow("cannot read the version of inlined package ajv");
+  });
+
+  it("names the package, not a node_modules directory nested in another", () => {
+    expect(() =>
+      inlinedPackages(
+        metafile(),
+        sourcemap("../../node_modules/node_modules/pkg/a.js"),
+      ),
+    ).toThrow("cannot read the version of inlined package pkg");
+  });
+
   it("knows a package installed inside another one as installed", () => {
     expect(
       inlinedPackages(
@@ -289,6 +307,44 @@ describe("inlined package audit", () => {
     const { request } = registry({ ajv: [{ ...high, severity: "severe" }] });
     await expect(auditInlined(packages, request)).rejects.toThrow(
       "unknown severity: severe",
+    );
+  });
+
+  it("refuses a request that throws", async () => {
+    const request = (async () => {
+      throw new Error("network down");
+    }) as typeof fetch;
+    await expect(auditInlined(packages, request)).rejects.toThrow(
+      "network down",
+    );
+  });
+
+  for (const [what, body] of [
+    ["a list", "[]"],
+    ["null", "null"],
+    ["a string", '"ok"'],
+  ] as const) {
+    it(`refuses an answer that is ${what}`, async () => {
+      const request = (async () => new Response(body)) as typeof fetch;
+      await expect(auditInlined(packages, request)).rejects.toThrow(
+        "the advisory response is not an object",
+      );
+    });
+  }
+
+  it("refuses an advisory that is not an object", async () => {
+    const { request } = registry({ ajv: [null] });
+    await expect(auditInlined(packages, request)).rejects.toThrow(
+      "an advisory for ajv is not an object",
+    );
+  });
+
+  it("refuses an advisory without a url", async () => {
+    const { request } = registry({
+      ajv: [{ severity: "high", title: "Bad" }],
+    });
+    await expect(auditInlined(packages, request)).rejects.toThrow(
+      "an advisory for ajv has no title or no url",
     );
   });
 

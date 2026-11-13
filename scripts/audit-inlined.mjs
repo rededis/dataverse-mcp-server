@@ -18,8 +18,14 @@
 // unrelated change.
 
 import { realpathSync } from "node:fs";
+import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
-import { bundleServer, COVERED_BY_SDK, packageOf } from "./build-server.mjs";
+import {
+  bundleServer,
+  COVERED_BY_SDK,
+  OUTDIR,
+  packageOf,
+} from "./build-server.mjs";
 
 /** @typedef {{ name: string, version: string }} InlinedPackage */
 /** @typedef {InlinedPackage & { severity: string, title: string, url: string }} Advisory */
@@ -63,23 +69,22 @@ const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
  * @returns {InlinedPackage[]} sorted, one entry per name and version
  */
 export function inlinedPackages(metafile, sourcemap) {
-  // A metafile path is relative to the repo root and a source map path to
-  // the output directory: without the leading ../ the two are comparable.
-  /** @param {string} dir */
-  const fromRoot = (dir) => dir.replace(/^(?:\.\.\/)+/, "");
+  // A metafile path is relative to the repo root, a source map path to the
+  // output directory: resolved against it, the two are comparable. A path
+  // that leaves the repo keeps its ../ and equals nothing inside it.
   const installedDirs = new Set(
     Object.keys(metafile.inputs).flatMap((path) => {
-      const installed = packageOf(path);
-      return installed ? [fromRoot(installed.dir)] : [];
+      const installed = packageOf(posix.normalize(path));
+      return installed ? [installed.dir] : [];
     }),
   );
   /** @type {Map<string, InlinedPackage>} */
   const found = new Map();
   for (const source of JSON.parse(sourcemap).sources) {
-    const origin = packageOf(source);
+    const origin = packageOf(posix.join(OUTDIR, source));
     if (
       !origin ||
-      installedDirs.has(fromRoot(origin.dir)) ||
+      installedDirs.has(origin.dir) ||
       COVERED_BY_SDK.has(origin.name)
     ) {
       continue;
@@ -157,7 +162,11 @@ export async function advisoriesFor(packages, request = fetch) {
       if (!Array.isArray(list)) {
         throw new Error(`the advisory response for ${name} is not a list`);
       }
-      for (const { severity, title, url } of list) {
+      for (const advisory of list) {
+        if (typeof advisory !== "object" || advisory === null) {
+          throw new Error(`an advisory for ${name} is not an object`);
+        }
+        const { severity, title, url } = advisory;
         const level =
           typeof severity === "string" ? severity.toLowerCase() : "";
         if (!SEVERITIES.has(level)) {
@@ -165,12 +174,15 @@ export async function advisoriesFor(packages, request = fetch) {
             `an advisory for ${name} has an unknown severity: ${severity}`,
           );
         }
+        if (typeof title !== "string" || typeof url !== "string") {
+          throw new Error(`an advisory for ${name} has no title or no url`);
+        }
         advisories.push({
           name,
           version,
           severity: level,
-          title: String(title),
-          url: String(url),
+          title,
+          url,
         });
       }
     }
@@ -193,15 +205,15 @@ export async function auditInlined(packages, request = fetch) {
       "no inlined packages found in the server bundle: the MCP SDK inlines several, so the source map no longer shows them",
     );
   }
+  const fails = (/** @type {Advisory} */ { severity }) =>
+    FAILING_SEVERITIES.has(severity);
   const canary = await advisoriesFor([CANARY], request);
-  if (!canary.some(({ severity }) => FAILING_SEVERITIES.has(severity))) {
+  if (!canary.some(fails)) {
     throw new Error(
       `the registry reports no high advisory for ${CANARY.name}@${CANARY.version}, which has several: its answers cannot be trusted`,
     );
   }
   const advisories = await advisoriesFor(packages, request);
-  const fails = (/** @type {Advisory} */ { severity }) =>
-    FAILING_SEVERITIES.has(severity);
   return {
     failing: advisories.filter(fails),
     belowThreshold: advisories.filter((advisory) => !fails(advisory)),
