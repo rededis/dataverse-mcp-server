@@ -13,12 +13,6 @@
 # Betterleaks is not an npm package. Without it on PATH the push goes through
 # with a warning, and CI stays the gate. CI pins the version (ci.yml); the
 # hook runs whichever is installed.
-if ! command -v betterleaks >/dev/null 2>&1; then
-  echo "pre-push: betterleaks is not on PATH, so the environment host scan did not run; CI runs it after the push." >&2
-  echo "pre-push: install it (brew install betterleaks, or the release binary) to have a finding stop the push." >&2
-  exit 0
-fi
-
 remote=$1
 pushed=
 # One line per ref being pushed: <local ref> <local sha> <remote ref> <remote sha>.
@@ -33,11 +27,30 @@ while read -r line; do
     *[!0]*) pushed="$pushed $local_sha" ;;
   esac
 done
+# Nothing to scan, so nothing to warn about either.
 [ -n "$pushed" ] || exit 0
+
+# The scan script is bash; a machine without it is treated like one without
+# Betterleaks.
+for tool in betterleaks bash; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "pre-push: $tool is not on PATH, so the environment host scan did not run; CI runs it after the push." >&2
+    echo "pre-push: install Betterleaks (brew install betterleaks, or the release binary) to have a finding stop the push." >&2
+    exit 0
+  fi
+done
+
+# Only a configured remote has remote-tracking branches to leave out. A URL
+# has none, and one with a space in it would break the revisions apart.
+if git config --get "remote.$remote.url" >/dev/null 2>&1; then
+  set -- --not "--remotes=$remote"
+else
+  set --
+fi
 
 # One scan for every ref of the push: a commit two of them share is read once.
 # $pushed is unquoted on purpose: it splits into one revision per sha.
-if ! bash scripts/scan-commits.sh betterleaks $pushed --not "--remotes=$remote"; then
+if ! bash scripts/scan-commits.sh betterleaks $pushed "$@"; then
   echo "pre-push: the push is refused: the scan above found something, or could not run." >&2
   echo "pre-push: for a finding, rewrite the commits (git commit --amend, git rebase) and push again." >&2
   exit 1
