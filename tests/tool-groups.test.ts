@@ -196,4 +196,34 @@ describe("import boundary", () => {
     expect([...outsideImporters]).toEqual(["src/tools/all.ts"]);
     expect(importers.get("src/tools/all.ts")).toEqual(["src/index.ts"]);
   });
+
+  // The other direction (#126): src/server builds on the rest of src/, never
+  // the reverse. Biome's noRestrictedImports in biome.json reports it at the
+  // import; this test holds the rule if that configuration is overridden, and
+  // sees what the lint rule does not: require(), import() in a type, and a
+  // template literal without substitutions. A specifier built at run time is
+  // invisible to both.
+  it("nothing in src/ outside src/server imports src/server", () => {
+    // "src/server" itself is what a specifier such as "./server" resolves to.
+    const isServer = (f: string) =>
+      f === "src/server" || f.startsWith("src/server/");
+    const files = readdirSync(resolve(root, "src"), { recursive: true })
+      .map(String)
+      .filter((f) => f.endsWith(".ts"))
+      .map((f) => resolve(root, "src", f))
+      .filter((f) => !isServer(relative(root, f)));
+    expect(files).toContain(resolve(root, "src/tools/types.ts"));
+
+    const offenders = files.flatMap((file) =>
+      [
+        ...readFileSync(file, "utf-8").matchAll(
+          /(?:\bfrom|\bimport|\brequire)\s*\(?\s*["'`](\.[^"'`]+)["'`]/g,
+        ),
+      ]
+        .map((m) => relative(root, resolve(dirname(file), m[1]!)))
+        .filter(isServer)
+        .map((target) => `${relative(root, file)} -> ${target}`),
+    );
+    expect(offenders).toEqual([]);
+  });
 });
