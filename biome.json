@@ -16,7 +16,8 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "preset": "recommended"
+      "preset": "recommended",
+      "suspicious": { "noImportCycles": "error" }
     }
   },
   "javascript": {
@@ -41,6 +42,26 @@
             "noConsole": {
               "level": "error",
               "options": { "allow": ["error", "warn", "trace", "assert"] }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/**", "!src/server/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["**/server/**", "!@modelcontextprotocol/**"],
+                    "message": "src/server is imported by nothing outside it (#126)."
+                  }
+                ]
+              }
             }
           }
         }
