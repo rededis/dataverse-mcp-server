@@ -156,6 +156,8 @@ async function main() {
   // The version only ends up in the bundle's text, which is thrown away.
   const { metafile, sourcemap } = await bundleServer({ version: "audit" });
   const packages = inlinedPackages(metafile, sourcemap);
+  // DELIBERATE, to be reverted (#130): an old version with high advisories.
+  for (const p of packages) if (p.name === "fast-uri") p.version = "3.1.5";
   console.log(`Inlined packages in the server bundle: ${packages.length}`);
   for (const { name, version } of packages) console.log(`  ${name}@${version}`);
 
