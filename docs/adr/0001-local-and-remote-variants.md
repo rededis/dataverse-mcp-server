@@ -507,7 +507,28 @@ in the workflow:
   would push the image again under the same tags.
 - A tag whose lockfile has a high or critical production advisory
   (`npm audit --omit=dev --audit-level=high`) is refused before anything is
-  built; so is one pushed while the registry cannot be reached (#129).
+  built; so is one pushed while the registry cannot be reached (#129). The
+  packages the MCP SDK inlined into its own `dist/` are not in the lockfile;
+  `scripts/audit-inlined.mjs` reads them from the bundle's source map and
+  refuses the tag for the same reasons, after the packages are installed
+  and before the image is built (#130).
+
+  _Added 2026-11-13 (#130)._ What that gate rests on:
+  - The versions are read from the paths pnpm left in the SDK's source maps.
+    An SDK built another way has no version to read, and the audit fails
+    until the script is taught the new layout: a tag is refused rather than
+    published unaudited.
+  - The advisories come from the registry endpoint `npm audit` itself asks
+    (`/-/npm/v1/security/advisories/bulk`), called directly. It is not a
+    documented contract, so the script first asks about a version known to
+    be vulnerable and fails if nothing comes back. Running `npm audit` on a
+    lockfile generated from the list was set aside: npm would resolve a tree
+    of its own around those packages, and the audit would be of that tree,
+    not of the versions in the image. OSV was set aside for the reason the
+    lockfile audit uses npm: one source of severities.
+  - There is no way to accept an advisory, as with `npm audit`: a high one
+    in an inlined package holds `server-v*` tags until the SDK ships a fix
+    or the threshold is changed in the script.
 - The CHANGELOG is `CHANGELOG-server.md`. A release needs its `## [X.Y.Z]`
   section; a pre-release may use `## [Unreleased]`. The section becomes the
   Release notes.
