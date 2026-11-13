@@ -20,7 +20,7 @@ ARG SERVER_VERSION
 RUN SERVER_VERSION="$SERVER_VERSION" npm run build:server
 
 # No shell, uid 65532. Node is /nodejs/bin/node and not on PATH.
-FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:b8cec4b2f2126ff7bd034ec9ac207ffb3272667dfdc48376e3b035d3270549ba
+FROM gcr.io/distroless/nodejs24-debian13:nonroot@sha256:088a01637f22908632ba09018be2e0b516f2fa6f7869c191d29491139db43c78
 WORKDIR /app
 # server.js, server.js.map, LICENSE and licenses/ (third-party licence texts).
 COPY --from=build /app/build/server/ ./
