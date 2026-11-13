@@ -1,3 +1,4 @@
+import "../server/audit.js";
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { DataverseClient } from "../client.js";
 import type { Permissions } from "./permissions.js";
