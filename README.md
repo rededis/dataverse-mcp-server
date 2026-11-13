@@ -190,6 +190,8 @@ npm install
 npm run build
 ```
 
+`npm run check` is what the pre-commit hook and CI run. The pre-push hook scans the commits being pushed for environment hosts and tenant or client IDs with [Betterleaks](https://github.com/betterleaks/betterleaks), if it is installed (`brew install betterleaks`, or the release binary); without it the push goes through with a warning and CI runs the scan. A git client that runs hooks with its own `PATH` may not find an installed Betterleaks; husky reads `~/.config/husky/init.sh`, where `PATH` can be set.
+
 ### Claude Code configuration (local build)
 
 If you cloned the repo instead of using `npx`:

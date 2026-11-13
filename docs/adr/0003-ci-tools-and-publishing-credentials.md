@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-10
-- **Issue:** #121; amended by #157 (typos) and #124 (Betterleaks)
+- **Issue:** #121; amended by #157 (typos), #124 (Betterleaks) and #167 (pre-push hook)
 - **Relates to:** [ADR-0001](0001-local-and-remote-variants.md) §13 (release lines)
 
 ## Context
@@ -50,12 +50,19 @@ Betterleaks (#124) is installed the same way. Its release has a
 too, and a new digest is confirmed with `gh release verify-asset` the same
 way (`-R betterleaks/betterleaks`).
 
-The step runs inside the `ci` job, because `ci` is the required check on
-`main`: a separate job would not block a merge without changing branch
-protection.
+Each of these steps runs inside the `ci` job, because `ci` is the required
+check on `main`: a separate job would not block a merge without changing
+branch protection.
 
 Dependabot cannot update a version and digest written in a `run:` step.
 They are bumped by hand, together.
+
+The pre-push hook (#167) runs the same scan through
+`scripts/scan-commits.sh`, with whichever Betterleaks is on the developer's
+`PATH`: it downloads nothing, so there is nothing for it to verify, and
+without the binary it lets the push through with a warning. The version
+pinned in `ci.yml` is the one that decides; the hook only catches a finding
+before it is public.
 
 A new tool added to CI follows the same rule: an image pinned by digest, a
 lock file with checksums, or a hash in the workflow. An action that only
@@ -99,5 +106,5 @@ tokens and the npm token secrets are removed from the repository.
   <https://github.com/crate-ci/typos/releases/tag/v1.52.0>
 - Betterleaks v1.10.0 release: archives with `checksums.txt` and its
   Sigstore bundle; immutable. Since v1.10.0 a config file in the scanned
-  directory is read only with `--unsafe-auto-load-config`, so the workflow
-  passes `--config`. <https://github.com/betterleaks/betterleaks/releases/tag/v1.10.0>
+  directory is read only with `--unsafe-auto-load-config`, so
+  `scripts/scan-commits.sh` passes `--config`. <https://github.com/betterleaks/betterleaks/releases/tag/v1.10.0>
