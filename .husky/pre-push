@@ -6,6 +6,8 @@
 # public and left to CI. The branches are the local copies: after the
 # remote's URL is changed, or with a pushurl of its own, they describe
 # another repository and hide commits from the scan until the next fetch.
+# A push to a URL instead of a named remote has no such branches, and the
+# whole history of the pushed refs is scanned.
 # Not read, here or in CI: the message of an annotated tag, and a pushed ref
 # that points at a tree or a blob instead of a commit.
 # Betterleaks is not an npm package. Without it on PATH the push goes through
@@ -34,8 +36,7 @@ done
 [ -n "$pushed" ] || exit 0
 
 # One scan for every ref of the push: a commit two of them share is read once.
-# $pushed is split on purpose, one revision per sha.
-# shellcheck disable=SC2086
+# $pushed is unquoted on purpose: it splits into one revision per sha.
 if ! bash scripts/scan-commits.sh betterleaks $pushed --not "--remotes=$remote"; then
   echo "pre-push: the push is refused: the scan above found something, or could not run." >&2
   echo "pre-push: for a finding, rewrite the commits (git commit --amend, git rebase) and push again." >&2
