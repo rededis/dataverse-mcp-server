@@ -163,11 +163,16 @@ describe("import boundary", () => {
     }
   });
 
-  function importersOf(): Map<string, string[]> {
-    const files = readdirSync(resolve(root, "src"), { recursive: true })
+  /** Every .ts file under src/, as an absolute path. */
+  function sourceFiles(): string[] {
+    return readdirSync(resolve(root, "src"), { recursive: true })
       .map(String)
       .filter((f) => f.endsWith(".ts"))
       .map((f) => resolve(root, "src", f));
+  }
+
+  function importersOf(): Map<string, string[]> {
+    const files = sourceFiles();
     const importers = new Map<string, string[]>();
     for (const file of files) {
       for (const target of localImports(file)) {
@@ -200,30 +205,35 @@ describe("import boundary", () => {
   // The other direction (#126): src/server builds on the rest of src/, never
   // the reverse. Biome's noRestrictedImports in biome.json reports it at the
   // import; this test holds the rule if that configuration is overridden, and
-  // sees what the lint rule does not: require(), import() in a type, and a
-  // template literal without substitutions. A specifier built at run time is
-  // invisible to both.
+  // sees some of what the lint rule does not: require(), import() in a type,
+  // and a template literal without substitutions. Neither sees a specifier
+  // built at run time, `declare module` or a triple-slash reference.
+  // The scan reads the text, not the syntax: a path to src/server after
+  // `import` or `from` in a comment or a string fails it too.
   it("nothing in src/ outside src/server imports src/server", () => {
     // "src/server" itself is what a specifier such as "./server" resolves to.
     const isServer = (f: string) =>
       f === "src/server" || f.startsWith("src/server/");
-    const files = readdirSync(resolve(root, "src"), { recursive: true })
-      .map(String)
-      .filter((f) => f.endsWith(".ts"))
-      .map((f) => resolve(root, "src", f))
-      .filter((f) => !isServer(relative(root, f)));
-    expect(files).toContain(resolve(root, "src/tools/types.ts"));
+    const serverImports = (files: string[]) =>
+      files.flatMap((file) =>
+        [
+          ...readFileSync(file, "utf-8").matchAll(
+            /(?:\bfrom|\bimport|\brequire)\s*\(?\s*["'`](\.[^"'`]+)["'`]/g,
+          ),
+        ]
+          .map((m) => relative(root, resolve(dirname(file), m[1]!)))
+          .filter(isServer)
+          .map((target) => `${relative(root, file)} -> ${target}`),
+      );
+    const inServer = (file: string) => isServer(relative(root, file));
 
-    const offenders = files.flatMap((file) =>
-      [
-        ...readFileSync(file, "utf-8").matchAll(
-          /(?:\bfrom|\bimport|\brequire)\s*\(?\s*["'`](\.[^"'`]+)["'`]/g,
-        ),
-      ]
-        .map((m) => relative(root, resolve(dirname(file), m[1]!)))
-        .filter(isServer)
-        .map((target) => `${relative(root, file)} -> ${target}`),
+    // The scan does find such imports where they are allowed: without this,
+    // a scan that matches nothing would pass for ever.
+    expect(serverImports(sourceFiles().filter(inServer))).toContain(
+      "src/server/index.ts -> src/server/app.js",
     );
-    expect(offenders).toEqual([]);
+    expect(serverImports(sourceFiles().filter((f) => !inServer(f)))).toEqual(
+      [],
+    );
   });
 });
