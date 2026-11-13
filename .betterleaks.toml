@@ -1,6 +1,8 @@
-# Betterleaks rules for this repository (#124), run by the ci job over the
-# git history and the commit messages, at the version pinned there. Locally,
-# the release binary of that version and the two commands of that step.
+# Betterleaks rules for this repository (#124), run by scripts/scan-commits.sh
+# over commit diffs and commit messages: by the ci job over the whole history,
+# at the version pinned there, and by the pre-push hook over the commits being
+# pushed, with the betterleaks on PATH (#167). By hand:
+# bash scripts/scan-commits.sh betterleaks HEAD
 #
 # They enforce the rule in CLAUDE.md: the repository is public and holds no
 # environment URLs or tenant and client IDs. Token formats are left to GitHub

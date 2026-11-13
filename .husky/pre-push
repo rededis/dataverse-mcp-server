@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+# Refuses a push whose commits add an environment host or a tenant or client
+# ID (#167): the scan the ci job runs, before the commits reach GitHub, where
+# they stay indexed. It reads the commits the remote does not have yet, by
+# its remote-tracking branches; a commit already on any branch there is
+# public and left to CI.
+# Betterleaks is not an npm package. Without it on PATH the push goes through
+# with a warning, and CI stays the gate. CI pins the version (ci.yml); the
+# hook runs whichever is installed.
+if ! command -v betterleaks >/dev/null 2>&1; then
+  echo "pre-push: betterleaks is not installed, so the environment host scan did not run; CI runs it after the push." >&2
+  echo "pre-push: install it (brew install betterleaks, or the release binary) to have a finding stop the push." >&2
+  exit 0
+fi
+
+remote=$1
+status=0
+# One line per ref being pushed: <local ref> <local sha> <remote ref> <remote sha>.
+while read -r _ local_sha _ _; do
+  # All zeros: the push deletes the ref and adds no commits.
+  case $local_sha in
+    *[!0]*) ;;
+    *) continue ;;
+  esac
+  # </dev/null: the scan must not read the lines this loop is reading.
+  bash scripts/scan-commits.sh betterleaks "$local_sha" --not "--remotes=$remote" </dev/null || status=1
+done
+if [ "$status" -ne 0 ]; then
+  echo "pre-push: the push is refused. Rewrite the commits above (git commit --amend, git rebase) and push again." >&2
+fi
+exit "$status"
