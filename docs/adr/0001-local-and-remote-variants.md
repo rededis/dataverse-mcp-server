@@ -54,9 +54,22 @@ flag that a misconfiguration could flip.
 - Code needed by more than one group lives in `src/tools/shared/`. Group
   modules never import each other, so a helper cannot pull another group,
   or development, in after it.
-- `tests/tool-groups.test.ts` enforces both rules: reachability from
+- `tests/tool-groups.test.ts` enforces both of these rules: reachability from
   `server-groups.ts`, and the importer allowlist. The bundle check in #79
   covers the same boundary from the build side.
+- The other direction (#126): nothing in `src/` outside `src/server` imports
+  `src/server`. Biome's `noRestrictedImports` in `biome.json` reports such an
+  import written as `import`, `export ... from` or `import()` with a string
+  literal; a test in `tests/tool-groups.test.ts` holds the same rule and also
+  sees `require()`, `import()` in a type and a template literal. Tests and
+  `scripts/` are outside this boundary.
+- Biome's `noImportCycles` fails a run-time import cycle everywhere it lints,
+  tests and `scripts/` included; an `import type` declaration does not count,
+  an `import { type X }` does.
+
+_Added 2026-11-13 (#126)._ The `src/server` boundary and the cycle rule. The
+boundary refuses type-only imports too: it is a rule about the source tree,
+and a type the rest of `src/` needs does not belong in `src/server`.
 
 *Why not npm workspaces now:* the core has one consumer shape today (two entry
 points in one package). Workspaces add release and build machinery without
