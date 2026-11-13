@@ -510,7 +510,8 @@ in the workflow:
   built; so is one pushed while the registry cannot be reached (#129). The
   packages the MCP SDK inlined into its own `dist/` are not in the lockfile;
   `scripts/audit-inlined.mjs` reads them from the bundle's source map and
-  refuses the tag on the same terms (#130).
+  refuses the tag for the same reasons, after the packages are installed
+  and before the image is built (#130).
 - The CHANGELOG is `CHANGELOG-server.md`. A release needs its `## [X.Y.Z]`
   section; a pre-release may use `## [Unreleased]`. The section becomes the
   Release notes.

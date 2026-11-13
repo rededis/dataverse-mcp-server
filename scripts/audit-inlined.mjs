@@ -7,74 +7,92 @@
 // The names and versions come from the bundle's source map, so a package the
 // SDK starts to inline is picked up without a list to edit. Exits 1 on a high
 // or critical advisory, like npm audit --audit-level=high, and when it cannot
-// tell: an inlined package without a readable version, a registry that does
-// not answer, or one that no longer reports an advisory known to exist.
+// tell: no inlined package found, one without a readable version, a registry
+// that does not answer, or one that no longer reports an advisory known to
+// exist.
 // Run by audit.yml on its schedule and by server-release.yml before the image
 // is built. Not part of npm run check: a new advisory must not fail an
 // unrelated change.
 
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { bundleServer, COVERED_BY_SDK } from "./build-server.mjs";
+import { bundleServer, COVERED_BY_SDK, packageOf } from "./build-server.mjs";
 
 /** @typedef {{ name: string, version: string }} InlinedPackage */
-/** @typedef {{ name: string, versions: string[], severity: string, title: string, url: string }} Advisory */
+/** @typedef {InlinedPackage & { severity: string, title: string, url: string }} Advisory */
 
 // What npm audit itself asks: package names with versions in, the advisories
 // that apply to those versions out.
 const ADVISORIES_URL =
   "https://registry.npmjs.org/-/npm/v1/security/advisories/bulk";
 
-const FAILING = new Set(["high", "critical"]);
+const FAILING_SEVERITIES = new Set(["high", "critical"]);
 
 // A version with high advisories that will not go away (GHSA-qw65-cvwx-89v3
 // and others). Asked about first: an endpoint that stopped answering in the
 // expected shape would otherwise read as "no advisories" forever.
-const CANARY = { name: "fast-uri", version: "3.1.5" };
+export const CANARY = { name: "fast-uri", version: "3.1.5" };
+
+// What the registry can be asked about. Anything else in the place of a
+// version (a git or tarball dependency) would be answered with nothing.
+const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 /**
  * The packages in the bundle that are not installed from the lockfile: those
  * a dependency had already bundled into its own dist/. The metafile lists
  * what esbuild took from node_modules; the source map also names the files
- * those packages were built from.
+ * those packages were built from. A source map file is inlined when its
+ * package directory is not one esbuild read, so a package that is installed
+ * and also inlined, at another version, is still listed.
  *
- * The version is read from the path pnpm gave the package when the SDK was
- * built (.pnpm/<name>@<version>/node_modules/<name>/). A package inlined
- * from any other layout has no version to read, and that is an error: it
- * must not pass unaudited.
+ * The version is read from the directory pnpm gave the package when the SDK
+ * was built (.pnpm/<name>@<version>/node_modules/<name>). A package inlined
+ * from any other layout, or with something other than a version there, is an
+ * error: it must not pass unaudited.
  *
  * @param {import("esbuild").Metafile} metafile
  * @param {string} sourcemap the source map, as JSON text
  * @returns {InlinedPackage[]} sorted, one entry per name and version
  */
 export function inlinedPackages(metafile, sourcemap) {
-  const installed = new Set();
-  for (const path of Object.keys(metafile.inputs)) {
-    const name = path.match(/node_modules\/((?:@[^/]+\/)?[^/]+)\//)?.[1];
-    if (name) installed.add(name);
-  }
+  // A metafile path is relative to the repo root and a source map path to
+  // the output directory: without the leading ../ the two are comparable.
+  /** @param {string} dir */
+  const fromRoot = (dir) => dir.replace(/^(?:\.\.\/)+/, "");
+  const installedDirs = new Set(
+    Object.keys(metafile.inputs).flatMap((path) => {
+      const installed = packageOf(path);
+      return installed ? [fromRoot(installed.dir)] : [];
+    }),
+  );
   /** @type {Map<string, InlinedPackage>} */
   const found = new Map();
   for (const source of JSON.parse(sourcemap).sources) {
-    // The innermost node_modules/ segment is the package the file belongs to.
-    const name = [
-      ...source.matchAll(/node_modules\/((?:@[^/]+\/)?[^/.][^/]*)\//g),
-    ].at(-1)?.[1];
-    if (!name || installed.has(name) || COVERED_BY_SDK.has(name)) continue;
+    const origin = packageOf(source);
+    if (
+      !origin ||
+      installedDirs.has(fromRoot(origin.dir)) ||
+      COVERED_BY_SDK.has(origin.name)
+    ) {
+      continue;
+    }
+    const { name, dir } = origin;
     // pnpm writes a scoped name with + for the slash, and appends the peer
     // dependencies after an underscore: ajv-formats@3.0.1_ajv@8.18.0.
-    const store = `.pnpm/${name.replace("/", "+")}@`;
-    const at = source.lastIndexOf(store);
+    const storePrefix = `.pnpm/${name.replace("/", "+")}@`;
+    const storeSuffix = `/node_modules/${name}`;
+    const storeIndex = dir.lastIndexOf(storePrefix);
     const version =
-      at === -1
-        ? undefined
-        : source.slice(at + store.length).match(/^[^/_]+/)?.[0];
-    if (!version || !source.includes(`/node_modules/${name}/`, at)) {
+      storeIndex !== -1 && dir.endsWith(storeSuffix)
+        ? dir.slice(storeIndex + storePrefix.length, -storeSuffix.length)
+        : "";
+    const withoutPeers = version.split("_")[0] ?? "";
+    if (version.includes("/") || !SEMVER.test(withoutPeers)) {
       throw new Error(
         `cannot read the version of inlined package ${name} from ${source}`,
       );
     }
-    found.set(`${name}@${version}`, { name, version });
+    found.set(`${name}@${withoutPeers}`, { name, version: withoutPeers });
   }
   return [...found.values()].sort(
     (a, b) =>
@@ -85,47 +103,64 @@ export function inlinedPackages(metafile, sourcemap) {
 /**
  * The advisories npm has for these packages at these versions.
  *
+ * The endpoint answers per package name, not per version. Each request
+ * therefore carries a name once: two versions of one package go in two
+ * requests, and every advisory is known to apply to the version it is
+ * reported for.
+ *
  * @param {InlinedPackage[]} packages
  * @param {typeof fetch} [request]
  * @returns {Promise<Advisory[]>}
  */
 export async function advisoriesFor(packages, request = fetch) {
-  /** @type {Record<string, string[]>} */
-  const versions = {};
+  /** @type {Map<string, string>[]} */
+  const batches = [];
   for (const { name, version } of packages) {
-    versions[name] = [...(versions[name] ?? []), version];
-  }
-  if (packages.length === 0) return [];
-  const response = await request(ADVISORIES_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(versions),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!response.ok) {
-    throw new Error(`the advisory request failed: HTTP ${response.status}`);
-  }
-  const body = /** @type {unknown} */ (await response.json());
-  if (typeof body !== "object" || body === null || Array.isArray(body)) {
-    throw new Error("the advisory response is not an object");
+    let batch = batches.find((versions) => !versions.has(name));
+    if (!batch) {
+      batch = new Map();
+      batches.push(batch);
+    }
+    batch.set(name, version);
   }
   /** @type {Advisory[]} */
   const advisories = [];
-  for (const [name, list] of Object.entries(body)) {
-    if (!Array.isArray(list)) {
-      throw new Error(`the advisory response for ${name} is not a list`);
+  for (const batch of batches) {
+    const response = await request(ADVISORIES_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(
+        Object.fromEntries([...batch].map(([name, v]) => [name, [v]])),
+      ),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!response.ok) {
+      throw new Error(`the advisory request failed: HTTP ${response.status}`);
     }
-    for (const { severity, title, url } of list) {
-      if (typeof severity !== "string") {
-        throw new Error(`an advisory for ${name} has no severity`);
+    const body = /** @type {unknown} */ (await response.json());
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      throw new Error("the advisory response is not an object");
+    }
+    for (const [name, list] of Object.entries(body)) {
+      const version = batch.get(name);
+      if (version === undefined) {
+        throw new Error(`the advisory response names ${name}, not asked about`);
       }
-      advisories.push({
-        name,
-        versions: versions[name] ?? [],
-        severity,
-        title: String(title),
-        url: String(url),
-      });
+      if (!Array.isArray(list)) {
+        throw new Error(`the advisory response for ${name} is not a list`);
+      }
+      for (const { severity, title, url } of list) {
+        if (typeof severity !== "string") {
+          throw new Error(`an advisory for ${name} has no severity`);
+        }
+        advisories.push({
+          name,
+          version,
+          severity,
+          title: String(title),
+          url: String(url),
+        });
+      }
     }
   }
   return advisories;
@@ -133,22 +168,31 @@ export async function advisoriesFor(packages, request = fetch) {
 
 /**
  * The advisories for these packages, split by whether they fail the audit.
- * Throws when the registry does not report the canary's known advisory.
+ * Throws when there is nothing to ask about, since the SDK does inline
+ * packages and an empty list means they were not found, and when the
+ * registry does not report the canary's known advisory.
  *
  * @param {InlinedPackage[]} packages
  * @param {typeof fetch} [request]
  */
 export async function auditInlined(packages, request = fetch) {
+  if (packages.length === 0) {
+    throw new Error(
+      "no inlined packages found in the server bundle: the MCP SDK inlines several, so the source map no longer shows them",
+    );
+  }
   const canary = await advisoriesFor([CANARY], request);
-  if (!canary.some(({ severity }) => FAILING.has(severity))) {
+  if (!canary.some(({ severity }) => FAILING_SEVERITIES.has(severity))) {
     throw new Error(
       `the registry reports no high advisory for ${CANARY.name}@${CANARY.version}, which has several: its answers cannot be trusted`,
     );
   }
   const advisories = await advisoriesFor(packages, request);
+  const fails = (/** @type {Advisory} */ { severity }) =>
+    FAILING_SEVERITIES.has(severity);
   return {
-    failing: advisories.filter(({ severity }) => FAILING.has(severity)),
-    other: advisories.filter(({ severity }) => !FAILING.has(severity)),
+    failing: advisories.filter(fails),
+    belowThreshold: advisories.filter((advisory) => !fails(advisory)),
   };
 }
 
@@ -159,17 +203,19 @@ async function main() {
   console.log(`Inlined packages in the server bundle: ${packages.length}`);
   for (const { name, version } of packages) console.log(`  ${name}@${version}`);
 
-  const { failing, other } = await auditInlined(packages);
+  const { failing, belowThreshold } = await auditInlined(packages);
   /** @param {Advisory} advisory */
-  const line = ({ name, versions, severity, title, url }) =>
-    `  ${severity}: ${name}@${versions.join(", ")}: ${title} (${url})`;
-  if (other.length > 0) {
+  const formatAdvisory = ({ name, version, severity, title, url }) =>
+    `  ${severity}: ${name}@${version}: ${title} (${url})`;
+  if (belowThreshold.length > 0) {
     console.log("Advisories below high, not failing:");
-    for (const advisory of other) console.log(line(advisory));
+    for (const advisory of belowThreshold) {
+      console.log(formatAdvisory(advisory));
+    }
   }
   if (failing.length > 0) {
     console.error("High or critical advisories in inlined packages:");
-    for (const advisory of failing) console.error(line(advisory));
+    for (const advisory of failing) console.error(formatAdvisory(advisory));
     console.error(
       "They change only with the MCP SDK: update @modelcontextprotocol/server, or see whether the SDK has a release with the fix.",
     );

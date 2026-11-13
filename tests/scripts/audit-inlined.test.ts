@@ -1,5 +1,10 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { auditInlined, inlinedPackages } from "../../scripts/audit-inlined.mjs";
+import {
+  advisoriesFor,
+  auditInlined,
+  CANARY,
+  inlinedPackages,
+} from "../../scripts/audit-inlined.mjs";
 import { bundleServer } from "../../scripts/build-server.mjs";
 
 // The audit of what the MCP SDK inlined into its own dist/ (#130). The
@@ -20,9 +25,10 @@ const metafile = (...inputs: string[]) =>
 const sourcemap = (...sources: string[]) => JSON.stringify({ sources });
 
 describe("inlined packages", () => {
-  it("lists what the SDK inlined into the real bundle, with versions", () => {
+  it("finds inlined packages in the real bundle, with versions, and no installed one", () => {
     const packages = inlinedPackages(server.metafile, server.sourcemap);
     const names = packages.map(({ name }) => name);
+    // Not the whole list: it changes with the SDK.
     expect(names).toEqual(expect.arrayContaining(["ajv", "fast-uri"]));
     // Installed packages are in the lockfile: npm audit has them.
     expect(names).not.toContain("zod");
@@ -85,6 +91,49 @@ describe("inlined packages", () => {
     ).toThrow("cannot read the version of inlined package pkg");
   });
 
+  it("refuses something other than a version in the store path", () => {
+    expect(() =>
+      inlinedPackages(
+        metafile(),
+        sourcemap(
+          "../node_modules/.pnpm/pkg@github.com+owner+pkg+abc123/node_modules/pkg/a.js",
+        ),
+      ),
+    ).toThrow("cannot read the version of inlined package pkg");
+  });
+
+  it("lists a package that is also installed, at its inlined version", () => {
+    expect(
+      inlinedPackages(
+        metafile("node_modules/ajv/dist/ajv.js"),
+        sourcemap(
+          "../../node_modules/ajv/dist/ajv.js",
+          "../../node_modules/node_modules/.pnpm/ajv@6.0.0/node_modules/ajv/lib/ajv.js",
+        ),
+      ),
+    ).toEqual([{ name: "ajv", version: "6.0.0" }]);
+  });
+
+  it("reads the version next to the package, not from a store path further out", () => {
+    expect(
+      inlinedPackages(
+        metafile(),
+        sourcemap(
+          "../node_modules/.pnpm/pkg@1.0.0/node_modules/outer/node_modules/.pnpm/pkg@2.0.0/node_modules/pkg/a.js",
+        ),
+      ),
+    ).toEqual([{ name: "pkg", version: "2.0.0" }]);
+  });
+
+  it("knows a package installed inside another one as installed", () => {
+    expect(
+      inlinedPackages(
+        metafile("node_modules/a/node_modules/b/index.js"),
+        sourcemap("../../node_modules/a/node_modules/b/index.js"),
+      ),
+    ).toEqual([]);
+  });
+
   it("leaves out the SDK's own workspace package", () => {
     expect(
       inlinedPackages(
@@ -116,7 +165,7 @@ describe("inlined package audit", () => {
       asked.push(body);
       const answer: Record<string, unknown> = {};
       for (const name of Object.keys(body)) {
-        if (name === "fast-uri" && body[name]?.[0] === "3.1.5") {
+        if (name === CANARY.name && body[name]?.[0] === CANARY.version) {
           answer[name] = canary;
         } else if (name in known) {
           answer[name] = known[name];
@@ -132,20 +181,22 @@ describe("inlined package audit", () => {
     { name: "content-type", version: "1.0.5" },
   ];
 
-  it("fails on a high advisory and names the package and version", async () => {
+  it("reports a high advisory as failing, with the package and version", async () => {
     const { request, asked } = registry({ ajv: [high, moderate] });
 
-    const { failing, other } = await auditInlined(packages, request);
+    const { failing, belowThreshold } = await auditInlined(packages, request);
 
-    expect(failing).toEqual([{ name: "ajv", versions: ["8.18.0"], ...high }]);
-    expect(other).toEqual([{ name: "ajv", versions: ["8.18.0"], ...moderate }]);
+    expect(failing).toEqual([{ name: "ajv", version: "8.18.0", ...high }]);
+    expect(belowThreshold).toEqual([
+      { name: "ajv", version: "8.18.0", ...moderate },
+    ]);
     expect(asked.at(-1)).toEqual({
       ajv: ["8.18.0"],
       "content-type": ["1.0.5"],
     });
   });
 
-  it("fails on a critical advisory", async () => {
+  it("reports a critical advisory as failing", async () => {
     const { request } = registry({ ajv: [{ ...high, severity: "critical" }] });
     expect((await auditInlined(packages, request)).failing).toHaveLength(1);
   });
@@ -166,6 +217,64 @@ describe("inlined package audit", () => {
     const request = (async () =>
       new Response("down", { status: 503 })) as typeof fetch;
     await expect(auditInlined(packages, request)).rejects.toThrow("HTTP 503");
+  });
+
+  it("refuses a request that fails after the canary's answered", async () => {
+    const { request: answers } = registry({});
+    let calls = 0;
+    const request = (async (...args: Parameters<typeof fetch>) => {
+      calls += 1;
+      return calls === 1
+        ? answers(...args)
+        : new Response("down", { status: 502 });
+    }) as typeof fetch;
+    await expect(auditInlined(packages, request)).rejects.toThrow("HTTP 502");
+  });
+
+  it("refuses an empty list: the SDK does inline packages", async () => {
+    const { request, asked } = registry({});
+    await expect(auditInlined([], request)).rejects.toThrow(
+      "no inlined packages found",
+    );
+    expect(asked).toEqual([]);
+  });
+
+  it("asks about two versions of one package apart, and reports each for itself", async () => {
+    const asked: Record<string, string[]>[] = [];
+    const request = (async (_url: unknown, init?: { body?: unknown }) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, string[]>;
+      asked.push(body);
+      return new Response(
+        JSON.stringify(body.pkg?.[0] === "1.0.0" ? { pkg: [high] } : {}),
+      );
+    }) as typeof fetch;
+
+    const advisories = await advisoriesFor(
+      [
+        { name: "pkg", version: "1.0.0" },
+        { name: "pkg", version: "2.0.0" },
+        { name: "other", version: "3.0.0" },
+      ],
+      request,
+    );
+
+    expect(asked).toEqual([
+      { pkg: ["1.0.0"], other: ["3.0.0"] },
+      { pkg: ["2.0.0"] },
+    ]);
+    expect(advisories).toEqual([{ name: "pkg", version: "1.0.0", ...high }]);
+  });
+
+  it("refuses an answer about a package it did not ask about", async () => {
+    const { request } = registry({});
+    const stranger = (async (...args: Parameters<typeof fetch>) => {
+      const response = await request(...args);
+      const body = (await response.json()) as Record<string, unknown>;
+      return new Response(JSON.stringify({ ...body, stranger: [] }));
+    }) as typeof fetch;
+    await expect(auditInlined(packages, stranger)).rejects.toThrow(
+      "not asked about",
+    );
   });
 
   it("refuses an answer in another shape", async () => {
