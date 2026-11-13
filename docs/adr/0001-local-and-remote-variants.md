@@ -66,6 +66,10 @@ flag that a misconfiguration could flip.
 - Biome's `noImportCycles` fails a run-time import cycle everywhere it lints,
   tests and `scripts/` included; type-only imports do not count.
 
+_Added 2026-11-13 (#126)._ The last two items. The boundary refuses type-only
+imports too: it is a rule about the source tree, and a type the rest of
+`src/` needs does not belong in `src/server`.
+
 *Why not npm workspaces now:* the core has one consumer shape today (two entry
 points in one package). Workspaces add release and build machinery without
 buying anything the bundle does not already give. See Deferred.
