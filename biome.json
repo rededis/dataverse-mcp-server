@@ -57,8 +57,13 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["**/server/**", "!@modelcontextprotocol/**"],
-                    "message": "src/server is imported by nothing outside it (#126)."
+                    "group": [
+                      "**/server",
+                      "**/server/**",
+                      "!@modelcontextprotocol/server",
+                      "!@modelcontextprotocol/server/**"
+                    ],
+                    "message": "Code in src/ outside src/server must not import src/server (#126)."
                   }
                 ]
               }

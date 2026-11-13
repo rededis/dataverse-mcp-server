@@ -57,6 +57,11 @@ flag that a misconfiguration could flip.
 - `tests/tool-groups.test.ts` enforces both rules: reachability from
   `server-groups.ts`, and the importer allowlist. The bundle check in #79
   covers the same boundary from the build side.
+- The other direction (#126): nothing in `src/` outside `src/server` imports
+  `src/server`. Biome's `noRestrictedImports` in `biome.json` fails such an
+  import written as `import`, `export ... from` or `import()` with a string
+  literal; `noImportCycles` fails a run-time import cycle. Tests and
+  `scripts/` are outside the rule.
 
 *Why not npm workspaces now:* the core has one consumer shape today (two entry
 points in one package). Workspaces add release and build machinery without
