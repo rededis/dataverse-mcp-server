@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -9,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 // The pre-push hook (#167) against a real git push to a local bare
@@ -19,10 +20,20 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const REPO = resolve(__dirname, "../..");
 
-// Where git, sh, bash and cat are expected, and a betterleaks installed by
-// Homebrew or by hand is not: the stub, or its absence, must be what the
-// hook finds. A machine with betterleaks in /usr/bin fails the last test.
-const SYSTEM_PATH = "/usr/bin:/bin";
+// What the hook and the script run, besides betterleaks. The tests give git
+// a PATH with these alone, each as a wrapper around the one found on this
+// machine: wherever they are installed, and whatever else is installed next
+// to them, the stub or its absence is what the hook finds.
+const TOOLS = ["git", "sh", "bash", "cat"];
+
+/** The absolute path of a command on this process's PATH. */
+function locate(command: string): string {
+  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+    const candidate = join(dir, command);
+    if (dir && existsSync(candidate)) return candidate;
+  }
+  throw new Error(`${command} is not on PATH`);
+}
 
 const STUB = `#!/bin/sh
 # Stands in for betterleaks: appends its arguments and, for the stdin scan,
@@ -43,6 +54,7 @@ type Scan = "git" | "stdin" | "both" | "none";
 
 let tmp: string;
 let work: string;
+let toolsDir: string;
 let stubDir: string;
 let log: string;
 
@@ -59,10 +71,10 @@ function git(
     cwd = work,
   }: { betterleaksInstalled?: boolean; failingScan?: Scan; cwd?: string } = {},
 ): { status: number; stdout: string; stderr: string } {
-  const result = spawnSync("git", args, {
+  const result = spawnSync(join(toolsDir, "git"), args, {
     cwd,
     env: {
-      PATH: betterleaksInstalled ? `${stubDir}:${SYSTEM_PATH}` : SYSTEM_PATH,
+      PATH: betterleaksInstalled ? `${stubDir}:${toolsDir}` : toolsDir,
       HOME: tmp,
       GIT_CONFIG_NOSYSTEM: "1",
       STUB_LOG: log,
@@ -132,9 +144,18 @@ function diffScans(): string[] {
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "dataverse-mcp-pre-push-"));
   work = join(tmp, "work");
+  toolsDir = join(tmp, "tools");
   stubDir = join(tmp, "bin");
   log = join(tmp, "stub.log");
 
+  mkdirSync(toolsDir);
+  for (const tool of TOOLS) {
+    writeFileSync(
+      join(toolsDir, tool),
+      `#!/bin/sh\nexec "${locate(tool)}" "$@"\n`,
+      { mode: 0o755 },
+    );
+  }
   mkdirSync(stubDir);
   writeFileSync(join(stubDir, "betterleaks"), STUB);
   chmodSync(join(stubDir, "betterleaks"), 0o755);
@@ -167,7 +188,9 @@ afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-describe("pre-push hook", () => {
+// The hook is a POSIX shell script; git for Windows brings its own sh, which
+// these tests do not look for.
+describe.skipIf(process.platform === "win32")("pre-push hook", () => {
   // Each scan on its own: a finding in a diff, or in a message, is enough.
   for (const failingScan of ["git", "stdin"] as const) {
     it(`refuses the push when the ${failingScan} scan fails`, () => {
@@ -229,7 +252,7 @@ describe("pre-push hook", () => {
     ]);
   });
 
-  it("scans each branch of one push", () => {
+  it("scans every branch of one push, in one scan", () => {
     pushedMain();
     mustGit(["switch", "--quiet", "-c", "one"]);
     const one = commit("one");
@@ -240,7 +263,25 @@ describe("pre-push hook", () => {
 
     expect(stubLog()).toContain(`commit ${one}`);
     expect(stubLog()).toContain(`commit ${two}`);
-    expect(diffScans()).toHaveLength(2);
+    expect(diffScans()).toEqual([
+      expect.stringContaining(
+        `--log-opts=--diff-merges=first-parent ${one} ${two} --not --remotes=origin`,
+      ),
+    ]);
+  });
+
+  it("reads the sha of a ref typed with spaces in it", () => {
+    pushedMain();
+    const second = commit("second");
+
+    expect(
+      git(["push", "origin", "HEAD@{0 minutes ago}:refs/heads/typed"]).status,
+    ).toBe(0);
+
+    expect(stubLog()).toContain(`commit ${second}`);
+    expect(diffScans()).toEqual([
+      expect.stringContaining(` ${second} --not --remotes=origin`),
+    ]);
   });
 
   it("does not scan a branch deletion", () => {
@@ -264,7 +305,7 @@ describe("pre-push hook", () => {
     });
 
     expect(push.status).toBe(0);
-    expect(push.stderr).toContain("pre-push: betterleaks is not installed");
+    expect(push.stderr).toContain("pre-push: betterleaks is not on PATH");
     expect(remoteBranches()).toEqual(["main"]);
   });
 });

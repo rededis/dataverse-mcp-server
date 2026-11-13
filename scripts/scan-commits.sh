@@ -25,7 +25,9 @@ fi
 betterleaks=$1
 shift
 
-cd "$(git rev-parse --show-toplevel)"
+# Assigned first: a failing rev-parse stops the script here, not at the scans.
+root=$(git rev-parse --show-toplevel)
+cd "$root"
 
 scan=("$betterleaks" --config .betterleaks.toml --redact --verbose --no-banner)
 status=0
