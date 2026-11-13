@@ -26,3 +26,25 @@ jobs:
       # Reads package-lock.json, so nothing needs installing.
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+
+  # What the MCP SDK inlined into its own dist/ (Ajv and others) reaches the
+  # image but has no entry in package-lock.json, so the audit above cannot
+  # see it (#130). The script reads the names and versions from the server
+  # bundle's source map and asks the registry about them; it needs the
+  # packages installed to bundle. server-release.yml runs it too.
+  inlined:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # No npm cache: the run has nothing to restore it for.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Audit packages inlined by the MCP SDK
+        run: node scripts/audit-inlined.mjs
