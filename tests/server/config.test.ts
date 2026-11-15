@@ -223,7 +223,10 @@ describe("readServerConfig: roles", () => {
         tokens: [{ name: "agent", sha256: sha256("a"), role: "all" }],
       }),
     );
-    expect(result.ok && result.config.roles.all?.groups).toEqual(groups);
+    expect(result).toMatchObject({
+      ok: true,
+      config: { roles: { all: { groups } } },
+    });
   });
 
   const support = {

@@ -62,7 +62,8 @@ jobs:
       # instead; only a pure function tested case by case keeps its export,
       # marked @internal with the reason (Knip then skips it). knip.json lists the
       # issue types by name: when Knip is bumped, compare the list with the
-      # issue types of the new release. Knip needs node_modules, so it runs
+      # issue types of the new release. Left out because strict mode never
+      # reports them: devDependencies, subpaths, catalog, catalogReferences. Knip needs node_modules, so it runs
       # only when npm ci did.
       - name: Unused code
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
