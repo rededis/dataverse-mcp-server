@@ -5,8 +5,6 @@ import { registerFunctionTools } from "./functions.js";
 import { registerMetadataReadTools } from "./metadata-read.js";
 import type { RegisterTools, ToolGroup } from "./types.js";
 
-export type { ToolRegistrar } from "./types.js";
-
 /**
  * The groups a remote server may expose. `development` is deliberately absent:
  * nothing reachable from this module imports ./development/, so a bundle built

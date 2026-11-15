@@ -61,6 +61,12 @@ describe("AuditLog.id", () => {
   it.each(["a".repeat(65), "ид"])("fingerprints %j", (v) => {
     expect(audit.id(v)).toEqual(fingerprint(v, KEY));
   });
+
+  it("fingerprints without an HMAC when there is no key", () => {
+    const unkeyed = new AuditLog({ write: () => {} });
+    expect(unkeyed.id("ид")).toEqual(fingerprint("ид"));
+    expect(unkeyed.id("ид")).not.toHaveProperty("hmac");
+  });
 });
 
 describe("callFields", () => {

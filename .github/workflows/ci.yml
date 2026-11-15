@@ -44,7 +44,8 @@ jobs:
           node-version: 24
           cache: npm
 
-      - run: npm ci
+      - id: install
+        run: npm ci
 
       # The same command the pre-commit hook runs (check in package.json).
       - name: Check
@@ -56,9 +57,12 @@ jobs:
       # Unused or unresolved code and dependencies, duplicate exports and
       # import cycles in what ships, src/, by knip.json (#123). Here only, not
       # in npm run check, which the pre-commit hook runs too: findings are
-      # rare. Tests and scripts are left out on purpose.
+      # rare. Tests and scripts are left out on purpose. knip.json lists the
+      # issue types by name: when Knip is bumped, compare the list with the
+      # issue types of the new release. Knip needs node_modules, so it runs
+      # only when npm ci did.
       - name: Unused code
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run knip -- --reporter github-actions
 
       # Spelling in every file git does not ignore, by _typos.toml (#127).
