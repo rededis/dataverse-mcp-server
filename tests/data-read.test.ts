@@ -6,7 +6,7 @@ import { createMockServer, GUID } from "./helpers.js";
 
 function readTools(client: unknown, entitySets?: EntitySetCatalog) {
   const server = createMockServer();
-  registerDataReadTools(server as any, {
+  registerDataReadTools(server, {
     client: client as DataverseClient,
     entitySets,
   });

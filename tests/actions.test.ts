@@ -10,7 +10,7 @@ describe("invoke_action", () => {
   it("posts an unbound action to /<name> with parameters as body", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({ ok: true }) } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("invoke_action")!.handler({
       name: "UnpublishDuplicateRule",
@@ -26,7 +26,7 @@ describe("invoke_action", () => {
   it("posts a bound action to /<set>(<id>)/Microsoft.Dynamics.CRM.<name>", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("invoke_action")!.handler({
       name: "QualifyLead",
@@ -46,7 +46,7 @@ describe("invoke_action", () => {
   it("posts bound PublishDuplicateRule to the duplicaterule entity", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("invoke_action")!.handler({
       name: "PublishDuplicateRule",
@@ -63,7 +63,7 @@ describe("invoke_action", () => {
   it("sends an empty body when no parameters are given", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("invoke_action")!.handler({ name: "WhoAmI" });
     expect(client.post).toHaveBeenCalledWith("/WhoAmI", {});
@@ -72,7 +72,7 @@ describe("invoke_action", () => {
   it("rejects an invalid operation name", async () => {
     const server = createMockServer();
     const client = { post: vi.fn() } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("invoke_action")!.handler({ name: "../accounts" }),
@@ -83,7 +83,7 @@ describe("invoke_action", () => {
   it("rejects a half-specified binding", async () => {
     const server = createMockServer();
     const client = { post: vi.fn() } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools
@@ -96,7 +96,7 @@ describe("invoke_action", () => {
   it("posts a bound action under its namespace whether or not the caller gave it", async () => {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("invoke_action")!.handler({
       name: "Microsoft.Dynamics.CRM.SendEmail",
@@ -117,7 +117,7 @@ describe("invoke_action", () => {
   ])("refuses the name %j: only the one namespace is known", async (name) => {
     const server = createMockServer();
     const client = { post: vi.fn() } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("invoke_action")!.handler({ name }),
@@ -128,7 +128,7 @@ describe("invoke_action", () => {
   it("refuses a bound call whose entity set would leave the path", async () => {
     const server = createMockServer();
     const client = { post: vi.fn() } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("invoke_action")!.handler({
@@ -145,7 +145,7 @@ describe("invoke_action allowlist", () => {
   function actionTools(actions: readonly string[] | "*") {
     const server = createMockServer();
     const client = { post: vi.fn().mockResolvedValue({}) } as any;
-    registerActionTools(server as any, {
+    registerActionTools(server, {
       client,
       permissions: { ...NO_PERMISSIONS, actions },
     });

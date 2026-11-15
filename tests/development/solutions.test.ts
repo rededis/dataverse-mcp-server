@@ -8,7 +8,7 @@ describe("list_solutions", () => {
     const client = {
       get: vi.fn().mockResolvedValue({ value: [{ uniquename: "Default" }] }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const tool = server.tools.get("list_solutions");
     expect(tool).toBeDefined();
@@ -26,7 +26,7 @@ describe("list_solutions", () => {
   it("includes managed solutions when include_managed=true", async () => {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools
       .get("list_solutions")!
@@ -49,7 +49,7 @@ describe("list_solutions", () => {
         })
         .mockResolvedValueOnce({ value: [{ uniquename: "B" }] }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("list_solutions")!.handler({});
     expect(client.get).toHaveBeenCalledTimes(2);

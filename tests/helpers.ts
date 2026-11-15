@@ -1,23 +1,27 @@
 import { vi } from "vitest";
 import { DataverseApiError } from "../src/errors.js";
 import { stdioPermissions } from "../src/tools/permissions.js";
-import type { ToolDeps } from "../src/tools/types.js";
+import type { ToolDeps, ToolRegistrar } from "../src/tools/types.js";
 
 // A stand-in for McpServer that records each tool registered through
 // `server.registerTool(name, config, handler)`, so tests can look a tool up by
 // name and call its handler directly.
 type Handler = (...args: any[]) => any;
 
+// What registerTool returns. Only this is cast: the tests never read it, and
+// a full RegisteredTool needs methods they do not use. The function itself is
+// not cast, so its parameters are checked against ToolRegistrar (#135).
+export const REGISTERED_TOOL = {} as ReturnType<ToolRegistrar["registerTool"]>;
+
 export function createMockServer() {
   const tools = new Map<string, { description: string; handler: Handler }>();
-  return {
-    registerTool: vi.fn(
-      (name: string, config: { description: string }, handler: Handler) => {
-        tools.set(name, { description: config.description, handler });
-      },
-    ),
-    tools,
-  };
+  const registerTool = vi.fn(
+    (name: string, config: { description?: string }, handler: Handler) => {
+      tools.set(name, { description: config.description ?? "", handler });
+      return REGISTERED_TOOL;
+    },
+  );
+  return { registerTool, tools } satisfies ToolRegistrar & { tools: unknown };
 }
 
 export const GUID = "11111111-1111-1111-1111-111111111111";
