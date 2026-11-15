@@ -9,17 +9,6 @@ type Handler = (...args: any[]) => any;
 // never read it, and a full RegisteredTool needs methods they do not use.
 type RegisterToolResult = ReturnType<ToolRegistrar["registerTool"]>;
 
-// The mock is checked against ToolRegistrar, not cast to it (#135). As a
-// method, registerTool's parameters are compared both ways, so a mock that
-// accepts less than the registrar passes would still fit. This function form
-// compares them one way. infer takes only the last overload, the raw-shape
-// one: the other overload's config is not compared.
-type StrictRegisterTool = ToolRegistrar["registerTool"] extends (
-  ...args: infer A
-) => infer R
-  ? (...args: A) => R
-  : never;
-
 interface RecordedTool {
   description: string | undefined;
   inputSchema: unknown;
@@ -44,7 +33,14 @@ export function createMockServer() {
       });
       return {} as RegisterToolResult;
     },
-  ) satisfies StrictRegisterTool;
+    // The mock is checked against ToolRegistrar, not cast to it (#135). As a
+    // method, registerTool's parameters are compared both ways, so a mock that
+    // accepts less than the registrar passes would still fit. This function
+    // form compares them one way. Parameters takes only the last overload,
+    // the raw-shape one: the other overload's config is not compared.
+  ) satisfies (
+    ...args: Parameters<ToolRegistrar["registerTool"]>
+  ) => RegisterToolResult;
   return { registerTool, tools };
 }
 

@@ -84,6 +84,7 @@ describe("tool groups", () => {
       const first = captureTools(registerAllTools, allowDelete);
       const second = captureTools(registerAllTools, allowDelete);
       for (const [name, tool] of first) {
+        expect(tool.inputSchema, name).toBeDefined();
         expect(second.get(name)?.inputSchema, name).toBe(tool.inputSchema);
       }
     });
