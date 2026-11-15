@@ -53,10 +53,10 @@ jobs:
       # The linters below run even when a step above failed, and each other's
       # failure does not skip them: one red run shows every problem.
 
-      # Unused exports, files and dependencies in what ships, src/, by
-      # knip.json (#123). Here only, not in npm run check: findings are rare,
-      # and the hook would run the same check again. Tests and scripts are
-      # left out on purpose.
+      # Unused or unresolved code and dependencies, duplicate exports and
+      # import cycles in what ships, src/, by knip.json (#123). Here only, not
+      # in npm run check, which the pre-commit hook runs too: findings are
+      # rare. Tests and scripts are left out on purpose.
       - name: Unused code
         if: ${{ !cancelled() }}
         run: npm run knip -- --reporter github-actions

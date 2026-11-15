@@ -38,8 +38,10 @@ export interface ServerConfig {
   tokens: TokenEntry[];
 }
 
-// Kept in step with SERVER_TOOL_GROUPS by tests/server/config.test.ts. Listed
-// here rather than imported, so reading the config does not load the tools.
+// Kept in step with SERVER_TOOL_GROUPS: a name that is not a server group is
+// a type error (satisfies below), and tests/server/config.test.ts fails when a
+// server group is missing. Listed here rather than imported, so reading the
+// config does not load the tools.
 const ROLE_GROUPS = [
   "metadata-read",
   "data-read",
