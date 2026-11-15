@@ -13,9 +13,7 @@ const client = {} as DataverseClient;
 function captureTools(register: RegisterTools, allowDelete = false) {
   const server = createMockServer();
   register(server, { client, ...stdio(allowDelete) });
-  return new Map(
-    [...server.tools].map(([name, tool]) => [name, tool.inputSchema]),
-  );
+  return server.tools;
 }
 
 // ADR-0001 §4. The group names are the vocabulary of role configuration, so
@@ -85,8 +83,8 @@ describe("tool groups", () => {
     it(`input schemas are shared between registrations, not rebuilt (allowDelete: ${allowDelete})`, () => {
       const first = captureTools(registerAllTools, allowDelete);
       const second = captureTools(registerAllTools, allowDelete);
-      for (const [name, schema] of first) {
-        expect(second.get(name), name).toBe(schema);
+      for (const [name, tool] of first) {
+        expect(second.get(name)?.inputSchema, name).toBe(tool.inputSchema);
       }
     });
   }

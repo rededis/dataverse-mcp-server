@@ -8,10 +8,20 @@ import type { ToolDeps, ToolRegistrar } from "../src/tools/types.js";
 // name and call its handler directly.
 type Handler = (...args: any[]) => any;
 
-// What registerTool returns. Only this is cast: the tests never read it, and
-// a full RegisteredTool needs methods they do not use. The function itself is
-// not cast, so its parameters are checked against ToolRegistrar (#135).
-const REGISTERED_TOOL = {} as ReturnType<ToolRegistrar["registerTool"]>;
+// What registerTool returns, a new one per call. Only this is cast: the tests
+// never read it, and a full RegisteredTool needs methods they do not use.
+type RegisteredTool = ReturnType<ToolRegistrar["registerTool"]>;
+
+// The mock is checked against ToolRegistrar, not cast to it (#135). As a
+// method, registerTool's parameters are compared both ways, so a mock that
+// accepts less than the registrar passes would still fit. This function form
+// compares them one way. infer takes the last overload, the raw-shape one;
+// the mock accepts the config of both.
+type StrictRegisterTool = ToolRegistrar["registerTool"] extends (
+  ...args: infer A
+) => infer R
+  ? (...args: A) => R
+  : never;
 
 interface RecordedTool {
   description: string | undefined;
@@ -32,13 +42,10 @@ export function createMockServer() {
         inputSchema: config.inputSchema,
         handler,
       });
-      return REGISTERED_TOOL;
+      return {} as RegisteredTool;
     },
-  );
-  return {
-    registerTool: registerTool satisfies ToolRegistrar["registerTool"],
-    tools,
-  };
+  ) satisfies StrictRegisterTool;
+  return { registerTool, tools };
 }
 
 export const GUID = "11111111-1111-1111-1111-111111111111";
