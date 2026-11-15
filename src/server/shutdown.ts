@@ -5,7 +5,7 @@ import type { Listener } from "./listener.js";
  * How long shutdown waits, within the 10 s Docker allows after SIGTERM before
  * it kills the container.
  */
-export const SHUTDOWN_BOUNDS = { callsMs: 5_000, flushMs: 2_000 };
+const SHUTDOWN_BOUNDS = { callsMs: 5_000, flushMs: 2_000 };
 
 /**
  * Stops the server without losing audit lines (#78): stop accepting, wait for

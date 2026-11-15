@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   expiredTokens,
-  ROLE_GROUPS,
   readListenSettings,
   readServerConfig,
 } from "../../src/server/config.js";
@@ -206,8 +205,28 @@ describe("readServerConfig", () => {
 });
 
 describe("readServerConfig: roles", () => {
-  it("knows exactly the server's tool groups", () => {
-    expect([...ROLE_GROUPS]).toEqual(Object.keys(SERVER_TOOL_GROUPS));
+  // The config lists its groups itself, so as not to load the tools; this
+  // keeps that list in step. A name outside the server's groups is a type
+  // error there.
+  it("accepts every one of the server's tool groups in a role", () => {
+    const groups = Object.keys(SERVER_TOOL_GROUPS);
+    const result = readServerConfig(
+      JSON.stringify({
+        roles: {
+          all: {
+            groups,
+            dataWrite: { create: ["tasks"] },
+            actions: ["SendEmail"],
+            functions: ["RetrieveTotalRecordCount"],
+          },
+        },
+        tokens: [{ name: "agent", sha256: sha256("a"), role: "all" }],
+      }),
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      config: { roles: { all: { groups } } },
+    });
   });
 
   const support = {

@@ -62,7 +62,12 @@ export function resolveBinding(entitySet?: string, id?: string): boolean {
   return hasSet;
 }
 
-/** Format a single value as an OData literal for inline function parameters. */
+/**
+ * Format a single value as an OData literal for inline function parameters.
+ *
+ * @internal Exported for its tests: a pure function, checked value type by
+ * value type rather than through a tool call (#123).
+ */
 export function formatODataLiteral(value: unknown): string {
   if (value === null || value === undefined) return "null";
   if (typeof value === "string") {

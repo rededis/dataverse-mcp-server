@@ -8,10 +8,9 @@ import type { DataverseClient } from "../client.js";
 import {
   SERVER_TOOL_GROUPS,
   type ServerToolGroup,
-  type ToolRegistrar,
 } from "../tools/server-groups.js";
 import { EntitySetCatalog } from "../tools/shared/paths.js";
-import type { ToolDeps } from "../tools/types.js";
+import type { ToolDeps, ToolRegistrar } from "../tools/types.js";
 import {
   type AuditLog,
   CallMetrics,

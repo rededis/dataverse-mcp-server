@@ -209,6 +209,11 @@ function buildAttributeBodyBound(
   );
 }
 
+/**
+ * @internal Exported for its tests: a pure function from a column spec to a
+ * request body, checked case by case against a table rather than through a
+ * tool call (#123).
+ */
 export function buildAttributeBody(
   attr: AttributeInput,
   globalOptionSetId?: string,

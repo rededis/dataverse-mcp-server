@@ -44,7 +44,8 @@ jobs:
           node-version: 24
           cache: npm
 
-      - run: npm ci
+      - id: install
+        run: npm ci
 
       # The same command the pre-commit hook runs (check in package.json).
       - name: Check
@@ -52,6 +53,21 @@ jobs:
 
       # The linters below run even when a step above failed, and each other's
       # failure does not skip them: one red run shows every problem.
+
+      # Unused or unresolved code and dependencies and duplicate exports in
+      # what ships, src/, by knip.json (#123); it repeats Biome's check for
+      # import cycles. Here only, not in npm run check, which the pre-commit
+      # hook runs too: findings are rare. Tests and scripts are left out on
+      # purpose. An export only a test uses: test through the public entry
+      # instead; only a pure function tested case by case keeps its export,
+      # marked @internal with the reason (Knip then skips it). knip.json lists the
+      # issue types by name: when Knip is bumped, compare the list with the
+      # issue types of the new release. Left out because strict mode never
+      # reports them: devDependencies, subpaths, catalog, catalogReferences. Knip needs node_modules, so it runs
+      # only when npm ci did.
+      - name: Unused code
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run knip -- --reporter github-actions
 
       # Spelling in every file git does not ignore, by _typos.toml (#127).
       # The release binary is checked against its sha256 by
