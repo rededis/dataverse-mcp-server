@@ -5,21 +5,17 @@ import type { DataverseClient } from "../src/client.js";
 import { registerAllTools } from "../src/tools/all.js";
 import { registerDevelopmentTools } from "../src/tools/development/index.js";
 import { SERVER_TOOL_GROUPS } from "../src/tools/server-groups.js";
-import type { RegisterTools, ToolRegistrar } from "../src/tools/types.js";
-import { REGISTERED_TOOL, stdio } from "./helpers.js";
+import type { RegisterTools } from "../src/tools/types.js";
+import { createMockServer, stdio } from "./helpers.js";
 
 const client = {} as DataverseClient;
 
 function captureTools(register: RegisterTools, allowDelete = false) {
-  const schemas = new Map<string, unknown>();
-  const server: ToolRegistrar = {
-    registerTool: (name: string, config: { inputSchema?: unknown }) => {
-      schemas.set(name, config.inputSchema);
-      return REGISTERED_TOOL;
-    },
-  };
+  const server = createMockServer();
   register(server, { client, ...stdio(allowDelete) });
-  return schemas;
+  return new Map(
+    [...server.tools].map(([name, tool]) => [name, tool.inputSchema]),
+  );
 }
 
 // ADR-0001 §4. The group names are the vocabulary of role configuration, so

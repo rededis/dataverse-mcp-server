@@ -151,7 +151,7 @@ describe("delete_picklist_option", () => {
       ...stdio(true),
     });
     const tool = server.tools.get("delete_picklist_option")!;
-    expect(tool.description.toLowerCase()).toContain("orphan");
+    expect(tool.description?.toLowerCase()).toContain("orphan");
   });
 
   it("returns isError when allowDelete is false (default)", async () => {

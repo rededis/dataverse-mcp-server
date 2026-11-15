@@ -11,17 +11,34 @@ type Handler = (...args: any[]) => any;
 // What registerTool returns. Only this is cast: the tests never read it, and
 // a full RegisteredTool needs methods they do not use. The function itself is
 // not cast, so its parameters are checked against ToolRegistrar (#135).
-export const REGISTERED_TOOL = {} as ReturnType<ToolRegistrar["registerTool"]>;
+const REGISTERED_TOOL = {} as ReturnType<ToolRegistrar["registerTool"]>;
+
+interface RecordedTool {
+  description: string | undefined;
+  inputSchema: unknown;
+  handler: Handler;
+}
 
 export function createMockServer() {
-  const tools = new Map<string, { description: string; handler: Handler }>();
+  const tools = new Map<string, RecordedTool>();
   const registerTool = vi.fn(
-    (name: string, config: { description?: string }, handler: Handler) => {
-      tools.set(name, { description: config.description ?? "", handler });
+    (
+      name: string,
+      config: { description?: string; inputSchema?: unknown },
+      handler: Handler,
+    ) => {
+      tools.set(name, {
+        description: config.description,
+        inputSchema: config.inputSchema,
+        handler,
+      });
       return REGISTERED_TOOL;
     },
   );
-  return { registerTool, tools } satisfies ToolRegistrar & { tools: unknown };
+  return {
+    registerTool: registerTool satisfies ToolRegistrar["registerTool"],
+    tools,
+  };
 }
 
 export const GUID = "11111111-1111-1111-1111-111111111111";
