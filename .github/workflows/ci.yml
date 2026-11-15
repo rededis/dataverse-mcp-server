@@ -54,10 +54,13 @@ jobs:
       # The linters below run even when a step above failed, and each other's
       # failure does not skip them: one red run shows every problem.
 
-      # Unused or unresolved code and dependencies, duplicate exports and
-      # import cycles in what ships, src/, by knip.json (#123). Here only, not
-      # in npm run check, which the pre-commit hook runs too: findings are
-      # rare. Tests and scripts are left out on purpose. knip.json lists the
+      # Unused or unresolved code and dependencies and duplicate exports in
+      # what ships, src/, by knip.json (#123); it repeats Biome's check for
+      # import cycles. Here only, not in npm run check, which the pre-commit
+      # hook runs too: findings are rare. Tests and scripts are left out on
+      # purpose. An export only a test uses: test through the public entry
+      # instead; only a pure function tested case by case keeps its export,
+      # marked @internal with the reason (Knip then skips it). knip.json lists the
       # issue types by name: when Knip is bumped, compare the list with the
       # issue types of the new release. Knip needs node_modules, so it runs
       # only when npm ci did.
