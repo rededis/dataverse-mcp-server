@@ -50,7 +50,7 @@ export function stdioPermissions(allowDelete: boolean): Permissions {
   };
 }
 
-export function allows(list: Allowlist, name: string): boolean {
+function allows(list: Allowlist, name: string): boolean {
   return list === "*" || list.includes(name);
 }
 

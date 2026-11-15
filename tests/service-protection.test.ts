@@ -5,11 +5,7 @@ import type {
   HttpResponse,
   RequestExecutor,
 } from "../src/executor.js";
-import {
-  ConcurrencyLimitExecutor,
-  RetryExecutor,
-  withServiceProtection,
-} from "../src/service-protection.js";
+import { withServiceProtection } from "../src/service-protection.js";
 
 const request: HttpRequest = {
   method: "GET",
@@ -75,10 +71,10 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("RetryExecutor", () => {
+describe("retrying a throttled request", () => {
   it("waits for Retry-After on a 429, then resends and returns the answer", async () => {
     const inner = answering(throttled("5"), response(200, {}, '{"value":[]}'));
-    const result = new RetryExecutor(inner).execute(request);
+    const result = withServiceProtection(inner).execute(request);
 
     await vi.advanceTimersByTimeAsync(4_999);
     expect(inner.execute).toHaveBeenCalledTimes(1);
@@ -92,7 +88,7 @@ describe("RetryExecutor", () => {
   it("fails fast when Retry-After is longer than the longest wait allowed", async () => {
     const inner = answering(throttled("45"));
 
-    const error = await new RetryExecutor(inner, { maxRetryWaitMs: 30_000 })
+    const error = await withServiceProtection(inner, { maxRetryWaitMs: 30_000 })
       .execute(request)
       .catch((e: unknown) => e);
 
@@ -110,7 +106,7 @@ describe("RetryExecutor", () => {
 
   it("gives up after the allowed number of attempts, saying when to retry", async () => {
     const inner = answering(throttled("1"), throttled("1"), throttled("2"));
-    const outcome = new RetryExecutor(inner, { maxAttempts: 3 })
+    const outcome = withServiceProtection(inner, { maxAttempts: 3 })
       .execute(request)
       .catch((e: unknown) => e);
 
@@ -135,7 +131,7 @@ describe("RetryExecutor", () => {
       throttled("Thu, 01 Oct 2026 12:00:03 GMT"),
       response(200),
     );
-    const result = new RetryExecutor(inner).execute(request);
+    const result = withServiceProtection(inner).execute(request);
 
     await vi.advanceTimersByTimeAsync(2_999);
     expect(inner.execute).toHaveBeenCalledTimes(1);
@@ -161,7 +157,7 @@ describe("RetryExecutor", () => {
         throttled(header),
         response(200),
       );
-      const result = new RetryExecutor(inner).execute(request);
+      const result = withServiceProtection(inner).execute(request);
 
       await vi.advanceTimersByTimeAsync(1_999);
       expect(inner.execute).toHaveBeenCalledTimes(1);
@@ -177,7 +173,7 @@ describe("RetryExecutor", () => {
   it("returns any other status untouched, without retrying", async () => {
     const inner = answering(response(503, { "Retry-After": "1" }, "down"));
 
-    const result = await new RetryExecutor(inner).execute(request);
+    const result = await withServiceProtection(inner).execute(request);
 
     expect(result.status).toBe(503);
     expect(result.body).toBe("down");
@@ -188,7 +184,7 @@ describe("RetryExecutor", () => {
     const failure = new DataverseTimeoutError(30_000, request);
     const inner = { execute: vi.fn().mockRejectedValue(failure) };
 
-    await expect(new RetryExecutor(inner).execute(request)).rejects.toBe(
+    await expect(withServiceProtection(inner).execute(request)).rejects.toBe(
       failure,
     );
     expect(inner.execute).toHaveBeenCalledTimes(1);
@@ -198,7 +194,7 @@ describe("RetryExecutor", () => {
   // duration is extended" (Microsoft Learn, service protection API limits).
   it("holds back other requests until the wait Dataverse asked for is over", async () => {
     const inner = answering(throttled("5"), response(200), response(200));
-    const executor = new RetryExecutor(inner);
+    const executor = withServiceProtection(inner);
 
     const first = executor.execute(request);
     await vi.advanceTimersByTimeAsync(1_000);
@@ -219,7 +215,7 @@ describe("RetryExecutor", () => {
   // as long as a request may wait anyway.
   it("holds other requests back for no longer than a request may wait, however long Retry-After is", async () => {
     const inner = answering(throttled("300"), response(200));
-    const executor = new RetryExecutor(inner, { maxRetryWaitMs: 15_000 });
+    const executor = withServiceProtection(inner, { maxRetryWaitMs: 15_000 });
     const first = await executor.execute(request).catch((e: unknown) => e);
     expect(first).toBeInstanceOf(DataverseBusyError);
     expect((first as DataverseBusyError).retryAfterMs).toBe(300_000);
@@ -236,7 +232,7 @@ describe("RetryExecutor", () => {
 
   it("holds nothing back when requests may not wait at all", async () => {
     const inner = answering(throttled("300"), response(200));
-    const executor = new RetryExecutor(inner, { maxRetryWaitMs: 0 });
+    const executor = withServiceProtection(inner, { maxRetryWaitMs: 0 });
     await executor.execute(request).catch(() => {});
 
     expect((await executor.execute(request)).status).toBe(200);
@@ -247,7 +243,7 @@ describe("RetryExecutor", () => {
   it("still sends when a wait of exactly the longest allowed ends a moment early", async () => {
     vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
     const inner = answering(throttled("15"), response(200));
-    const result = new RetryExecutor(inner, { maxRetryWaitMs: 15_000 })
+    const result = withServiceProtection(inner, { maxRetryWaitMs: 15_000 })
       .execute(request)
       .catch((e: unknown) => e);
 
@@ -266,7 +262,7 @@ describe("RetryExecutor", () => {
   // must not promise a retry the longer pause would turn away.
   it("tells a caller to wait for the whole pause, not only for its own Retry-After", async () => {
     const inner = answering(throttled("45"), throttled("5"));
-    const executor = new RetryExecutor(inner, {
+    const executor = withServiceProtection(inner, {
       maxAttempts: 1,
       maxRetryWaitMs: 60_000,
     });
@@ -287,7 +283,7 @@ describe("RetryExecutor", () => {
 
   it("counts the waits of one request together against the longest wait allowed", async () => {
     const inner = answering(throttled("20"), throttled("20"));
-    const outcome = new RetryExecutor(inner, { maxRetryWaitMs: 30_000 })
+    const outcome = withServiceProtection(inner, { maxRetryWaitMs: 30_000 })
       .execute(request)
       .catch((e: unknown) => e);
 
@@ -301,10 +297,10 @@ describe("RetryExecutor", () => {
   });
 });
 
-describe("ConcurrencyLimitExecutor", () => {
+describe("the concurrency limit", () => {
   it("sends no more than the limit at once, and the rest in arrival order", async () => {
     const inner = pending();
-    const executor = new ConcurrencyLimitExecutor(inner, { maxConcurrency: 2 });
+    const executor = withServiceProtection(inner, { maxConcurrency: 2 });
 
     const results = ["a", "b", "c", "d"].map((p) => executor.execute(get(p)));
     await vi.advanceTimersByTimeAsync(0);
@@ -329,7 +325,7 @@ describe("ConcurrencyLimitExecutor", () => {
 
   it("frees the slot when the request fails without a response", async () => {
     const inner = pending();
-    const executor = new ConcurrencyLimitExecutor(inner, { maxConcurrency: 1 });
+    const executor = withServiceProtection(inner, { maxConcurrency: 1 });
     const failure = new DataverseTimeoutError(30_000, request);
 
     const first = executor.execute(get("a")).catch((e: unknown) => e);
@@ -346,7 +342,7 @@ describe("ConcurrencyLimitExecutor", () => {
 
   it("turns a request away when the queue is full", async () => {
     const inner = pending();
-    const executor = new ConcurrencyLimitExecutor(inner, {
+    const executor = withServiceProtection(inner, {
       maxConcurrency: 1,
       maxQueueLength: 2,
     });
@@ -373,7 +369,7 @@ describe("ConcurrencyLimitExecutor", () => {
 
   it("states a wait that is not a whole number of seconds exactly", async () => {
     const inner = pending();
-    const executor = new ConcurrencyLimitExecutor(inner, {
+    const executor = withServiceProtection(inner, {
       maxConcurrency: 1,
       maxQueueWaitMs: 1_500,
     });
@@ -391,7 +387,7 @@ describe("ConcurrencyLimitExecutor", () => {
 
   it("gives up on a request that waited too long for its turn, and never sends it", async () => {
     const inner = pending();
-    const executor = new ConcurrencyLimitExecutor(inner, {
+    const executor = withServiceProtection(inner, {
       maxConcurrency: 1,
       maxQueueWaitMs: 10_000,
     });
@@ -467,7 +463,7 @@ describe("observing a request", () => {
 
   it("tells the throttled request from the one held back by it", async () => {
     const inner = pending();
-    const executor = new RetryExecutor(inner);
+    const executor = withServiceProtection(inner);
     const a = observed("a");
     const b = observed("b");
 

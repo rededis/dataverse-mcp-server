@@ -98,7 +98,7 @@ const PLAIN_ID = /^[A-Za-z0-9_.:-]{1,64}$/;
  * An id another system chose (a JSON-RPC id, an X-Request-Id): a number as
  * it is, a short plain string as it is, anything else fingerprinted.
  */
-export function plainOrFingerprint(
+function plainOrFingerprint(
   value: string | number,
   key?: string,
 ): string | number | Fingerprint {

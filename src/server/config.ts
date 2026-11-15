@@ -40,7 +40,7 @@ export interface ServerConfig {
 
 // Kept in step with SERVER_TOOL_GROUPS by tests/server/config.test.ts. Listed
 // here rather than imported, so reading the config does not load the tools.
-export const ROLE_GROUPS = [
+const ROLE_GROUPS = [
   "metadata-read",
   "data-read",
   "data-write",

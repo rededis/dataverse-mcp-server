@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  MAX_REQUEST_TIMEOUT_MS,
   readRequestTimeoutMs,
   readServiceProtectionSettings,
 } from "../src/config.js";
@@ -16,9 +15,9 @@ describe("readRequestTimeoutMs", () => {
 
   it("accepts a whole number of milliseconds up to the cap", () => {
     expect(readRequestTimeoutMs("45000")).toEqual({ ok: true, value: 45000 });
-    expect(readRequestTimeoutMs(String(MAX_REQUEST_TIMEOUT_MS))).toEqual({
+    expect(readRequestTimeoutMs("120000")).toEqual({
       ok: true,
-      value: MAX_REQUEST_TIMEOUT_MS,
+      value: 120000,
     });
   });
 
