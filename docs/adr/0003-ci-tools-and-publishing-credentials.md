@@ -91,7 +91,8 @@ tokens and the npm token secrets are removed from the repository.
 - `id-token: write` used to give the publishing job only provenance; now it
   also gives a credential that publishes. Only the publishing job can
   request it, and that job runs npm and the two pinned actions, nothing
-  from the repository (#156).
+  from the repository (#156). Code in the build job can still change the
+  tarball before it is packed, and provenance does not show that it did not.
 - A release from a maintenance branch runs that branch's `release.yml`. Each
   `maint/**` branch that may still release needs the trusted-publishing
   `release.yml` before the token is removed.

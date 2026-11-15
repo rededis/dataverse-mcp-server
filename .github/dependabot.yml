@@ -79,7 +79,9 @@ updates:
       actions:
         patterns:
           - actions/checkout
+          - actions/download-artifact
           - actions/setup-node
+          - actions/upload-artifact
           - docker/build-push-action
           - docker/login-action
           - docker/metadata-action
