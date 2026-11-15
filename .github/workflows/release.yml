@@ -105,11 +105,12 @@ jobs:
       # Trusted publishing: npm exchanges the job's OIDC token, no secret.
       # npmjs.com trusts this file by name: renaming it breaks publishing.
       # Access comes from publishConfig in the tarball's package.json.
-      # --provenance: fail rather than publish without provenance, which
-      # npm otherwise skips silently when generating it fails.
-      # --ignore-scripts: publishing a tarball runs no scripts. The flag keeps
-      # it so if this step goes back to publishing the folder, whose
-      # prepublishOnly would run next to the OIDC token.
+      # --provenance: provenance is required; without the flag npm publishes
+      # without it when generating it fails (lib/utils/oidc.js logs that at
+      # verbose level only).
+      # --ignore-scripts: a tarball runs no scripts anyway. The flag keeps
+      # prepublishOnly away from the OIDC token if this step ever publishes
+      # the folder again.
       - name: Publish to npm
         env:
           TARBALL: ${{ needs.build.outputs.tarball }}

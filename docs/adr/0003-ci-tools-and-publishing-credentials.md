@@ -74,8 +74,8 @@ pins a version is not enough.
 is granted to the publishing job only, the workflow level has no
 permissions. A build job without it runs `npm ci`, the checks and
 `npm pack`; the publishing job only downloads that tarball and publishes it
-with `--provenance --ignore-scripts`, so no code from the repository or its
-dependencies runs next to the token (#156).
+with provenance required and no lifecycle scripts, so no code from the
+repository or its dependencies runs next to the token (#156).
 
 The trusted publisher on npmjs.com names this repository and the file
 `release.yml`. Renaming the file breaks publishing until the setting on
