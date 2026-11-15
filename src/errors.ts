@@ -220,3 +220,6 @@ export function isTimeout(err: unknown): boolean {
 export function isNotFound(err: unknown): boolean {
   return err instanceof DataverseApiError && err.status === 404;
 }
+
+// Deliberately unused, to see the Knip step fail once (#123). Reverted next.
+export const KNIP_CANARY = 1;
