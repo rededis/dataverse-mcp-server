@@ -71,7 +71,8 @@ jobs:
           TARBALL="$(npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP/package" | jq -r '.[0].filename')"
           echo "tarball=${TARBALL}" >> "$GITHUB_OUTPUT"
 
-      # Only hands the tarball to publish, so it is kept for a day.
+      # Only hands the tarball to publish, so it is kept for a day. After
+      # that, "Re-run failed jobs" cannot download it: re-run all jobs.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-package
@@ -105,9 +106,10 @@ jobs:
       # Trusted publishing: npm exchanges the job's OIDC token, no secret.
       # npmjs.com trusts this file by name: renaming it breaks publishing.
       # Access comes from publishConfig in the tarball's package.json.
-      # --provenance: provenance is required; without the flag npm publishes
-      # without it when generating it fails (lib/utils/oidc.js logs that at
-      # verbose level only).
+      # --provenance: provenance is required. Without the flag npm turns it on
+      # only after checking that the repository and package are public; if
+      # that check fails, it publishes without provenance and logs this at
+      # verbose level only (lib/utils/oidc.js).
       # --ignore-scripts: a tarball runs no scripts anyway. The flag keeps
       # prepublishOnly away from the OIDC token if this step ever publishes
       # the folder again.
