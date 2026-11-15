@@ -10,7 +10,7 @@ describe("invoke_function", () => {
     const client = {
       get: vi.fn().mockResolvedValue({ UserId: GUID }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("invoke_function")!
@@ -23,7 +23,7 @@ describe("invoke_function", () => {
   it("rejects a parameter name that could inject into the URL", async () => {
     const server = createMockServer();
     const client = { get: vi.fn() } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools
@@ -36,7 +36,7 @@ describe("invoke_function", () => {
   it("inlines parameters into a bound function URL", async () => {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("invoke_function")!.handler({
       name: "RetrieveX",
@@ -55,7 +55,7 @@ describe("invoke_function allowlist", () => {
   function functionTools(functions: readonly string[]) {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({}) } as any;
-    registerFunctionTools(server as any, {
+    registerFunctionTools(server, {
       client,
       permissions: { ...NO_PERMISSIONS, functions },
     });

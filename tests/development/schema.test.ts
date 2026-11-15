@@ -394,7 +394,7 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
   it("resolves the set by name, then binds the created column by MetadataId", async () => {
     const server = createMockServer();
     const client = clientResolving(GUID);
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("add_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -424,7 +424,7 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
   it("reports a missing global set by name rather than surfacing the raw 404", async () => {
     const server = createMockServer();
     const client = clientResolving(null);
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("add_attribute")!.handler({
@@ -438,7 +438,7 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
   it("rejects a mutually-exclusive pair without spending a lookup", async () => {
     const server = createMockServer();
     const client = clientResolving(GUID);
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("add_attribute")!.handler({
@@ -452,7 +452,7 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
   it("create_entity resolves before creating the table, leaving nothing behind", async () => {
     const server = createMockServer();
     const client = clientResolving(null);
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("create_entity")!.handler({
@@ -472,7 +472,7 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
     // set is the cheapest way to reach that path.
     const server = createMockServer();
     const client = clientResolving(GUID);
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("create_entity")!.handler({
@@ -494,7 +494,7 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
       .fn()
       .mockResolvedValueOnce({ MetadataId: "entity-id" })
       .mockResolvedValue({});
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("create_entity")!.handler({
       logical_name: "fundai_new",
@@ -548,7 +548,7 @@ describe("create_entity", () => {
   it("sends HasNotes and HasActivities as false by default", async () => {
     const server = createMockServer();
     const client = clientCreatingEntity();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("create_entity")!.handler(table);
 
@@ -563,7 +563,7 @@ describe("create_entity", () => {
   it("sends HasNotes and HasActivities with attributes too, and posts the attributes to the created table", async () => {
     const server = createMockServer();
     const client = clientCreatingEntity();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("create_entity")!.handler({
       ...table,
@@ -589,7 +589,7 @@ describe("create_entity", () => {
   it("defaults OwnershipType to UserOwned", async () => {
     const server = createMockServer();
     const client = clientCreatingEntity();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const { ownership_type: _, ...withoutOwnership } = table;
     await server.tools.get("create_entity")!.handler(withoutOwnership);
@@ -613,7 +613,7 @@ describe("create_entity", () => {
       const client = clientCreatingEntity();
       const timeout = new DataverseTimeoutError(30_000, request);
       client.post.mockRejectedValueOnce(timeout);
-      registerAllTools(server as any, { client, ...stdio() });
+      registerAllTools(server, { client, ...stdio() });
 
       const err = await server.tools
         .get("create_entity")!
@@ -639,7 +639,7 @@ describe("create_entity", () => {
         .mockResolvedValueOnce(TABLE_CREATED)
         .mockResolvedValueOnce({})
         .mockRejectedValueOnce(refused);
-      registerAllTools(server as any, { client, ...stdio() });
+      registerAllTools(server, { client, ...stdio() });
 
       const err = await server.tools
         .get("create_entity")!
@@ -660,7 +660,7 @@ describe("create_entity", () => {
       client.post
         .mockResolvedValueOnce(TABLE_CREATED)
         .mockRejectedValueOnce(timeout);
-      registerAllTools(server as any, { client, ...stdio() });
+      registerAllTools(server, { client, ...stdio() });
 
       const err = await server.tools
         .get("create_entity")!
@@ -682,7 +682,7 @@ describe("create_entity", () => {
         .mockResolvedValueOnce({})
         .mockResolvedValueOnce({})
         .mockRejectedValueOnce(refused);
-      registerAllTools(server as any, { client, ...stdio() });
+      registerAllTools(server, { client, ...stdio() });
 
       const err = await server.tools
         .get("create_entity")!
@@ -700,7 +700,7 @@ describe("create_entity", () => {
       client.post.mockRejectedValueOnce(
         new DataverseTimeoutError(30_000, request),
       );
-      registerAllTools(server as any, { client, ...stdio() });
+      registerAllTools(server, { client, ...stdio() });
 
       const err = await server.tools
         .get("create_entity")!
@@ -716,7 +716,7 @@ describe("create_entity", () => {
       const server = createMockServer();
       const client = clientCreatingEntity();
       client.post.mockResolvedValueOnce({});
-      registerAllTools(server as any, { client, ...stdio() });
+      registerAllTools(server, { client, ...stdio() });
 
       await expect(
         server.tools
@@ -733,7 +733,7 @@ describe("create_entity", () => {
       const client = clientCreatingEntity();
       const refused = new DataverseApiError(400, request, "{}");
       client.post.mockRejectedValueOnce(refused);
-      registerAllTools(server as any, { client, ...stdio() });
+      registerAllTools(server, { client, ...stdio() });
 
       await expect(
         server.tools.get("create_entity")!.handler(table),
@@ -744,7 +744,7 @@ describe("create_entity", () => {
   it("passes has_notes and has_activities through", async () => {
     const server = createMockServer();
     const client = clientCreatingEntity();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("create_entity")!.handler({
       ...table,
@@ -786,7 +786,7 @@ describe("update_attribute", () => {
   it("GETs with the concrete type cast and PUTs the base path with If-Match: *", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -826,7 +826,7 @@ describe("update_attribute", () => {
     ] as const) {
       const server = createMockServer();
       const client = mockClient();
-      registerAllTools(server as any, { client, ...stdio() });
+      registerAllTools(server, { client, ...stdio() });
 
       await server.tools.get("update_attribute")!.handler({
         entity_logical_name: "fundai_x",
@@ -845,7 +845,7 @@ describe("update_attribute", () => {
   it("strips @odata.etag/@odata.context but keeps everything else from GET (merge preserves untouched fields)", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -875,7 +875,7 @@ describe("update_attribute", () => {
   it("user-supplied fields override values from GET", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -893,7 +893,7 @@ describe("update_attribute", () => {
   it("sends MSCRM.MergeLabels header when merge_labels=true", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -911,7 +911,7 @@ describe("update_attribute", () => {
   it("does not send MSCRM.MergeLabels header by default", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -927,7 +927,7 @@ describe("update_attribute", () => {
   it("returns isError when no mutable fields are provided (no-op guard); no HTTP calls made", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -954,7 +954,7 @@ describe("update_attribute", () => {
       FormatName: { Value: "Email" },
     };
     const client = mockClient(stringAttr as any);
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     // User only changes display_name — MaxLength/Format MUST survive.
     await server.tools.get("update_attribute")!.handler({
@@ -986,7 +986,7 @@ describe("update_attribute", () => {
       MinValue: -1000,
       MaxValue: 1000,
     } as any);
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -1018,7 +1018,7 @@ describe("update_attribute", () => {
       Format: "DateAndTime",
       DateTimeBehavior: { Value: "UserLocal" },
     } as any);
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -1036,7 +1036,7 @@ describe("update_attribute", () => {
   it("rejects date_format on non-DateTime type without calling HTTP", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("update_attribute")!.handler({
@@ -1053,7 +1053,7 @@ describe("update_attribute", () => {
   it("rejects DateOnly format with mismatched behavior on update_attribute", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("update_attribute")!.handler({
@@ -1072,7 +1072,7 @@ describe("delete_attribute", () => {
   it("returns an error when allowDelete is false", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn() } as any;
-    registerAllTools(server as any, { client, ...stdio(false) });
+    registerAllTools(server, { client, ...stdio(false) });
 
     const tool = server.tools.get("delete_attribute")!;
     expect(tool.description).toContain("disabled");
@@ -1089,7 +1089,7 @@ describe("delete_attribute", () => {
   it("calls client.delete when allowDelete is true", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, ...stdio(true) });
+    registerAllTools(server, { client, ...stdio(true) });
 
     const tool = server.tools.get("delete_attribute")!;
     expect(tool.description).not.toContain("currently disabled");
@@ -1110,7 +1110,7 @@ describe("delete_attribute", () => {
   it("escapes single quotes in entity/attribute names to prevent OData injection", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, ...stdio(true) });
+    registerAllTools(server, { client, ...stdio(true) });
 
     await server.tools.get("delete_attribute")!.handler({
       entity_logical_name: "weird'name",
@@ -1186,7 +1186,7 @@ describe("get_attribute_dependencies", () => {
   it("returns a flat array with resolved names, mapped component-type names, and the right RetrieveDependenciesForDelete call", async () => {
     const server = createMockServer();
     const client = makeClient();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_attribute_dependencies")!
@@ -1226,7 +1226,7 @@ describe("get_attribute_dependencies", () => {
   it("batches name resolution per component type (one HTTP call per type, not per dep)", async () => {
     const server = createMockServer();
     const client = makeClient();
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("get_attribute_dependencies")!.handler({
       entity_logical_name: "e",
@@ -1253,7 +1253,7 @@ describe("get_attribute_dependencies", () => {
         },
       ],
     });
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_attribute_dependencies")!
@@ -1276,7 +1276,7 @@ describe("get_attribute_dependencies", () => {
   it("returns empty array when the attribute has no dependencies", async () => {
     const server = createMockServer();
     const client = makeClient({ deps: [] });
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_attribute_dependencies")!
@@ -1302,7 +1302,7 @@ describe("get_attribute_dependencies", () => {
           ),
         ),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("get_attribute_dependencies")!.handler({
@@ -1319,7 +1319,7 @@ describe("get_attribute_dependencies", () => {
         .fn()
         .mockRejectedValue(new Error("Dataverse API error (500): boom")),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("get_attribute_dependencies")!.handler({
@@ -1332,7 +1332,7 @@ describe("get_attribute_dependencies", () => {
   it("escapes single quotes in logical names (OData injection)", async () => {
     const server = createMockServer();
     const client = makeClient({ deps: [] });
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("get_attribute_dependencies")!.handler({
       entity_logical_name: "weird'entity",
@@ -1354,7 +1354,7 @@ describe("get_attribute_dependencies", () => {
         { dependentcomponenttype: 60, dependentcomponentobjectid: FORM_B },
       ],
     });
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_attribute_dependencies")!
@@ -1382,7 +1382,7 @@ describe("add_entity_key", () => {
     const client = {
       request: vi.fn().mockResolvedValue({ MetadataId: "abc" }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("add_entity_key")!.handler({
       entity_logical_name: "contoso_record",
@@ -1416,7 +1416,7 @@ describe("add_entity_key", () => {
   it("sends MSCRM.SolutionUniqueName header when solution_unique_name is provided", async () => {
     const server = createMockServer();
     const client = { request: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("add_entity_key")!.handler({
       entity_logical_name: "contoso_record",
@@ -1433,7 +1433,7 @@ describe("add_entity_key", () => {
   it("escapes single quotes in entity name (OData injection)", async () => {
     const server = createMockServer();
     const client = { request: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("add_entity_key")!.handler({
       entity_logical_name: "weird'name",
@@ -1450,7 +1450,7 @@ describe("delete_entity_key", () => {
   it("returns an error when allowDelete is false", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn() } as any;
-    registerAllTools(server as any, { client, ...stdio(false) });
+    registerAllTools(server, { client, ...stdio(false) });
 
     const tool = server.tools.get("delete_entity_key")!;
     expect(tool.description).toContain("disabled");
@@ -1467,7 +1467,7 @@ describe("delete_entity_key", () => {
   it("calls client.delete when allowDelete is true", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, ...stdio(true) });
+    registerAllTools(server, { client, ...stdio(true) });
 
     const tool = server.tools.get("delete_entity_key")!;
     expect(tool.description).not.toContain("currently disabled");
@@ -1485,7 +1485,7 @@ describe("delete_entity_key", () => {
   it("escapes single quotes in entity/key names (OData injection)", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, ...stdio(true) });
+    registerAllTools(server, { client, ...stdio(true) });
 
     await server.tools.get("delete_entity_key")!.handler({
       entity_logical_name: "weird'name",

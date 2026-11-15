@@ -9,7 +9,7 @@ const mockClient = {} as DataverseClient;
 
 function writeTools(permissions: Partial<Permissions>, client = mockClient) {
   const server = createMockServer();
-  registerDataWriteTools(server as any, {
+  registerDataWriteTools(server, {
     client,
     permissions: { ...NO_PERMISSIONS, ...permissions },
   });
@@ -27,7 +27,7 @@ function writingClient() {
 describe("delete_record on stdio", () => {
   it("is a stub pointing at DATAVERSE_ALLOW_DELETE when deleting is off", async () => {
     const server = createMockServer();
-    registerAllTools(server as any, { client: mockClient, ...stdio(false) });
+    registerAllTools(server, { client: mockClient, ...stdio(false) });
 
     const deleteTool = server.tools.get("delete_record");
     expect(deleteTool).toBeDefined();
@@ -41,7 +41,7 @@ describe("delete_record on stdio", () => {
   it("deletes any entity set when deleting is on", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn() } as any;
-    registerAllTools(server as any, { client, ...stdio(true) });
+    registerAllTools(server, { client, ...stdio(true) });
 
     const deleteTool = server.tools.get("delete_record");
     expect(deleteTool!.description).not.toContain("disabled");
@@ -54,7 +54,7 @@ describe("delete_record on stdio", () => {
 describe("registration follows the permissions", () => {
   it("registers nothing without permissions", () => {
     const server = createMockServer();
-    registerDataWriteTools(server as any, { client: mockClient });
+    registerDataWriteTools(server, { client: mockClient });
     expect([...server.tools.keys()]).toEqual([]);
   });
 
@@ -263,7 +263,7 @@ describe("unknown entity sets", () => {
   it("refuses a name that is not an entity set, before writing", async () => {
     const client = writingClient();
     const server = createMockServer();
-    registerDataWriteTools(server as any, {
+    registerDataWriteTools(server, {
       client: client as unknown as DataverseClient,
       permissions: { ...NO_PERMISSIONS, create: "*" },
       entitySets: {

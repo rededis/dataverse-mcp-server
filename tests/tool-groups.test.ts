@@ -6,19 +6,14 @@ import { registerAllTools } from "../src/tools/all.js";
 import { registerDevelopmentTools } from "../src/tools/development/index.js";
 import { SERVER_TOOL_GROUPS } from "../src/tools/server-groups.js";
 import type { RegisterTools } from "../src/tools/types.js";
-import { stdio } from "./helpers.js";
+import { createMockServer, stdio } from "./helpers.js";
 
 const client = {} as DataverseClient;
 
 function captureTools(register: RegisterTools, allowDelete = false) {
-  const schemas = new Map<string, unknown>();
-  const server = {
-    registerTool: (name: string, config: { inputSchema: unknown }) => {
-      schemas.set(name, config.inputSchema);
-    },
-  };
-  register(server as any, { client, ...stdio(allowDelete) });
-  return schemas;
+  const server = createMockServer();
+  register(server, { client, ...stdio(allowDelete) });
+  return server.tools;
 }
 
 // ADR-0001 §4. The group names are the vocabulary of role configuration, so
@@ -88,8 +83,9 @@ describe("tool groups", () => {
     it(`input schemas are shared between registrations, not rebuilt (allowDelete: ${allowDelete})`, () => {
       const first = captureTools(registerAllTools, allowDelete);
       const second = captureTools(registerAllTools, allowDelete);
-      for (const [name, schema] of first) {
-        expect(second.get(name), name).toBe(schema);
+      for (const [name, tool] of first) {
+        expect(tool.inputSchema, name).toBeDefined();
+        expect(second.get(name)?.inputSchema, name).toBe(tool.inputSchema);
       }
     });
   }
