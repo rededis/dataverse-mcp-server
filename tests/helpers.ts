@@ -3,20 +3,17 @@ import { DataverseApiError } from "../src/errors.js";
 import { stdioPermissions } from "../src/tools/permissions.js";
 import type { ToolDeps, ToolRegistrar } from "../src/tools/types.js";
 
-// A stand-in for McpServer that records each tool registered through
-// `server.registerTool(name, config, handler)`, so tests can look a tool up by
-// name and call its handler directly.
 type Handler = (...args: any[]) => any;
 
 // What registerTool returns, a new one per call. Only this is cast: the tests
 // never read it, and a full RegisteredTool needs methods they do not use.
-type RegisteredTool = ReturnType<ToolRegistrar["registerTool"]>;
+type RegisterToolResult = ReturnType<ToolRegistrar["registerTool"]>;
 
 // The mock is checked against ToolRegistrar, not cast to it (#135). As a
 // method, registerTool's parameters are compared both ways, so a mock that
 // accepts less than the registrar passes would still fit. This function form
-// compares them one way. infer takes the last overload, the raw-shape one;
-// the mock accepts the config of both.
+// compares them one way. infer takes only the last overload, the raw-shape
+// one: the other overload's config is not compared.
 type StrictRegisterTool = ToolRegistrar["registerTool"] extends (
   ...args: infer A
 ) => infer R
@@ -29,6 +26,9 @@ interface RecordedTool {
   handler: Handler;
 }
 
+// A stand-in for the server's ToolRegistrar that records each tool registered
+// through `server.registerTool(name, config, handler)`, so tests can look a
+// tool up by name and call its handler directly.
 export function createMockServer() {
   const tools = new Map<string, RecordedTool>();
   const registerTool = vi.fn(
@@ -42,7 +42,7 @@ export function createMockServer() {
         inputSchema: config.inputSchema,
         handler,
       });
-      return {} as RegisteredTool;
+      return {} as RegisterToolResult;
     },
   ) satisfies StrictRegisterTool;
   return { registerTool, tools };
