@@ -32,9 +32,12 @@ jobs:
           persist-credentials: false
 
       # No npm cache: a poisoned cache entry would end up in what is published.
+      # Off explicitly: setup-node turns it on by itself once package.json
+      # names a packageManager.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
+          package-manager-cache: false
 
       # No audit gate here, unlike server-release.yml: the package ships no
       # lockfile, so users install whatever the ranges in package.json resolve
@@ -68,7 +71,7 @@ jobs:
         shell: bash # pipefail: a failed npm pack fails the step
         run: |
           mkdir -p "$RUNNER_TEMP/package"
-          TARBALL="$(npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP/package" | jq -r '.[0].filename')"
+          TARBALL="$(npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP/package" | jq -er '.[0].filename')"
           echo "tarball=${TARBALL}" >> "$GITHUB_OUTPUT"
 
       # Only hands the tarball to publish, so it is kept for a day. After
@@ -102,6 +105,20 @@ jobs:
         with:
           name: npm-package
           path: ${{ runner.temp }}/package
+
+      # The version guard ran in build, next to third-party code. Check the
+      # version inside the tarball against the tag again here.
+      - name: Verify tarball version matches release tag
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball }}
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(tar -xOzf "$RUNNER_TEMP/package/$TARBALL" package/package.json | jq -er .version)"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Release tag ${GITHUB_REF_NAME} (-> ${TAG}) does not match the tarball's version (${PKG})"
+            exit 1
+          fi
 
       # Trusted publishing: npm exchanges the job's OIDC token, no secret.
       # npmjs.com trusts this file by name: renaming it breaks publishing.
