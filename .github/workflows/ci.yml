@@ -79,9 +79,9 @@ jobs:
       - name: Spell check
         if: ${{ !cancelled() }}
         env:
-          VERSION: 1.52.0
+          VERSION: 1.52.2
           PLATFORM: x86_64-unknown-linux-musl
-          SHA256: 6155d4114f9a0f5b8f6d4fda96266c9d5f6add71df80da7f684ee5e72eb14588
+          SHA256: 3b13d1291281d39d01822e54035636487a7a0f228e70097899b1e33aeb0e7e93
         run: |
           bash scripts/fetch-verified.sh \
             "https://github.com/crate-ci/typos/releases/download/v${VERSION}/typos-v${VERSION}-${PLATFORM}.tar.gz" \
@@ -105,9 +105,9 @@ jobs:
       - name: Workflow lint
         if: ${{ !cancelled() }}
         env:
-          VERSION: 2.5.0
+          VERSION: 2.6.0
           PLATFORM: linux_amd64
-          SHA256: 5ac307b0499bb0eab45ae99c23e8e0790874fbc667c75224410954e0e3c6e0f5
+          SHA256: d5400967b8f0d3a5ae9a4cee21f56400a50eb3f05d0cbb4ef17184f17f0760c8
         run: |
           bash scripts/fetch-verified.sh \
             "https://github.com/jdx/jactionlint/releases/download/v${VERSION}/jactionlint_${VERSION}_${PLATFORM}.tar.gz" \
@@ -130,9 +130,9 @@ jobs:
       - name: Environment host and tenant ID scan
         if: ${{ !cancelled() }}
         env:
-          VERSION: 1.10.0
+          VERSION: 1.10.1
           PLATFORM: linux_x64
-          SHA256: 9d9ad503cd5d80d18a939352266c3fcca52f10da9b83cd5cfe646989b13940fe
+          SHA256: c174b42d7aa60caf58c0c3e555c0e4bed01fe6b0d99a412bce777b5af4ce913e
         run: |
           bash scripts/fetch-verified.sh \
             "https://github.com/betterleaks/betterleaks/releases/download/v${VERSION}/betterleaks_${VERSION}_${PLATFORM}.tar.gz" \
