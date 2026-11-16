@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-11-10
-- **Issue:** #121; amended by #157 (typos), #124 (Betterleaks) and #167 (pre-push hook)
+- **Issue:** #121; amended by #157 (typos), #124 (Betterleaks), #167 (pre-push hook) and #156 (publish job)
 - **Relates to:** [ADR-0001](0001-local-and-remote-variants.md) §13 (release lines)
 
 ## Context
@@ -72,7 +72,10 @@ pins a version is not enough.
 
 `release.yml` publishes with npm trusted publishing (OIDC). `id-token: write`
 is granted to the publishing job only, the workflow level has no
-permissions. npm adds provenance itself.
+permissions. A build job without it runs `npm ci`, the checks and
+`npm pack`; the publishing job only downloads that tarball and publishes it
+with provenance required and no lifecycle scripts, so no code from the
+repository or its dependencies runs next to the token (#156).
 
 The trusted publisher on npmjs.com names this repository and the file
 `release.yml`. Renaming the file breaks publishing until the setting on
@@ -86,9 +89,10 @@ tokens and the npm token secrets are removed from the repository.
 - Updating jactionlint, typos (#157) or Betterleaks (#124) is a manual
   edit of two values; nothing reminds anyone to do it.
 - `id-token: write` used to give the publishing job only provenance; now it
-  also gives a credential that publishes. Every step of the job can request
-  it, `npm ci` and the tests included, until #156 moves the build to a job
-  without it.
+  also gives a credential that publishes. Only the publishing job can
+  request it, and that job runs npm and the two pinned actions, nothing
+  from the repository (#156). Code in the build job can still change the
+  tarball before it is packed, and provenance does not show that it did not.
 - A release from a maintenance branch runs that branch's `release.yml`. Each
   `maint/**` branch that may still release needs the trusted-publishing
   `release.yml` before the token is removed.
@@ -101,6 +105,11 @@ tokens and the npm token secrets are removed from the repository.
 - npm, [Trusted publishing](https://docs.npmjs.com/trusted-publishers):
   npm CLI 11.5.1 or later and Node 22.14.0 or later, `id-token: write`,
   provenance generated automatically when publishing from GitHub Actions.
+- npm CLI v11.19.1, `lib/utils/oidc.js`: without `--provenance`, npm turns
+  provenance on only after checking that the repository and package are
+  public; if that check fails, it logs this at verbose level only and
+  publishes without provenance, hence `--provenance`.
+  <https://github.com/npm/cli/blob/v11.19.1/lib/utils/oidc.js>
 - typos v1.52.0 release: archives only, no checksums file; immutable, with
   a release attestation that `gh release verify-asset` checks.
   <https://github.com/crate-ci/typos/releases/tag/v1.52.0>

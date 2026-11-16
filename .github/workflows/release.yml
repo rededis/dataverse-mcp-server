@@ -13,24 +13,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
+  build:
     # Only v* tags: server-v* is the image's line (server-release.yml,
-    # ADR-0001 §13).
+    # ADR-0001 §13). publish needs this job, so it is skipped with it.
     if: ${{ startsWith(github.event.release.tag_name, 'v') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # No id-token: npm ci and the checks run third-party code, which must not
+    # be able to request the token that npm trusted publishing accepts.
     permissions:
       contents: read
-      id-token: write # npm trusted publishing (ADR-0003)
+    outputs:
+      tarball: ${{ steps.pack.outputs.tarball }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # No npm cache: a poisoned cache entry would end up in what is published.
+      # Off explicitly: setup-node turns it on by itself once package.json
+      # names a packageManager.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
       # No audit gate here, unlike server-release.yml: the package ships no
       # lockfile, so users install whatever the ranges in package.json resolve
@@ -54,12 +61,76 @@ jobs:
             exit 1
           fi
 
-      # Leaves dist/ in place for npm publish.
       - name: Check
         run: npm run check
 
+      # Packs the dist/ that Check built. --ignore-scripts skips prepare
+      # (husky), which adds nothing to the package.
+      - name: Pack
+        id: pack
+        shell: bash # pipefail: a failed npm pack fails the step
+        run: |
+          mkdir -p "$RUNNER_TEMP/package"
+          TARBALL="$(npm pack --ignore-scripts --json --pack-destination "$RUNNER_TEMP/package" | jq -er '.[0].filename')"
+          echo "tarball=${TARBALL}" >> "$GITHUB_OUTPUT"
+
+      # Only hands the tarball to publish, so it is kept for a day. After
+      # that, "Re-run failed jobs" cannot download it: re-run all jobs.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-package
+          path: ${{ runner.temp }}/package/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # No checkout and no install: this job runs no code from the repository
+    # or its dependencies.
+    permissions:
+      id-token: write # npm trusted publishing (ADR-0003)
+
+    steps:
+      # The current Node 24, whose npm is 11.5.1 or later, which trusted
+      # publishing needs. No checkout, so there is nothing to cache.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Fails if the artifact's digest differs from the upload.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: npm-package
+          path: ${{ runner.temp }}/package
+
+      # The version guard ran in build, next to third-party code. Check the
+      # version inside the tarball against the tag again here.
+      - name: Verify tarball version matches release tag
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball }}
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(tar -xOzf "$RUNNER_TEMP/package/$TARBALL" package/package.json | jq -er .version)"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Release tag ${GITHUB_REF_NAME} (-> ${TAG}) does not match the tarball's version (${PKG})"
+            exit 1
+          fi
+
       # Trusted publishing: npm exchanges the job's OIDC token, no secret.
       # npmjs.com trusts this file by name: renaming it breaks publishing.
-      # Provenance is added on its own; access comes from publishConfig.
+      # Access comes from publishConfig in the tarball's package.json.
+      # --provenance: provenance is required. Without the flag npm turns it on
+      # only after checking that the repository and package are public; if
+      # that check fails, it publishes without provenance and logs this at
+      # verbose level only (lib/utils/oidc.js).
+      # --ignore-scripts: a tarball runs no scripts anyway. The flag keeps
+      # prepublishOnly away from the OIDC token if this step ever publishes
+      # the folder again.
       - name: Publish to npm
-        run: npm publish
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball }}
+        run: npm publish "$RUNNER_TEMP/package/$TARBALL" --provenance --ignore-scripts
