@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-16
+
 ### Changed
 
 - **BREAKING** — Node 24 or later is required. Node 20 reached end of life on 2026-04-30, and Node 22 is in maintenance until 2027-04-30 (#101).
@@ -282,7 +284,8 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.8.0...v0.9.0
