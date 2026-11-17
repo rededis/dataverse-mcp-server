@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-17
+
+### Security
+
+- `@hono/node-server` 2.1.9 and `hono` 4.13.19, brought in by `@modelcontextprotocol/node`, which fix [GHSA-jpvv-r467-5p4w](https://github.com/advisories/GHSA-jpvv-r467-5p4w) and [GHSA-qv5m-9pm6-hqp3](https://github.com/advisories/GHSA-qv5m-9pm6-hqp3) in `@hono/node-server` and [GHSA-h7mg-cq63-vhpq](https://github.com/advisories/GHSA-h7mg-cq63-vhpq), [GHSA-4m76-xfj5-7975](https://github.com/advisories/GHSA-4m76-xfj5-7975), [GHSA-4h7h-rv7c-7m2v](https://github.com/advisories/GHSA-4h7h-rv7c-7m2v), [GHSA-46wx-v44x-9hh2](https://github.com/advisories/GHSA-46wx-v44x-9hh2) and [GHSA-3gg2-335m-rxc6](https://github.com/advisories/GHSA-3gg2-335m-rxc6) in `hono`. The stdio server does not load these packages, so for it the change only clears the `npm audit` warnings (#184).
+
 ## [0.10.0] - 2026-11-16
 
 ### Changed
@@ -284,7 +290,8 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.0...v0.9.1
