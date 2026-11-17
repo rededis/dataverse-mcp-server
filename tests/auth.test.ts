@@ -30,7 +30,7 @@ describe("DataverseAuth", () => {
     expect(token).toBe("mock-token-123");
     expect(fetchSpy).toHaveBeenCalledOnce();
 
-    const [url, options] = fetchSpy.mock.calls[0];
+    const [url, options] = fetchSpy.mock.calls[0]!;
     expect(url).toBe(
       "https://login.microsoftonline.com/tenant-id/oauth2/v2.0/token",
     );
@@ -161,7 +161,10 @@ describe("DataverseAuth", () => {
     ["has no access_token", '{"expires_in":3600}'],
     ["has an empty access_token", '{"access_token":"","expires_in":3600}'],
     ["has no expires_in", '{"access_token":"t"}'],
-    ["has a non-numeric expires_in", '{"access_token":"t","expires_in":"soon"}'],
+    [
+      "has a non-numeric expires_in",
+      '{"access_token":"t","expires_in":"soon"}',
+    ],
   ]) {
     it(`rejects a 200 token response that ${label}, and caches nothing`, async () => {
       const fetchSpy = vi

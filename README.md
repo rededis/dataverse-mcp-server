@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/@rededis/dataverse-mcp-server.svg)](https://www.npmjs.com/package/@rededis/dataverse-mcp-server)
 [![CI](https://github.com/rededis/dataverse-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/rededis/dataverse-mcp-server/actions/workflows/ci.yml)
 [![Node.js](https://img.shields.io/node/v/@rededis/dataverse-mcp-server.svg)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6.svg)](https://www.typescriptlang.org)
+[![TypeScript](https://img.shields.io/github/package-json/dependency-version/rededis/dataverse-mcp-server/dev/typescript?color=3178C6)](https://www.typescriptlang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-default](#safety) configuration. Works with any Dataverse / Dynamics 365 environment.
@@ -189,6 +189,8 @@ The concurrency limit alone does not prevent throttling, since Dataverse also li
 npm install
 npm run build
 ```
+
+`npm run check` is what the pre-commit hook and CI run. CI also runs `npm run knip`, which fails on unused or unresolved code and dependencies and duplicate exports in `src/` ([Knip](https://knip.dev)); tests and scripts are not checked. An export that only a test uses is tested through the public entry instead; a pure function tested case by case may keep its export, marked `@internal` with the reason. The pre-push hook scans the commits being pushed for environment hosts and tenant or client IDs with [Betterleaks](https://github.com/betterleaks/betterleaks), if it is installed (`brew install betterleaks`, or the release binary); without it the push goes through with a warning and CI runs the scan. A git client that runs hooks with its own `PATH` may not find an installed Betterleaks; husky reads `~/.config/husky/init.sh`, where `PATH` can be set.
 
 ### Claude Code configuration (local build)
 

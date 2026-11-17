@@ -1,7 +1,7 @@
-import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { buildODataQuery } from "./shared/odata.js";
-import type { ToolDeps } from "./types.js";
+import { assertEntitySetName, assertRecordId } from "./shared/paths.js";
+import type { ToolDeps, ToolRegistrar } from "./types.js";
 
 const QUERY_RECORDS_INPUT = z.object({
   entity_set: z
@@ -38,8 +38,11 @@ const GET_RECORD_INPUT = z.object({
     .describe("Related entities to expand ($expand)"),
 });
 
-export function registerDataReadTools(server: McpServer, deps: ToolDeps): void {
-  const { client } = deps;
+export function registerDataReadTools(
+  server: ToolRegistrar,
+  deps: ToolDeps,
+): void {
+  const { client, entitySets } = deps;
   server.registerTool(
     "query_records",
     {
@@ -47,6 +50,8 @@ export function registerDataReadTools(server: McpServer, deps: ToolDeps): void {
       inputSchema: QUERY_RECORDS_INPUT,
     },
     async ({ entity_set, select, filter, top, orderby, expand }) => {
+      assertEntitySetName(entity_set);
+      await entitySets?.assertExists(entity_set);
       const query = buildODataQuery({
         $select: select,
         $filter: filter,
@@ -75,6 +80,9 @@ export function registerDataReadTools(server: McpServer, deps: ToolDeps): void {
       inputSchema: GET_RECORD_INPUT,
     },
     async ({ entity_set, id, select, expand }) => {
+      assertEntitySetName(entity_set);
+      assertRecordId(id);
+      await entitySets?.assertExists(entity_set);
       const query = buildODataQuery({ $select: select, $expand: expand });
       const result = await client.get(`/${entity_set}(${id})${query}`);
       return {

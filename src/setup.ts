@@ -1,5 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import type { ToolRegistrar } from "./tools/types.js";
 
 export interface SetupProblems {
   /** Required variables that are not set. */
@@ -18,7 +18,7 @@ const SETUP_INPUT = z.object({});
  * so the client shows the user what to fix rather than failing on first use.
  */
 export function registerSetupTool(
-  server: McpServer,
+  server: ToolRegistrar,
   { missing, invalid, envFilePath, envExamplePath, hasEnvFile }: SetupProblems,
 ): void {
   server.registerTool(

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildODataQuery, escapeODataString } from "../../src/tools/shared/odata.js";
+import {
+  buildODataQuery,
+  escapeODataString,
+} from "../../src/tools/shared/odata.js";
 
 describe("escapeODataString", () => {
   it("returns string unchanged when no quotes", () => {

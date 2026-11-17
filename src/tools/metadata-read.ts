@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { DataverseClient } from "../client.js";
 import { isNotFound } from "../errors.js";
@@ -20,11 +19,12 @@ import {
   type RawOptionSet,
   summarizeOptionSet,
 } from "./shared/optionset.js";
+import { assertLogicalName } from "./shared/paths.js";
 import {
   LOCATION_INPUT,
   validatePicklistLocation,
 } from "./shared/picklist-location.js";
-import type { ToolDeps } from "./types.js";
+import type { ToolDeps, ToolRegistrar } from "./types.js";
 
 const METADATA_ID_CHUNK_SIZE = 50;
 
@@ -46,12 +46,13 @@ async function getEntityIdsInSolution(
   const solutionsResult = (await client.get(`/solutions${solutionsQuery}`)) as {
     value: Array<{ solutionid: string }>;
   };
-  if (solutionsResult.value.length === 0) {
+  const [solution] = solutionsResult.value;
+  if (!solution) {
     throw new Error(
       `Solution not found: '${solutionUniqueName}'. Use list_solutions to see available solutions.`,
     );
   }
-  const solutionId = solutionsResult.value[0].solutionid;
+  const solutionId = solution.solutionid;
 
   // componenttype = 1 is Entity (table)
   const componentsQuery = buildODataQuery({
@@ -93,7 +94,7 @@ const LIST_ENTITY_KEYS_INPUT = z.object({
 });
 
 export function registerMetadataReadTools(
-  server: McpServer,
+  server: ToolRegistrar,
   deps: ToolDeps,
 ): void {
   const {
@@ -183,6 +184,7 @@ export function registerMetadataReadTools(
       inputSchema: GET_ENTITY_SCHEMA_INPUT,
     },
     async ({ entity_logical_name }) => {
+      assertLogicalName(entity_logical_name, "entity logical name");
       const escaped = escapeODataString(entity_logical_name);
       const attributesPath = `/EntityDefinitions(LogicalName='${escaped}')/Attributes`;
       const query = buildODataQuery({
@@ -281,6 +283,7 @@ export function registerMetadataReadTools(
       validatePicklistLocation(params);
       let optionSet: RawOptionSet;
       if (params.option_set_name) {
+        assertLogicalName(params.option_set_name, "option set name");
         const escaped = escapeODataString(params.option_set_name);
         const query = buildODataQuery({
           $select: `${OPTION_SET_IDENTITY_SELECT},Options`,
@@ -301,6 +304,8 @@ export function registerMetadataReadTools(
         // validatePicklistLocation guarantees both are present when option_set_name is absent
         const entity = params.entity_logical_name ?? "";
         const attr = params.attribute_logical_name ?? "";
+        assertLogicalName(entity, "entity logical name");
+        assertLogicalName(attr, "attribute logical name");
         const entityEscaped = escapeODataString(entity);
         const attrEscaped = escapeODataString(attr);
         const query = buildODataQuery({
@@ -313,7 +318,8 @@ export function registerMetadataReadTools(
           `/EntityDefinitions(LogicalName='${entityEscaped}')/Attributes`,
           query,
         );
-        if (rows.length === 0) {
+        const [row] = rows;
+        if (!row) {
           throw new Error(
             `Choice attribute not found: ${entity}.${attr} — no Choice, Status, State or MultiSelect column with that logical name`,
           );
@@ -322,12 +328,12 @@ export function registerMetadataReadTools(
         // is_global: false, reporting a local set with full confidence on data that
         // never arrived. is_global is the entire point of this tool, so an unknown
         // answer has to fail rather than guess.
-        if (!rows[0].OptionSet) {
+        if (!row.OptionSet) {
           throw new Error(
             `OptionSet metadata missing for ${entity}.${attr} — cannot tell whether it is Local or Global`,
           );
         }
-        optionSet = rows[0].OptionSet;
+        optionSet = row.OptionSet;
       }
       const payload = {
         option_set: flattenOptionSet(optionSet),
@@ -349,6 +355,7 @@ export function registerMetadataReadTools(
       inputSchema: LIST_ENTITY_KEYS_INPUT,
     },
     async ({ entity_logical_name }) => {
+      assertLogicalName(entity_logical_name, "entity logical name");
       const entityEscaped = escapeODataString(entity_logical_name);
       let result: {
         value: Array<{

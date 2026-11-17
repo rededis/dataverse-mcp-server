@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { DataverseClient } from "../../src/client.js";
+import { DataverseApiError, DataverseTimeoutError } from "../../src/errors.js";
 import { registerAllTools } from "../../src/tools/all.js";
 import { buildAttributeBody } from "../../src/tools/development/schema.js";
-import { createMockServer, GUID, notFound } from "../helpers.js";
-
-const mockClient = {} as DataverseClient;
+import { createMockServer, GUID, notFound, stdio } from "../helpers.js";
 
 describe("buildAttributeBody", () => {
   it("builds String attribute body", () => {
@@ -70,7 +68,7 @@ describe("buildAttributeBody", () => {
     expect(body.Description).toBeDefined();
     const labels = (body.Description as Record<string, unknown>)
       .LocalizedLabels as Array<{ Label: string }>;
-    expect(labels[0].Label).toBe("A description");
+    expect(labels[0]!.Label).toBe("A description");
   });
 
   it("omits optional fields when not provided", () => {
@@ -122,8 +120,12 @@ describe("buildAttributeBody", () => {
       ],
     });
     const optionSet = body.OptionSet as Record<string, any>;
-    expect(optionSet.TrueOption.Label.LocalizedLabels[0].Label).toBe("Verified");
-    expect(optionSet.FalseOption.Label.LocalizedLabels[0].Label).toBe("Unverified");
+    expect(optionSet.TrueOption.Label.LocalizedLabels[0].Label).toBe(
+      "Verified",
+    );
+    expect(optionSet.FalseOption.Label.LocalizedLabels[0].Label).toBe(
+      "Unverified",
+    );
   });
 
   it("builds Boolean attribute with reversed option order", () => {
@@ -392,7 +394,7 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
   it("resolves the set by name, then binds the created column by MetadataId", async () => {
     const server = createMockServer();
     const client = clientResolving(GUID);
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("add_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -422,7 +424,7 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
   it("reports a missing global set by name rather than surfacing the raw 404", async () => {
     const server = createMockServer();
     const client = clientResolving(null);
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("add_attribute")!.handler({
@@ -436,7 +438,7 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
   it("rejects a mutually-exclusive pair without spending a lookup", async () => {
     const server = createMockServer();
     const client = clientResolving(GUID);
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("add_attribute")!.handler({
@@ -450,7 +452,7 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
   it("create_entity resolves before creating the table, leaving nothing behind", async () => {
     const server = createMockServer();
     const client = clientResolving(null);
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("create_entity")!.handler({
@@ -470,7 +472,7 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
     // set is the cheapest way to reach that path.
     const server = createMockServer();
     const client = clientResolving(GUID);
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("create_entity")!.handler({
@@ -492,7 +494,7 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
       .fn()
       .mockResolvedValueOnce({ MetadataId: "entity-id" })
       .mockResolvedValue({});
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("create_entity")!.handler({
       logical_name: "fundai_new",
@@ -520,9 +522,246 @@ describe("add_attribute / create_entity global OptionSet resolution", () => {
   });
 });
 
+describe("create_entity", () => {
+  // Dataverse answers CreateEntity with 204 and an OData-EntityId header,
+  // which DataverseClient.post returns as @odata.entityId
+  const TABLE_CREATED = {
+    "@odata.entityId": `https://org.crm.dynamics.com/api/data/v9.2/EntityDefinitions(${GUID})`,
+  };
+
+  function clientCreatingEntity() {
+    return {
+      get: vi.fn(),
+      post: vi.fn().mockResolvedValue(TABLE_CREATED),
+    } as any;
+  }
+
+  // The repro from #109
+  const table = {
+    logical_name: "contoso_adconversion",
+    display_name: "Ad Conversion",
+    display_collection_name: "Ad Conversions",
+    ownership_type: "OrganizationOwned" as const,
+    primary_attribute_name: "contoso_name",
+  };
+
+  it("sends HasNotes and HasActivities as false by default", async () => {
+    const server = createMockServer();
+    const client = clientCreatingEntity();
+    registerAllTools(server, { client, ...stdio() });
+
+    await server.tools.get("create_entity")!.handler(table);
+
+    const [path, body] = client.post.mock.calls[0];
+    expect(path).toBe("/EntityDefinitions");
+    expect(body.HasNotes).toBe(false);
+    expect(body.HasActivities).toBe(false);
+    expect(body.OwnershipType).toBe("OrganizationOwned");
+    expect(body.PrimaryNameAttribute).toBe("contoso_name");
+  });
+
+  it("sends HasNotes and HasActivities with attributes too, and posts the attributes to the created table", async () => {
+    const server = createMockServer();
+    const client = clientCreatingEntity();
+    registerAllTools(server, { client, ...stdio() });
+
+    await server.tools.get("create_entity")!.handler({
+      ...table,
+      attributes: [
+        {
+          logical_name: "contoso_clicks",
+          type: "Integer",
+          display_name: "Clicks",
+        },
+      ],
+    });
+
+    const [entityPath, entityBody] = client.post.mock.calls[0];
+    expect(entityPath).toBe("/EntityDefinitions");
+    expect(entityBody.HasNotes).toBe(false);
+    expect(entityBody.HasActivities).toBe(false);
+
+    const [attrPath, attrBody] = client.post.mock.calls[1];
+    expect(attrPath).toBe(`/EntityDefinitions(${GUID})/Attributes`);
+    expect(attrBody.LogicalName).toBe("contoso_clicks");
+  });
+
+  it("defaults OwnershipType to UserOwned", async () => {
+    const server = createMockServer();
+    const client = clientCreatingEntity();
+    registerAllTools(server, { client, ...stdio() });
+
+    const { ownership_type: _, ...withoutOwnership } = table;
+    await server.tools.get("create_entity")!.handler(withoutOwnership);
+
+    const [, body] = client.post.mock.calls[0];
+    expect(body.OwnershipType).toBe("UserOwned");
+  });
+
+  describe("when a request fails", () => {
+    const columns = ["contoso_a", "contoso_b", "contoso_c"].map((name) => ({
+      logical_name: name,
+      type: "Integer" as const,
+      display_name: name,
+    }));
+    const request = { method: "POST", url: "https://org/api/data/v9.2/x" };
+    const CHECK_LATER =
+      "Dataverse keeps working on a request for up to 2 minutes: wait that long, then check with get_entity_schema. If the table exists, missing columns can be added with add_attribute; do not call create_entity again for it.";
+
+    it("says on a table timeout that the outcome is unknown and no column was sent", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      const timeout = new DataverseTimeoutError(30_000, request);
+      client.post.mockRejectedValueOnce(timeout);
+      registerAllTools(server, { client, ...stdio() });
+
+      const err = await server.tools
+        .get("create_entity")!
+        .handler({ ...table, attributes: columns })
+        .catch((e: unknown) => e as Error);
+
+      expect(err.message).toBe(
+        `Dataverse did not answer within 30000 ms while creating table 'contoso_adconversion'. The table may not exist, may exist in part, or may still be in progress. None of the additional columns were sent: contoso_a, contoso_b, contoso_c. ${CHECK_LATER}`,
+      );
+      expect(err.cause).toBe(timeout);
+      expect(client.post).toHaveBeenCalledTimes(1);
+    });
+
+    it("says which columns were created, which failed and which were not sent", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      const refused = new DataverseApiError(
+        400,
+        request,
+        '{"error":{"code":"0x80044363","message":"The schema name is not unique."}}',
+      );
+      client.post
+        .mockResolvedValueOnce(TABLE_CREATED)
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(refused);
+      registerAllTools(server, { client, ...stdio() });
+
+      const err = await server.tools
+        .get("create_entity")!
+        .handler({ ...table, attributes: columns })
+        .catch((e: unknown) => e as Error);
+
+      expect(err.message).toBe(
+        `Table 'contoso_adconversion' was created. Columns created: contoso_a. Column 'contoso_b' failed: ${refused.message} Not sent: contoso_c. Missing columns can be added with add_attribute.`,
+      );
+      expect(err.cause).toBe(refused);
+      expect(client.post).toHaveBeenCalledTimes(3);
+    });
+
+    it("says on a column timeout that the column may exist", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      const timeout = new DataverseTimeoutError(30_000, request);
+      client.post
+        .mockResolvedValueOnce(TABLE_CREATED)
+        .mockRejectedValueOnce(timeout);
+      registerAllTools(server, { client, ...stdio() });
+
+      const err = await server.tools
+        .get("create_entity")!
+        .handler({ ...table, attributes: columns.slice(0, 1) })
+        .catch((e: unknown) => e as Error);
+
+      expect(err.message).toBe(
+        `Table 'contoso_adconversion' was created. No additional columns were created. Dataverse did not answer within 30000 ms while creating column 'contoso_a': it may not exist or may still be in progress. ${CHECK_LATER}`,
+      );
+      expect(err.cause).toBe(timeout);
+    });
+
+    it("leaves out the unsent list when the last column fails", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      const refused = new DataverseApiError(400, request, "{}");
+      client.post
+        .mockResolvedValueOnce(TABLE_CREATED)
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(refused);
+      registerAllTools(server, { client, ...stdio() });
+
+      const err = await server.tools
+        .get("create_entity")!
+        .handler({ ...table, attributes: columns })
+        .catch((e: unknown) => e as Error);
+
+      expect(err.message).toBe(
+        `Table 'contoso_adconversion' was created. Columns created: contoso_a, contoso_b. Column 'contoso_c' failed: ${refused.message} Missing columns can be added with add_attribute.`,
+      );
+    });
+
+    it("mentions no columns on a table timeout when none were asked for", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      client.post.mockRejectedValueOnce(
+        new DataverseTimeoutError(30_000, request),
+      );
+      registerAllTools(server, { client, ...stdio() });
+
+      const err = await server.tools
+        .get("create_entity")!
+        .handler(table)
+        .catch((e: unknown) => e as Error);
+
+      expect(err.message).toBe(
+        `Dataverse did not answer within 30000 ms while creating table 'contoso_adconversion'. The table may not exist, may exist in part, or may still be in progress. ${CHECK_LATER}`,
+      );
+    });
+
+    it("lists the unsent columns when the table id does not come back", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      client.post.mockResolvedValueOnce({});
+      registerAllTools(server, { client, ...stdio() });
+
+      await expect(
+        server.tools
+          .get("create_entity")!
+          .handler({ ...table, attributes: columns }),
+      ).rejects.toThrow(
+        "Table 'contoso_adconversion' was created, but Dataverse did not return its id, so none of the additional columns were sent: contoso_a, contoso_b, contoso_c. They can be added with add_attribute.",
+      );
+      expect(client.post).toHaveBeenCalledTimes(1);
+    });
+
+    it("passes any other failure of the table request through unchanged", async () => {
+      const server = createMockServer();
+      const client = clientCreatingEntity();
+      const refused = new DataverseApiError(400, request, "{}");
+      client.post.mockRejectedValueOnce(refused);
+      registerAllTools(server, { client, ...stdio() });
+
+      await expect(
+        server.tools.get("create_entity")!.handler(table),
+      ).rejects.toBe(refused);
+    });
+  });
+
+  it("passes has_notes and has_activities through", async () => {
+    const server = createMockServer();
+    const client = clientCreatingEntity();
+    registerAllTools(server, { client, ...stdio() });
+
+    await server.tools.get("create_entity")!.handler({
+      ...table,
+      has_notes: true,
+      has_activities: true,
+    });
+
+    const [, body] = client.post.mock.calls[0];
+    expect(body.HasNotes).toBe(true);
+    expect(body.HasActivities).toBe(true);
+  });
+});
+
 describe("update_attribute", () => {
   const existingAttribute = {
-    "@odata.context": "https://org/api/data/v9.2/$metadata#EntityDefinitions(...)/Attributes/$entity",
+    "@odata.context":
+      "https://org/api/data/v9.2/$metadata#EntityDefinitions(...)/Attributes/$entity",
     "@odata.etag": 'W/"12345"',
     "@odata.type": "#Microsoft.Dynamics.CRM.StringAttributeMetadata",
     MetadataId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
@@ -547,7 +786,7 @@ describe("update_attribute", () => {
   it("GETs with the concrete type cast and PUTs the base path with If-Match: *", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -587,7 +826,7 @@ describe("update_attribute", () => {
     ] as const) {
       const server = createMockServer();
       const client = mockClient();
-      registerAllTools(server as any, { client });
+      registerAllTools(server, { client, ...stdio() });
 
       await server.tools.get("update_attribute")!.handler({
         entity_logical_name: "fundai_x",
@@ -606,7 +845,7 @@ describe("update_attribute", () => {
   it("strips @odata.etag/@odata.context but keeps everything else from GET (merge preserves untouched fields)", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -636,7 +875,7 @@ describe("update_attribute", () => {
   it("user-supplied fields override values from GET", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -654,7 +893,7 @@ describe("update_attribute", () => {
   it("sends MSCRM.MergeLabels header when merge_labels=true", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -672,7 +911,7 @@ describe("update_attribute", () => {
   it("does not send MSCRM.MergeLabels header by default", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -688,7 +927,7 @@ describe("update_attribute", () => {
   it("returns isError when no mutable fields are provided (no-op guard); no HTTP calls made", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -715,7 +954,7 @@ describe("update_attribute", () => {
       FormatName: { Value: "Email" },
     };
     const client = mockClient(stringAttr as any);
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     // User only changes display_name — MaxLength/Format MUST survive.
     await server.tools.get("update_attribute")!.handler({
@@ -747,7 +986,7 @@ describe("update_attribute", () => {
       MinValue: -1000,
       MaxValue: 1000,
     } as any);
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -779,7 +1018,7 @@ describe("update_attribute", () => {
       Format: "DateAndTime",
       DateTimeBehavior: { Value: "UserLocal" },
     } as any);
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("update_attribute")!.handler({
       entity_logical_name: "fundai_x",
@@ -797,7 +1036,7 @@ describe("update_attribute", () => {
   it("rejects date_format on non-DateTime type without calling HTTP", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("update_attribute")!.handler({
@@ -814,7 +1053,7 @@ describe("update_attribute", () => {
   it("rejects DateOnly format with mismatched behavior on update_attribute", async () => {
     const server = createMockServer();
     const client = mockClient();
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("update_attribute")!.handler({
@@ -833,7 +1072,7 @@ describe("delete_attribute", () => {
   it("returns an error when allowDelete is false", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn() } as any;
-    registerAllTools(server as any, { client, allowDelete: false });
+    registerAllTools(server, { client, ...stdio(false) });
 
     const tool = server.tools.get("delete_attribute")!;
     expect(tool.description).toContain("disabled");
@@ -850,7 +1089,7 @@ describe("delete_attribute", () => {
   it("calls client.delete when allowDelete is true", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, allowDelete: true });
+    registerAllTools(server, { client, ...stdio(true) });
 
     const tool = server.tools.get("delete_attribute")!;
     expect(tool.description).not.toContain("currently disabled");
@@ -871,7 +1110,7 @@ describe("delete_attribute", () => {
   it("escapes single quotes in entity/attribute names to prevent OData injection", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, allowDelete: true });
+    registerAllTools(server, { client, ...stdio(true) });
 
     await server.tools.get("delete_attribute")!.handler({
       entity_logical_name: "weird'name",
@@ -916,7 +1155,10 @@ describe("get_attribute_dependencies", () => {
     } = overrides;
     return {
       get: vi.fn().mockImplementation((path: string) => {
-        if (path.includes("/EntityDefinitions(") && path.includes("/Attributes(")) {
+        if (
+          path.includes("/EntityDefinitions(") &&
+          path.includes("/Attributes(")
+        ) {
           return Promise.resolve(attrResponse);
         }
         if (path.startsWith("/RetrieveDependenciesForDelete")) {
@@ -944,7 +1186,7 @@ describe("get_attribute_dependencies", () => {
   it("returns a flat array with resolved names, mapped component-type names, and the right RetrieveDependenciesForDelete call", async () => {
     const server = createMockServer();
     const client = makeClient();
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_attribute_dependencies")!
@@ -984,7 +1226,7 @@ describe("get_attribute_dependencies", () => {
   it("batches name resolution per component type (one HTTP call per type, not per dep)", async () => {
     const server = createMockServer();
     const client = makeClient();
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("get_attribute_dependencies")!.handler({
       entity_logical_name: "e",
@@ -993,7 +1235,9 @@ describe("get_attribute_dependencies", () => {
 
     const paths = client.get.mock.calls.map(([p]: [string]) => p);
     const formCalls = paths.filter((p: string) => p.startsWith("/systemforms"));
-    const viewCalls = paths.filter((p: string) => p.startsWith("/savedqueries"));
+    const viewCalls = paths.filter((p: string) =>
+      p.startsWith("/savedqueries"),
+    );
     // 2 forms in one batch, 1 view in one batch — 2 HTTP calls total, not 3.
     expect(formCalls).toHaveLength(1);
     expect(viewCalls).toHaveLength(1);
@@ -1009,7 +1253,7 @@ describe("get_attribute_dependencies", () => {
         },
       ],
     });
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_attribute_dependencies")!
@@ -1032,7 +1276,7 @@ describe("get_attribute_dependencies", () => {
   it("returns empty array when the attribute has no dependencies", async () => {
     const server = createMockServer();
     const client = makeClient({ deps: [] });
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_attribute_dependencies")!
@@ -1058,7 +1302,7 @@ describe("get_attribute_dependencies", () => {
           ),
         ),
     } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("get_attribute_dependencies")!.handler({
@@ -1075,7 +1319,7 @@ describe("get_attribute_dependencies", () => {
         .fn()
         .mockRejectedValue(new Error("Dataverse API error (500): boom")),
     } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("get_attribute_dependencies")!.handler({
@@ -1088,7 +1332,7 @@ describe("get_attribute_dependencies", () => {
   it("escapes single quotes in logical names (OData injection)", async () => {
     const server = createMockServer();
     const client = makeClient({ deps: [] });
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("get_attribute_dependencies")!.handler({
       entity_logical_name: "weird'entity",
@@ -1110,7 +1354,7 @@ describe("get_attribute_dependencies", () => {
         { dependentcomponenttype: 60, dependentcomponentobjectid: FORM_B },
       ],
     });
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_attribute_dependencies")!
@@ -1121,9 +1365,9 @@ describe("get_attribute_dependencies", () => {
 
     const payload = JSON.parse(result.content[0].text);
     // Output preserves the original dep order, even though resolution was batched per type.
-    expect(payload.map((d: { component_type: number }) => d.component_type)).toEqual([
-      26, 60, 60,
-    ]);
+    expect(
+      payload.map((d: { component_type: number }) => d.component_type),
+    ).toEqual([26, 60, 60]);
     expect(payload.map((d: { name: string | null }) => d.name)).toEqual([
       "Active ACH Transactions",
       "Information",
@@ -1138,7 +1382,7 @@ describe("add_entity_key", () => {
     const client = {
       request: vi.fn().mockResolvedValue({ MetadataId: "abc" }),
     } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("add_entity_key")!.handler({
       entity_logical_name: "contoso_record",
@@ -1149,9 +1393,7 @@ describe("add_entity_key", () => {
 
     expect(client.request).toHaveBeenCalledTimes(1);
     const [path, opts] = client.request.mock.calls[0];
-    expect(path).toBe(
-      "/EntityDefinitions(LogicalName='contoso_record')/Keys",
-    );
+    expect(path).toBe("/EntityDefinitions(LogicalName='contoso_record')/Keys");
     expect(opts.method).toBe("POST");
     expect(opts.body["@odata.type"]).toBe(
       "Microsoft.Dynamics.CRM.EntityKeyMetadata",
@@ -1174,7 +1416,7 @@ describe("add_entity_key", () => {
   it("sends MSCRM.SolutionUniqueName header when solution_unique_name is provided", async () => {
     const server = createMockServer();
     const client = { request: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("add_entity_key")!.handler({
       entity_logical_name: "contoso_record",
@@ -1191,7 +1433,7 @@ describe("add_entity_key", () => {
   it("escapes single quotes in entity name (OData injection)", async () => {
     const server = createMockServer();
     const client = { request: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("add_entity_key")!.handler({
       entity_logical_name: "weird'name",
@@ -1208,7 +1450,7 @@ describe("delete_entity_key", () => {
   it("returns an error when allowDelete is false", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn() } as any;
-    registerAllTools(server as any, { client, allowDelete: false });
+    registerAllTools(server, { client, ...stdio(false) });
 
     const tool = server.tools.get("delete_entity_key")!;
     expect(tool.description).toContain("disabled");
@@ -1225,7 +1467,7 @@ describe("delete_entity_key", () => {
   it("calls client.delete when allowDelete is true", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, allowDelete: true });
+    registerAllTools(server, { client, ...stdio(true) });
 
     const tool = server.tools.get("delete_entity_key")!;
     expect(tool.description).not.toContain("currently disabled");
@@ -1243,7 +1485,7 @@ describe("delete_entity_key", () => {
   it("escapes single quotes in entity/key names (OData injection)", async () => {
     const server = createMockServer();
     const client = { delete: vi.fn().mockResolvedValue({}) } as any;
-    registerAllTools(server as any, { client, allowDelete: true });
+    registerAllTools(server, { client, ...stdio(true) });
 
     await server.tools.get("delete_entity_key")!.handler({
       entity_logical_name: "weird'name",

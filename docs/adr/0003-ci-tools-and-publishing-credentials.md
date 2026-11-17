@@ -1,0 +1,119 @@
+# ADR-0003: CI tools run verified bytes; npm publishing has no stored token
+
+- **Status:** Accepted
+- **Date:** 2026-11-10
+- **Issue:** #121; amended by #157 (typos), #124 (Betterleaks), #167 (pre-push hook) and #156 (publish job)
+- **Relates to:** [ADR-0001](0001-local-and-remote-variants.md) §13 (release lines)
+
+## Context
+
+#121 adds [jactionlint](https://github.com/jdx/jactionlint) to CI and fixes
+what it reports on the workflows. jactionlint can be installed four ways,
+and its own CI guide (`docs/ci.md` in the release archive of v2.5.0) says
+which of them verify what they download:
+
+| Method | Pinned by | Download verified by |
+|---|---|---|
+| Action `jdx/jactionlint` | the action's commit | nothing: it runs a download script that does not check the archive |
+| Download script | its version argument | nothing |
+| Image `ghcr.io/jdx/jactionlint` | tag or digest | the digest, when pinned |
+| mise | `mise.lock` | checksum and provenance in the lock file |
+
+A SHA-pinned action fixes which release is fetched, not the bytes that
+arrive. Typos in `ci.yml` (#127) ran from such an action; #157 moved it to
+a checked download as well.
+
+jactionlint's first run also flagged `release.yml` (`use-trusted-publishing`): it publishes to npm with a long-lived
+`NPM_TOKEN` secret, while the job can already request an OIDC token.
+
+## Decision
+
+### 1. A tool CI downloads is checked against a recorded hash
+
+jactionlint is installed in a `run:` step that downloads the release archive
+and checks it with `sha256sum --check` against the digest written in the
+workflow, taken from the release's checksums file. Not the action: it
+verifies nothing. Not the image: the step would work, but the project does
+not use mise or this image anywhere else, and a binary plus a hash is the
+smallest thing to read and to update.
+
+typos (#157) is installed the same way. Each step calls
+`scripts/fetch-verified.sh`, which downloads the archive, checks it and
+extracts the binary. The typos release has no checksums file: the digest is
+the sha256 GitHub shows for the release asset. The release is immutable and
+attested, so a new digest is confirmed with `gh release verify-asset
+v<version> <archive> -R crate-ci/typos` on a downloaded copy before it goes
+into the workflow.
+
+Betterleaks (#124) is installed the same way. Its release has a
+`checksums.txt`, and the digest comes from there; the release is immutable
+too, and a new digest is confirmed with `gh release verify-asset` the same
+way (`-R betterleaks/betterleaks`).
+
+Each of these steps runs inside the `ci` job, because `ci` is the required
+check on `main`: a separate job would not block a merge without changing
+branch protection.
+
+Dependabot cannot update a version and digest written in a `run:` step.
+They are bumped by hand, together.
+
+The pre-push hook (#167) runs the same scan through
+`scripts/scan-commits.sh`, with whichever Betterleaks is on the developer's
+`PATH`: it downloads nothing, so there is nothing for it to verify, and
+without the binary it lets the push through with a warning. The version
+pinned in `ci.yml` is the one that decides; the hook only catches a finding
+before it is public.
+
+A new tool added to CI follows the same rule: an image pinned by digest, a
+lock file with checksums, or a hash in the workflow. An action that only
+pins a version is not enough.
+
+### 2. npm publishing uses trusted publishing
+
+`release.yml` publishes with npm trusted publishing (OIDC). `id-token: write`
+is granted to the publishing job only, the workflow level has no
+permissions. A build job without it runs `npm ci`, the checks and
+`npm pack`; the publishing job only downloads that tarball and publishes it
+with provenance required and no lifecycle scripts, so no code from the
+repository or its dependencies runs next to the token (#156).
+
+The trusted publisher on npmjs.com names this repository and the file
+`release.yml`. Renaming the file breaks publishing until the setting on
+npmjs.com is changed to match.
+
+After the first release published this way, the package is set to disallow
+tokens and the npm token secrets are removed from the repository.
+
+## Consequences
+
+- Updating jactionlint, typos (#157) or Betterleaks (#124) is a manual
+  edit of two values; nothing reminds anyone to do it.
+- `id-token: write` used to give the publishing job only provenance; now it
+  also gives a credential that publishes. Only the publishing job can
+  request it, and that job runs npm and the two pinned actions, nothing
+  from the repository (#156). Code in the build job can still change the
+  tarball before it is packed, and provenance does not show that it did not.
+- A release from a maintenance branch runs that branch's `release.yml`. Each
+  `maint/**` branch that may still release needs the trusted-publishing
+  `release.yml` before the token is removed.
+
+## Evidence
+
+- jactionlint v2.5.0 release, `docs/ci.md` in its archive: the install
+  methods and what each verifies; `docs/cli.md`: online checks run only when
+  turned on. <https://github.com/jdx/jactionlint/releases/tag/v2.5.0>
+- npm, [Trusted publishing](https://docs.npmjs.com/trusted-publishers):
+  npm CLI 11.5.1 or later and Node 22.14.0 or later, `id-token: write`,
+  provenance generated automatically when publishing from GitHub Actions.
+- npm CLI v11.19.1, `lib/utils/oidc.js`: without `--provenance`, npm turns
+  provenance on only after checking that the repository and package are
+  public; if that check fails, it logs this at verbose level only and
+  publishes without provenance, hence `--provenance`.
+  <https://github.com/npm/cli/blob/v11.19.1/lib/utils/oidc.js>
+- typos v1.52.0 release: archives only, no checksums file; immutable, with
+  a release attestation that `gh release verify-asset` checks.
+  <https://github.com/crate-ci/typos/releases/tag/v1.52.0>
+- Betterleaks v1.10.0 release: archives with `checksums.txt` and its
+  Sigstore bundle; immutable. Since v1.10.0 a config file in the scanned
+  directory is read only with `--unsafe-auto-load-config`, so
+  `scripts/scan-commits.sh` passes `--config`. <https://github.com/betterleaks/betterleaks/releases/tag/v1.10.0>

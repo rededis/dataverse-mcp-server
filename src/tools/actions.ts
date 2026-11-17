@@ -1,17 +1,17 @@
-import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { allowsNothing, assertAllowed, NO_PERMISSIONS } from "./permissions.js";
 import {
-  assertValidName,
+  bareOperationName,
   qualifyOperationName,
   resolveBinding,
 } from "./shared/operations.js";
-import type { ToolDeps } from "./types.js";
+import type { ToolDeps, ToolRegistrar } from "./types.js";
 
 const INVOKE_ACTION_INPUT = z.object({
   name: z
     .string()
     .describe(
-      "Action name, e.g. 'PublishDuplicateRule', 'QualifyLead'. Bare names are namespaced automatically for bound calls; pass a fully-qualified name to override.",
+      "Action name, e.g. 'PublishDuplicateRule', 'QualifyLead'. The Microsoft.Dynamics.CRM. namespace is added for bound calls and may be omitted.",
     ),
   entity_set: z
     .string()
@@ -33,8 +33,13 @@ const INVOKE_ACTION_INPUT = z.object({
     ),
 });
 
-export function registerActionTools(server: McpServer, deps: ToolDeps): void {
+export function registerActionTools(
+  server: ToolRegistrar,
+  deps: ToolDeps,
+): void {
   const { client } = deps;
+  const allowed = (deps.permissions ?? NO_PERMISSIONS).actions;
+  if (allowsNothing(allowed)) return;
   server.registerTool(
     "invoke_action",
     {
@@ -43,9 +48,10 @@ export function registerActionTools(server: McpServer, deps: ToolDeps): void {
       inputSchema: INVOKE_ACTION_INPUT,
     },
     async ({ name, entity_set, id, parameters }) => {
-      assertValidName(name);
+      const bare = bareOperationName(name);
       const bound = resolveBinding(entity_set, id);
-      const opName = qualifyOperationName(name, bound);
+      assertAllowed(allowed, bare, "call action");
+      const opName = qualifyOperationName(bare, bound);
       const path = bound ? `/${entity_set}(${id})/${opName}` : `/${opName}`;
       const result = await client.post(path, parameters ?? {});
       return {

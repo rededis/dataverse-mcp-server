@@ -19,7 +19,7 @@ import {
 import { DataverseBusyError } from "./errors.js";
 import type { HttpRequest, HttpResponse, RequestExecutor } from "./executor.js";
 
-export interface RetryOptions {
+interface RetryOptions {
   /**
    * The longest one request waits on throttling, all its waits together. A
    * wait that would go past it fails the call instead, saying when to retry.
@@ -52,7 +52,7 @@ export interface RetryOptions {
  * that token is still valid; with the largest ones it may have expired, and
  * the call then fails with a 401. MAX_WAIT_MS in config.ts has the arithmetic.
  */
-export class RetryExecutor implements RequestExecutor {
+class RetryExecutor implements RequestExecutor {
   private maxRetryWaitMs: number;
   private maxAttempts: number;
   /** No request is sent before this moment (epoch ms). */
@@ -76,6 +76,8 @@ export class RetryExecutor implements RequestExecutor {
         if (waitedMs + pauseMs > this.maxRetryWaitMs) {
           throw throttledError(pauseMs);
         }
+        // Before its first send, a request waits only for another's 429.
+        if (attempt === 1) request.observer?.heldBack?.();
         // Time that passed, not time asked for: a timer can fire a moment
         // early, and the remainder must still fit the allowance.
         const before = Date.now();
@@ -83,8 +85,11 @@ export class RetryExecutor implements RequestExecutor {
         waitedMs += Date.now() - before;
       }
 
+      if (attempt > 1) request.observer?.retried?.();
+      request.observer?.sent?.();
       const response = await this.inner.execute(request);
       if (response.status !== 429) return response;
+      request.observer?.throttled?.();
 
       const retryMs =
         parseRetryAfter(response.headers.get("Retry-After")) ??
@@ -105,7 +110,7 @@ export class RetryExecutor implements RequestExecutor {
   }
 }
 
-export interface ConcurrencyLimitOptions {
+interface ConcurrencyLimitOptions {
   /** How many requests may be in flight at once. */
   maxConcurrency?: number;
   /** How many requests may wait for a slot; one more is turned away. */
@@ -123,7 +128,7 @@ export interface ConcurrencyLimitOptions {
  * RetryExecutor belongs inside this one: a request then keeps its place while
  * it waits to be resent.
  */
-export class ConcurrencyLimitExecutor implements RequestExecutor {
+class ConcurrencyLimitExecutor implements RequestExecutor {
   private maxConcurrency: number;
   private maxQueueLength: number;
   private maxQueueWaitMs: number;

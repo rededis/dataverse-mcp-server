@@ -1,24 +1,45 @@
 // Helpers shared by invoke_action and invoke_function, which sit in separate
 // tool groups.
 
-// Operation names are restricted to dotted identifiers so a caller can never
-// smuggle a path segment, query string, or quote into the request URL.
-const OPERATION_NAME = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)*$/;
+import { RefusedError } from "../../errors.js";
+import { assertEntitySetName, assertRecordId, GUID } from "./paths.js";
+
+// Operation names are restricted to identifiers so a caller can never smuggle
+// a path segment, query string, or quote into the request URL.
+export const OPERATION_NAME = /^[A-Za-z][A-Za-z0-9_]*$/;
 // Function parameter names are interpolated into the URL (`Fn(P=@P)?@P=...`),
 // so they are held to the same identifier restriction to prevent URL injection.
 const PARAM_NAME = /^[A-Za-z][A-Za-z0-9_]*$/;
-const GUID = /^\{?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\}?$/;
 const CRM_NAMESPACE = "Microsoft.Dynamics.CRM.";
 
 /**
- * Bound operations need the `Microsoft.Dynamics.CRM.` namespace prefix; unbound
- * ones (system functions like WhoAmI, and custom process actions like
- * `new_MyAction`) are called by their plain name. A name that already carries a
- * namespace (contains a dot) is passed through untouched.
+ * The bare name of an operation: `Microsoft.Dynamics.CRM.SendEmail` and
+ * `SendEmail` are the same action. Allowlists hold bare names, so a name is
+ * normalized before it is checked, and the URL is built from what was
+ * checked. Every Dataverse operation, custom APIs included, lives in that one
+ * namespace, so a name with any other dot is refused rather than passed on.
  */
-export function qualifyOperationName(name: string, bound: boolean): string {
-  if (!bound || name.includes(".")) return name;
-  return `${CRM_NAMESPACE}${name}`;
+export function bareOperationName(name: string): string {
+  const bare = name.startsWith(CRM_NAMESPACE)
+    ? name.slice(CRM_NAMESPACE.length)
+    : name;
+  if (!OPERATION_NAME.test(bare)) {
+    throw new RefusedError(
+      "operation-name",
+      `Invalid operation name: '${name}'. Use the bare operation name (e.g. 'QualifyLead', 'PublishDuplicateRule').`,
+      name,
+    );
+  }
+  return bare;
+}
+
+/**
+ * The name as it goes in the URL. Bound operations need the namespace; unbound
+ * ones (system functions like WhoAmI, and custom process actions like
+ * `new_MyAction`) are called by their plain name.
+ */
+export function qualifyOperationName(bare: string, bound: boolean): string {
+  return bound ? `${CRM_NAMESPACE}${bare}` : bare;
 }
 
 /**
@@ -29,25 +50,24 @@ export function resolveBinding(entitySet?: string, id?: string): boolean {
   const hasSet = entitySet !== undefined && entitySet !== "";
   const hasId = id !== undefined && id !== "";
   if (hasSet !== hasId) {
-    throw new Error(
+    throw new RefusedError(
+      "binding",
       "Inconsistent binding: a bound call requires both entity_set and id; an unbound call requires neither.",
     );
   }
-  if (hasSet && id !== undefined && !GUID.test(id)) {
-    throw new Error(`Invalid record id (expected a GUID): ${id}`);
+  if (hasSet) {
+    assertEntitySetName(entitySet as string);
+    assertRecordId(id as string);
   }
   return hasSet;
 }
 
-export function assertValidName(name: string): void {
-  if (!OPERATION_NAME.test(name)) {
-    throw new Error(
-      `Invalid operation name: '${name}'. Use the bare operation name (e.g. 'QualifyLead', 'PublishDuplicateRule') or a fully-qualified name.`,
-    );
-  }
-}
-
-/** Format a single value as an OData literal for inline function parameters. */
+/**
+ * Format a single value as an OData literal for inline function parameters.
+ *
+ * @internal Exported for its tests: a pure function, checked value type by
+ * value type rather than through a tool call (#123).
+ */
 export function formatODataLiteral(value: unknown): string {
   if (value === null || value === undefined) return "null";
   if (typeof value === "string") {
@@ -73,8 +93,10 @@ export function buildFunctionCall(
   if (keys.length === 0) return opName;
   for (const k of keys) {
     if (!PARAM_NAME.test(k)) {
-      throw new Error(
+      throw new RefusedError(
+        "parameter-name",
         `Invalid parameter name: '${k}'. Parameter names must be identifiers (letters, digits, underscore; starting with a letter).`,
+        k,
       );
     }
   }

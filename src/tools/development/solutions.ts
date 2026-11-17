@@ -1,7 +1,6 @@
-import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { buildODataQuery, fetchAllPages } from "../shared/odata.js";
-import type { ToolDeps } from "../types.js";
+import type { ToolDeps, ToolRegistrar } from "../types.js";
 
 const LIST_SOLUTIONS_INPUT = z.object({
   include_managed: z
@@ -12,7 +11,10 @@ const LIST_SOLUTIONS_INPUT = z.object({
     ),
 });
 
-export function registerSolutionTools(server: McpServer, deps: ToolDeps): void {
+export function registerSolutionTools(
+  server: ToolRegistrar,
+  deps: ToolDeps,
+): void {
   const { client } = deps;
   server.registerTool(
     "list_solutions",

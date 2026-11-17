@@ -54,13 +54,36 @@ flag that a misconfiguration could flip.
 - Code needed by more than one group lives in `src/tools/shared/`. Group
   modules never import each other, so a helper cannot pull another group,
   or development, in after it.
-- `tests/tool-groups.test.ts` enforces both rules: reachability from
+- `tests/tool-groups.test.ts` enforces both of these rules: reachability from
   `server-groups.ts`, and the importer allowlist. The bundle check in #79
   covers the same boundary from the build side.
+- The other direction (#126): nothing in `src/` outside `src/server` imports
+  `src/server`. Biome's `noRestrictedImports` in `biome.json` reports such an
+  import written as `import`, `export ... from` or `import()` with a string
+  literal; a test in `tests/tool-groups.test.ts` holds the same rule and also
+  sees `require()`, `import()` in a type and a template literal. Tests and
+  `scripts/` are outside this boundary.
+- Biome's `noImportCycles` fails a run-time import cycle everywhere it lints,
+  tests and `scripts/` included; an `import type` declaration does not count,
+  an `import { type X }` does.
+
+_Added 2026-11-13 (#126)._ The `src/server` boundary and the cycle rule. The
+boundary refuses type-only imports too: it is a rule about the source tree,
+and a type the rest of `src/` needs does not belong in `src/server`.
 
 *Why not npm workspaces now:* the core has one consumer shape today (two entry
 points in one package). Workspaces add release and build machinery without
 buying anything the bundle does not already give. See Deferred.
+
+_Settled on 2026-10-10 (#79)._ The npm package keeps what the server needs:
+it goes on depending on `@modelcontextprotocol/node` (and through it `hono`)
+and shipping `dist/server/`, although stdio users never run them. The
+direction of the asymmetry is deliberate: the server is expected to change
+faster than the stdio package, and the stdio package may grow development
+needs of its own, so neither side is trimmed to the other's shape yet. The
+image is unaffected, since it holds only the server bundle. Differences
+between the two variants are left alone until the npm workspaces trigger in
+Deferred is met.
 
 ### 2. Mechanism in code, policy in configuration
 
@@ -149,6 +172,10 @@ Migrating to SDK v2 (#75) raises `engines.node` from `>=18` to `>=20`, because
 it ([E1](#e1-mcp-typescript-sdk-v2)). That is a breaking change for the npm package and is released as
 0.9.0.
 
+_Raised on 2026-10-10 (#101)._ `engines.node` is `>=24`, the same floor as the
+server image (#79). Node 20 reached end of life on 2026-04-30 and Node 22
+reaches it on 2027-04-30.
+
 ### 6. Proxy headers
 
 A 2026-07-28 request carries its method and protocol version in HTTP headers
@@ -158,6 +185,25 @@ disagree") when a header is missing ([E1](#e1-mcp-typescript-sdk-v2)). If an
 installation puts a reverse proxy, gateway or WAF in front of the server, it
 must pass these headers through unchanged. The server documentation says so
 (#80).
+
+_Added 2026-10-08 with #76._ There is a third: `tools/call` (and
+`resources/read`, `prompts/get`) also needs `Mcp-Name`, and its absence is the
+same `400 -32020`. A proxy must pass all three.
+
+_Added 2026-10-13 with #78._ The server reads the body of a JSON `POST` itself
+and hands it to the SDK parsed (`parsedBody`), so that the audit log takes a
+`tools/call`'s id and tool name from the body: the SDK checks `Mcp-Name`
+against the body only for requests, and a notification could otherwise fake a
+call's line (§12). This leans on the SDK, so an SDK upgrade checks it again:
+
+- With `parsedBody` the SDK must still check the headers against that body,
+  and read nothing more. Verified for SDK 2.4.0.
+- The SDK does not bound a body given as `parsedBody`; the server applies the
+  SDK's own bound (`DEFAULT_MAX_REQUEST_BODY_SIZE`) when it reads.
+- A body the server cannot use (too large, not JSON, unreadable) is passed on
+  unread, and the SDK answers it as before.
+- The body is read only after the `Origin` and token checks: a request
+  without a valid token is never read.
 
 ### 7. Access: bearer tokens from a config file
 
@@ -171,6 +217,46 @@ must pass these headers through unchanged. The server documentation says so
   `/.well-known/openid-configuration`) answer 404, so clients do not assume
   OAuth.
 - Config changes apply on restart.
+
+_Added 2026-10-08 with #76._ How the server does this:
+
+- `TokenVerifier` is the SDK's `OAuthTokenVerifier`, and the server uses the
+  SDK's `verifyBearerToken` and `bearerAuthChallengeResponse` for parsing the
+  header and for the 401. They refuse a token whose `expiresAt` is unset, so a
+  token without expiry is reported with `expiresAt: Infinity` (in seconds, as
+  `AuthInfo` counts). A JWT verifier (Deferred) plugs into the same call.
+- Only `/mcp` is behind the check. `/health`, every other path, and
+  `/register` answer without a token: `mcp-remote` probes the discovery paths
+  and posts to `/register` without `Authorization`, and a 401 there would send
+  it into an OAuth flow. The 401 and the 404s are this server's choice; the
+  specification defines no static-token mode.
+- `Origin` is validated in front of the token check, as the specification
+  requires ("Servers MUST validate the `Origin` header … If the `Origin` header
+  is present and invalid, servers MUST respond with HTTP 403"). A request
+  without it is served: none of the clients in scope (Claude Code, `mcp-remote`,
+  SDK clients) sends one. A request with any `Origin` gets 403, so there is no
+  list of allowed origins. With a bearer token required, the check adds little
+  on its own: a browser does not attach the token the way it attaches a
+  cookie.
+
+  A web UI run next to the server works without browser access if its
+  backend calls the server: the model loop runs there, the request is server
+  to server and carries no `Origin`, and the UI's LLM key and this server's
+  token stay off the user's machine. The same holds when the Anthropic API's
+  MCP connector calls the server.
+
+  A UI whose page calls `/mcp` from the browser is not supported. Browsers
+  send `Origin` on a POST even to their own origin, so a UI served from the
+  same origin as the server (one reverse proxy, `app.example/` and
+  `app.example/mcp`) would need an allowlist; a UI on another origin would
+  also need CORS (a preflight `OPTIONS`, which carries no token, answered
+  before the token check). Either way the page would hold a token from the
+  config file, readable by every user of the UI and by any script injected
+  into it. Browser access is therefore decided together with per-user
+  tokens (OAuth), not on its own. See Deferred.
+- HTTP is served through the SDK's Node adapter (`@modelcontextprotocol/node`),
+  which bounds the request body while reading it and handles backpressure and
+  client disconnects. It requires `@modelcontextprotocol/server` 2.4 or later.
 
 *Why not OAuth now:* the clients in scope (Claude Code, `mcp-remote`, other
 programmatic clients) all send a static header. OAuth pays off only when people
@@ -193,6 +279,15 @@ and send messages to customers. Depending on the org, sending is either
 "create an `email` in Draft, then call `SendEmail`" or "create a record in a
 queued state that a flow or plugin picks up". Only per-entity-set and per-action
 allowlists can express both (#77).
+
+_Settled in #77._ `actAs` is the user's Microsoft Entra object id, sent as
+`CallerObjectId` (Microsoft's preferred header; `MSCRMCallerID` is legacy).
+Dataverse allows a call only when both the application user and the mapped
+user hold the privilege, and the application user needs
+`prvActOnBehalfOfAnotherUser` in a role assigned to it directly. An allowlist
+protects only if the request goes where the checked name says and does only
+what its tool claims: [ADR-0002](0002-tool-arguments-do-not-choose-the-target.md)
+records how the tools make sure of that.
 
 ### 9. Per-caller tool lists
 
@@ -283,6 +378,10 @@ a request counts against. If Dataverse counts it against the user acted for,
 one throttling state per instance is wrong, and the state has to be kept per
 user. How Dataverse counts impersonated requests was not verified.
 
+_Still open after #77._ The server keeps one throttling state per instance:
+a client acting on behalf of a user shares the application user's executor.
+Dev-org check O8 in #77 decides whether it has to become one per `actAs`.
+
 Adding application users would only spread the 5-minute limits. All
 application users in a tenant **share one tenant-level daily allowance**
 ([E3](#e3-microsoft-dataverse-limits-and-licensing)), so extra users add no daily capacity.
@@ -312,11 +411,134 @@ Dataverse error text. Field values are not logged **by default**. The only
 exception is opt-in: an installation may name specific entity-set/field pairs
 in a config allowlist, and only those values are logged (#78).
 
+_Changed on 2026-10-09, before #78 was started._ The log records **no content
+at all**, so neither the masking of `$filter` literals nor the field allowlist
+above is built:
+
+- Everything a call carries and returns (its arguments: filters, bodies,
+  action and function parameters; its result: the records; Dataverse's error
+  text) is seen in full by whatever sits between the agent and the server: an
+  MCP gateway, a proxy, the agent's framework. An installation that wants
+  content logged logs it there, under its own retention and access rules.
+  The server does not know where its logs go, and what an installation
+  considers sensitive is policy (§2).
+- Masking would have meant parsing OData well enough never to miss a
+  literal, in `$filter`, in filters nested in `$expand` and in function
+  parameters: one miss puts personal data in the log. Not logging content
+  makes the log safe by construction instead of by correct parsing.
+- So the server logs what only it knows: who called after the token check
+  (token name, role, `actAs`), what was asked and how it ended (tool, entity
+  set, selected column names, record id, status, Dataverse error code), and
+  what happened inside (Dataverse request count, throttling and retries,
+  duration, record count). Never: tokens, secrets, argument or result
+  content, Dataverse error text. There is no flag to turn content on.
+
+_Settled on 2026-10-13 (#78)._ What "shape, not content" covers, now that the
+line is built:
+
+- Names the call uses are logged only after the audit code's own shape
+  check, whatever the tool checked: entity set, column names, record id (a
+  GUID), action or function name, the logical names of a metadata call, the
+  field names of a create or update body and the parameter names of an
+  action or function. Their values never are, nor `list_entities`' prefix and
+  solution filters. `top` is logged as the number it is.
+- A value refused for its shape is not logged. Its length is, with whether it
+  has an `@`, a space or non-ASCII characters, and, when `DATAVERSE_AUDIT_KEY`
+  is set, an HMAC-SHA256 of it under that key, so whoever holds the key can
+  match it against the agent's own logs. A plain hash is not used: the CRM
+  itself is the dictionary that reverses the hash of an email.
+- The id of the record `create_record` made is logged, taken from
+  `OData-EntityId`, only when it is a GUID.
+- The JSON-RPC id is logged, so a line leads to the call in the agent's logs,
+  and the `X-Request-Id` a proxy set, so it leads to the proxy's logs: as is
+  when short and plain, otherwise its fingerprint. The server makes up
+  neither, and logs no client IP.
+- Lines that are not tool calls go to the same log: a refused token (no
+  token, malformed, unknown, expired; the name only when the token was known
+  and expired), a request refused for its `Origin`, and a call to a tool the
+  caller's role does not have. A call whose arguments fail the tool's input
+  schema is answered by the SDK before the server sees it and is not logged
+  (#80 says so).
+- The log is stdout, one JSON line each, `"type": "audit"`; everything else
+  the server says goes to stderr.
+- The line's fields are what log queries are built on, so they are fixed
+  here, within §14's 0.x terms. A tool call's line has no `event`; it has
+  `time` (when the call started), `durationMs`, `rpcId`, `token`, `role`,
+  `actAs`, `requestId`, `tool`, the names the call used (`entitySet`,
+  `columns`, `top`, `id`, `operation`, `fields`, `params`, `entity`,
+  `attribute`, `optionSet`), `outcome`, the result (`records`, `more`,
+  `createdId`) and what it cost (`dataverseRequests`, `throttled`,
+  `heldBack`, `retries`). `outcome` is `ok`; `refused` with `check` (the
+  names are ADR-0002's) and `got` (a fingerprint); `dataverse-error` with
+  `error: {class, status, code, reason}`, each only when known; or `error`
+  with `error: {class}`. Other lines have `event`: `auth-refused` (with
+  `reason`, and `token` for an expired one) or `origin-refused`.
+- `dataverseRequests` counts HTTP requests sent to Dataverse, resends after
+  a 429 included (so `retries` is also part of it), and the entity-set
+  lookup a call caused. A request the concurrency limit or a throttling
+  pause turned away was never sent and is not counted. `throttled` means
+  this call got a 429; `heldBack` that it waited before its first send for
+  another call's 429.
+- `DATAVERSE_AUDIT_KEY` is optional; set, it must be at least 32 characters,
+  or the server does not start. A short key could be found by trying keys
+  against a known value. Changing the key ends matching against older lines.
+- No line is dropped. On SIGTERM the server stops accepting, waits for the
+  requests and tool calls still running, then for stdout to take every line,
+  and only then exits. If stdout's reader goes away, the server keeps
+  serving and says once on stderr that audit lines are being lost: losing
+  the log is not made into losing the service.
+
 ### 13. Two independent release lines
 
 - Tags `v*` publish the npm package (`release.yml`).
 - Tags `server-v*` publish the image (`server-release.yml`), with its own
   version and CHANGELOG. `release.yml` ignores `server-v*`.
+
+_Settled on 2026-10-11 (#96)._ What a `server-v*` tag publishes, once
+pushed, is what installations pull, so these are fixed here rather than only
+in the workflow:
+
+- The image is `ghcr.io/rededis/dataverse-mcp-server-http`, the name #96 was
+  opened with.
+- Tags are `server-vX.Y.Z` or `server-vX.Y.Z-rc.N`; no other pre-release
+  form. A release gets the image tags `X.Y.Z`, `X.Y` and `latest`; a
+  pre-release gets only `X.Y.Z-rc.N`. With one release line, a patch to an
+  older `X.Y` would move `latest` back; that waits until there is a second
+  line.
+- Each tag is built for `linux/amd64` and `linux/arm64`. The bundle is plain
+  JavaScript, so it is built once on the builder's platform and nothing runs
+  under emulation.
+- The tag push starts `server-release.yml`, which creates the GitHub Release
+  itself as its last step, not marked latest, so the repo's releases page
+  stays on the npm package. A tag whose Release exists is refused: a re-run
+  would push the image again under the same tags.
+- A tag whose lockfile has a high or critical production advisory
+  (`npm audit --omit=dev --audit-level=high`) is refused before anything is
+  built; so is one pushed while the registry cannot be reached (#129). The
+  packages the MCP SDK inlined into its own `dist/` are not in the lockfile;
+  `scripts/audit-inlined.mjs` reads them from the bundle's source map and
+  refuses the tag for the same reasons, after the packages are installed
+  and before the image is built (#130).
+
+  _Added 2026-11-13 (#130)._ What that gate rests on:
+  - The versions are read from the paths pnpm left in the SDK's source maps.
+    An SDK built another way has no version to read, and the audit fails
+    until the script is taught the new layout: a tag is refused rather than
+    published unaudited.
+  - The advisories come from the registry endpoint `npm audit` itself asks
+    (`/-/npm/v1/security/advisories/bulk`), called directly. It is not a
+    documented contract, so the script first asks about a version known to
+    be vulnerable and fails if nothing comes back. Running `npm audit` on a
+    lockfile generated from the list was set aside: npm would resolve a tree
+    of its own around those packages, and the audit would be of that tree,
+    not of the versions in the image. OSV was set aside for the reason the
+    lockfile audit uses npm: one source of severities.
+  - There is no way to accept an advisory, as with `npm audit`: a high one
+    in an inlined package holds `server-v*` tags until the SDK ships a fix
+    or the threshold is changed in the script.
+- The CHANGELOG is `CHANGELOG-server.md`. A release needs its `## [X.Y.Z]`
+  section; a pre-release may use `## [Unreleased]`. The section becomes the
+  Release notes.
 
 Deploying a particular installation is outside this repository.
 
@@ -357,8 +579,8 @@ Not planned now. Each item names what would make it worth revisiting.
 | Extensions (custom module, derived image, upstream proxy, server as a library) | The first concrete request for custom behaviour. |
 | Shared limiter across instances (e.g. Redis) | More than one instance runs against the same Dataverse budget. |
 | Pool of Dataverse application users | One application user's limits are the bottleneck. Extra users only spread the 5-minute limits and share the tenant's daily allowance. Microsoft's Product Terms forbid working "around any technical limitations"; whether a pool counts is unresolved ([E3](#e3-microsoft-dataverse-limits-and-licensing)), so check it first. |
+| Browser clients (`Origin` allowlist; CORS too for another origin) | A web page must call the server from the user's browser rather than through its backend (§7). Decide together with OAuth: a token from the config file would sit in the page. |
 | `structuredContent` / `outputSchema` | Programmatic consumers need a typed response contract. |
-| Excluding field-secured columns (`IsSecured`) from logs | Field value logging is enabled for an installation. |
 
 ## Evidence
 

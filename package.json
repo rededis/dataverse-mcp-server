@@ -1,6 +1,6 @@
 {
   "name": "@rededis/dataverse-mcp-server",
-  "version": "0.9.0",
+  "version": "0.10.1",
   "description": "MCP server for Microsoft Dataverse API",
   "main": "dist/index.js",
   "bin": {
@@ -14,18 +14,25 @@
     ".env.example"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
+    "start:server": "node dist/server/index.js",
     "dev": "tsx src/index.ts",
-    "lint": "biome check src/",
-    "lint:fix": "biome check --write src/",
+    "dev:server": "tsx src/server/index.ts",
+    "lint": "biome check --error-on-warnings src/ scripts/ tests/ vitest.config.ts biome.json knip.json package.json",
+    "lint:fix": "biome check --write src/ scripts/ tests/ vitest.config.ts biome.json knip.json package.json",
+    "typecheck": "tsc -p tests",
+    "knip": "knip --strict",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "prepare": "husky",
-    "prepublishOnly": "npm run lint && npm test && npm run build"
+    "prepublishOnly": "npm run check",
+    "build:server": "node scripts/build-server.mjs",
+    "check": "npm run lint && npm run typecheck && npm run test:coverage && npm run build && npm run build:server"
   },
   "keywords": [
     "mcp",
@@ -49,17 +56,21 @@
     "access": "public"
   },
   "dependencies": {
-    "@modelcontextprotocol/server": "^2.2.0",
-    "dotenv": "^17.4.1",
-    "zod": "^4.3.6"
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "dotenv": "^18.0.9",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.10",
-    "@modelcontextprotocol/client": "^2.2.0",
-    "@types/node": "^22.0.0",
+    "@biomejs/biome": "^2.6.4",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@types/node": "^24.19.2",
+    "@vitest/coverage-v8": "5.0.5",
+    "esbuild": "0.28.2",
     "husky": "^9.1.7",
-    "tsx": "^4.21.0",
-    "typescript": "^5.7.0",
-    "vitest": "^4.1.2"
+    "knip": "6.45.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "5.0.5"
   }
 }

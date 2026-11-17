@@ -2,47 +2,139 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, "maint/**"]
+  # Commits pushed straight to these branches (docs and ADRs) are checked
+  # where they land, not by the next pull request (#164). The check goes on
+  # the pushed tip, not on each commit of the push; a finding then fails every
+  # later run too, until the history is rewritten. A skip instruction in the
+  # tip's message ([skip ci] and its variants, or a skip-checks: true
+  # trailer) skips the run, also one a squash merge takes over from the pull
+  # request's commits or body. A merged pull request runs again here: only
+  # this run sees the commit that lands and its final message.
+  push:
+    branches: [main, "maint/**"]
+
+# The job runs third-party actions: the token only reads.
+permissions:
+  contents: read
+
+# A new push to a pull request cancels its older runs, not those of others.
+# A push to a branch has no pull request number: it gets a group of its own,
+# so a later push does not cancel the check of an earlier commit.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   ci:
+    # Deleting a maint branch is a push too: the run falls back to the default
+    # branch's tip and would report on a commit the push did not touch.
+    if: ${{ !github.event.deleted }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      # The whole history, for the Betterleaks scan below.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
 
-      - run: npm install
+      - id: install
+        run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      # The same command the pre-commit hook runs (check in package.json).
+      - name: Check
+        run: npm run check
 
-      - name: Test
-        run: npm test
+      # The linters below run even when a step above failed, and each other's
+      # failure does not skip them: one red run shows every problem.
 
-      - name: Build
-        run: npm run build
+      # Unused or unresolved code and dependencies and duplicate exports in
+      # what ships, src/, by knip.json (#123); it repeats Biome's check for
+      # import cycles. Here only, not in npm run check, which the pre-commit
+      # hook runs too: findings are rare. Tests and scripts are left out on
+      # purpose. An export only a test uses: test through the public entry
+      # instead; only a pure function tested case by case keeps its export,
+      # marked @internal with the reason (Knip then skips it). knip.json lists the
+      # issue types by name: when Knip is bumped, compare the list with the
+      # issue types of the new release. Left out because strict mode never
+      # reports them: devDependencies, subpaths, catalog, catalogReferences. Knip needs node_modules, so it runs
+      # only when npm ci did.
+      - name: Unused code
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run knip -- --reporter github-actions
 
-  # engines.node says >=20; `ci` above runs on the version we develop on.
-  node-floor:
-    runs-on: ubuntu-latest
+      # Spelling in every file git does not ignore, by _typos.toml (#127).
+      # The release binary is checked against its sha256 by
+      # scripts/fetch-verified.sh, like jactionlint below (ADR-0003, #157).
+      # Dependabot does not bump it: change the version and the digest
+      # together, from the release asset's sha256 on its GitHub release page,
+      # confirmed with gh release verify-asset (ADR-0003). The digest is the
+      # PLATFORM archive's: an arm64 runner needs another.
+      - name: Spell check
+        if: ${{ !cancelled() }}
+        env:
+          VERSION: 1.52.2
+          PLATFORM: x86_64-unknown-linux-musl
+          SHA256: 3b13d1291281d39d01822e54035636487a7a0f228e70097899b1e33aeb0e7e93
+        run: |
+          bash scripts/fetch-verified.sh \
+            "https://github.com/crate-ci/typos/releases/download/v${VERSION}/typos-v${VERSION}-${PLATFORM}.tar.gz" \
+            "$SHA256" ./typos "$RUNNER_TEMP"
+          "$RUNNER_TEMP/typos"
 
-    steps:
-      - uses: actions/checkout@v4
+      # Hadolint on the Dockerfile (#127), default rules and threshold. The
+      # action's SHA pins the Hadolint image: its own Dockerfile names it by
+      # tag and digest. The action always passes failure-threshold (default
+      # info), which beats one in a .hadolint.yaml: change it under with:.
+      - name: Dockerfile lint
+        if: ${{ !cancelled() }}
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+      # jactionlint on the workflows (#121), default profile, offline. The
+      # release binary is checked against its sha256 by
+      # scripts/fetch-verified.sh, like typos above, not by an action or image
+      # (ADR-0003). Dependabot does not bump it: change the version and the
+      # digest together, from the release's checksums file. The digest is the
+      # PLATFORM archive's: an arm64 runner needs another.
+      - name: Workflow lint
+        if: ${{ !cancelled() }}
+        env:
+          VERSION: 2.6.0
+          PLATFORM: linux_amd64
+          SHA256: d5400967b8f0d3a5ae9a4cee21f56400a50eb3f05d0cbb4ef17184f17f0760c8
+        run: |
+          bash scripts/fetch-verified.sh \
+            "https://github.com/jdx/jactionlint/releases/download/v${VERSION}/jactionlint_${VERSION}_${PLATFORM}.tar.gz" \
+            "$SHA256" jactionlint "$RUNNER_TEMP"
+          "$RUNNER_TEMP/jactionlint" --no-online --format github
 
-      - run: npm install
-
-      - name: Test
-        run: npm test
-
-      - name: Build
-        run: npm run build
+      # Betterleaks with the project rules in .betterleaks.toml (#124), run
+      # by scripts/scan-commits.sh, which the pre-push hook calls too (#167):
+      # environment hosts and tenant or client IDs in every commit reachable
+      # from the checked-out one, so one added and removed within a pull
+      # request still fails, and in their messages. HEAD, not the default
+      # --all: a finding on another fetched branch does not fail this one.
+      # What the scan reads and prints is described in the script.
+      # The release binary is checked against its sha256 by
+      # scripts/fetch-verified.sh, like typos and jactionlint (ADR-0003).
+      # Dependabot does not bump it: change the version and the digest
+      # together, from the release's checksums.txt, confirmed with gh release
+      # verify-asset (ADR-0003). The digest is the PLATFORM archive's: an
+      # arm64 runner needs another.
+      - name: Environment host and tenant ID scan
+        if: ${{ !cancelled() }}
+        env:
+          VERSION: 1.10.1
+          PLATFORM: linux_x64
+          SHA256: c174b42d7aa60caf58c0c3e555c0e4bed01fe6b0d99a412bce777b5af4ce913e
+        run: |
+          bash scripts/fetch-verified.sh \
+            "https://github.com/betterleaks/betterleaks/releases/download/v${VERSION}/betterleaks_${VERSION}_${PLATFORM}.tar.gz" \
+            "$SHA256" betterleaks "$RUNNER_TEMP"
+          bash scripts/scan-commits.sh "$RUNNER_TEMP/betterleaks" HEAD

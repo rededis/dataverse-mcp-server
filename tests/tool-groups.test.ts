@@ -6,18 +6,14 @@ import { registerAllTools } from "../src/tools/all.js";
 import { registerDevelopmentTools } from "../src/tools/development/index.js";
 import { SERVER_TOOL_GROUPS } from "../src/tools/server-groups.js";
 import type { RegisterTools } from "../src/tools/types.js";
+import { createMockServer, stdio } from "./helpers.js";
 
 const client = {} as DataverseClient;
 
 function captureTools(register: RegisterTools, allowDelete = false) {
-  const schemas = new Map<string, unknown>();
-  const server = {
-    registerTool: (name: string, config: { inputSchema: unknown }) => {
-      schemas.set(name, config.inputSchema);
-    },
-  };
-  register(server as any, { client, allowDelete });
-  return schemas;
+  const server = createMockServer();
+  register(server, { client, ...stdio(allowDelete) });
+  return server.tools;
 }
 
 // ADR-0001 §4. The group names are the vocabulary of role configuration, so
@@ -87,8 +83,9 @@ describe("tool groups", () => {
     it(`input schemas are shared between registrations, not rebuilt (allowDelete: ${allowDelete})`, () => {
       const first = captureTools(registerAllTools, allowDelete);
       const second = captureTools(registerAllTools, allowDelete);
-      for (const [name, schema] of first) {
-        expect(second.get(name), name).toBe(schema);
+      for (const [name, tool] of first) {
+        expect(tool.inputSchema, name).toBeDefined();
+        expect(second.get(name)?.inputSchema, name).toBe(tool.inputSchema);
       }
     });
   }
@@ -97,7 +94,8 @@ describe("tool groups", () => {
 // A server entry point may import src/tools/server-groups.ts. Nothing reachable from it
 // may import src/tools/development/, or the development tools end up in the
 // server bundle (ADR-0001 §1). The only way in is src/index.ts (stdio) →
-// src/tools/all.ts → development/. #79 adds the bundle-level check in CI.
+// src/tools/all.ts → development/. The bundle-level check is
+// tests/server/bundle.test.ts.
 describe("import boundary", () => {
   const root = resolve(__dirname, "..");
 
@@ -106,7 +104,7 @@ describe("import boundary", () => {
     const specifiers = [
       // `from "./x.js"`, side-effect `import "./x.js"`, dynamic `import("./x.js")`.
       ...source.matchAll(/(?:\bfrom|\bimport)\s*\(?\s*"(\.[^"]+)"/g),
-    ].map((m) => m[1]);
+    ].map((m) => m[1]!);
     return specifiers.map((spec) => {
       const ts = resolve(dirname(file), spec.replace(/\.js$/, ".ts"));
       if (!existsSync(ts))
@@ -115,25 +113,62 @@ describe("import boundary", () => {
     });
   }
 
-  it("nothing reachable from src/tools/server-groups.ts imports development/", () => {
+  function reachableFrom(entry: string): string[] {
     const seen = new Set<string>();
-    const queue = [resolve(root, "src/tools/server-groups.ts")];
+    const queue = [resolve(root, entry)];
     while (queue.length > 0) {
       const file = queue.pop() as string;
       if (seen.has(file)) continue;
       seen.add(file);
       queue.push(...localImports(file));
     }
-    const reached = [...seen].map((f) => relative(root, f));
+    return [...seen].map((f) => relative(root, f));
+  }
+
+  it("nothing reachable from src/tools/server-groups.ts imports development/", () => {
+    const reached = reachableFrom("src/tools/server-groups.ts");
     expect(reached).toContain("src/tools/metadata-read.ts");
     expect(reached.filter((f) => f.includes("/development/"))).toEqual([]);
   });
 
-  function importersOf(): Map<string, string[]> {
-    const files = readdirSync(resolve(root, "src"), { recursive: true })
+  // The server entry point is a root of its own: it also imports modules
+  // outside src/tools/, and none of them may bring in the stdio package's
+  // setup tool or every group.
+  it("the server entry point reaches neither development/ nor the stdio-only modules", () => {
+    const reached = reachableFrom("src/server/index.ts");
+    expect(reached).toContain("src/tools/server-groups.ts");
+    expect(reached).toContain("src/dataverse.ts");
+    expect(
+      reached.filter(
+        (f) =>
+          f.includes("/development/") ||
+          f === "src/tools/all.ts" ||
+          f === "src/setup.ts" ||
+          f === "src/index.ts",
+      ),
+    ).toEqual([]);
+    // Packages are invisible to the walk; the bundle check covers them.
+    // dotenv is named here because the stdio entry uses it and the server
+    // must not read a .env file.
+    for (const file of reached) {
+      expect(readFileSync(resolve(root, file), "utf-8"), file).not.toMatch(
+        // `from`, side-effect `import`, dynamic `import()` and `require()`,
+        // subpaths such as dotenv/config included.
+        /(?:\bfrom|\bimport|\brequire)\s*\(?\s*["']dotenv(?:\/[^"']*)?["']/,
+      );
+    }
+  });
+
+  /** Every .ts file under src/, as an absolute path. */
+  function sourceFiles(): string[] {
+    return readdirSync(resolve(root, "src"), { recursive: true })
       .map(String)
       .filter((f) => f.endsWith(".ts"))
       .map((f) => resolve(root, "src", f));
+  }
+
+  function importersOf(): Map<string, string[]> {
+    const files = sourceFiles();
     const importers = new Map<string, string[]>();
     for (const file of files) {
       for (const target of localImports(file)) {
@@ -161,5 +196,40 @@ describe("import boundary", () => {
     );
     expect([...outsideImporters]).toEqual(["src/tools/all.ts"]);
     expect(importers.get("src/tools/all.ts")).toEqual(["src/index.ts"]);
+  });
+
+  // The other direction (#126): src/server builds on the rest of src/, never
+  // the reverse. Biome's noRestrictedImports in biome.json reports it at the
+  // import; this test holds the rule if that configuration is overridden, and
+  // sees some of what the lint rule does not: require(), import() in a type,
+  // and a template literal without substitutions. Neither sees a specifier
+  // built at run time, `declare module` or a triple-slash reference.
+  // The scan reads the text, not the syntax: a path to src/server after
+  // `import` or `from` in a comment or a string fails it too.
+  it("nothing in src/ outside src/server imports src/server", () => {
+    // "src/server" itself is what a specifier such as "./server" resolves to.
+    const isServer = (f: string) =>
+      f === "src/server" || f.startsWith("src/server/");
+    const serverImports = (files: string[]) =>
+      files.flatMap((file) =>
+        [
+          ...readFileSync(file, "utf-8").matchAll(
+            /(?:\bfrom|\bimport|\brequire)\s*\(?\s*["'`](\.[^"'`]+)["'`]/g,
+          ),
+        ]
+          .map((m) => relative(root, resolve(dirname(file), m[1]!)))
+          .filter(isServer)
+          .map((target) => `${relative(root, file)} -> ${target}`),
+      );
+    const inServer = (file: string) => isServer(relative(root, file));
+
+    // The scan does find such imports where they are allowed: without this,
+    // a scan that matches nothing would pass for ever.
+    expect(serverImports(sourceFiles().filter(inServer))).toContain(
+      "src/server/index.ts -> src/server/app.js",
+    );
+    expect(serverImports(sourceFiles().filter((f) => !inServer(f)))).toEqual(
+      [],
+    );
   });
 });

@@ -61,7 +61,7 @@ describe("FetchExecutor", () => {
 
     await new FetchExecutor(1_000).execute(request);
 
-    expect(fetchSpy.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(fetchSpy.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("rejects with DataverseTimeoutError when no response arrives in time", async () => {

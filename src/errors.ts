@@ -6,8 +6,14 @@
 // Logging (ADR-0001 §12): `status`, `code`, `method`, `reason`,
 // `retryAfterMs` and the class name are safe to log. `message` and `url` are
 // not: messages carry raw Dataverse and Entra response text, and URLs carry
-// `$filter` literals unmasked. DataverseBusyError is the exception: its
-// message is written here and carries neither.
+// the call's `$filter` and other arguments, which the log never records.
+// DataverseBusyError is the exception: its message is written here and
+// carries neither.
+//
+// RefusedError is not a Dataverse failure: the server's own checks refused
+// the call, the client's path and identity-header checks included. Its
+// `check` is safe to log; its `value` only as a fingerprint; its `message`,
+// which quotes the argument, never.
 
 import type { HttpRequest } from "./http.js";
 
@@ -33,12 +39,54 @@ export class DataverseApiError extends DataverseError {
     readonly status: number,
     request: RequestLine,
     body: string,
+    /** Replaces the default text; set here so `stack` carries it too. */
+    message?: string,
   ) {
     // Same text as before typed errors existed; callers may still show it.
-    super(`Dataverse API error (${status}): ${body}`);
+    super(message ?? `Dataverse API error (${status}): ${body}`);
     this.method = request.method;
     this.url = request.url;
-    this.code = errorCode(body);
+    this.code = errorField(body, "code");
+  }
+}
+
+/** Who a request was made on behalf of: the token's name and its `actAs`. */
+export interface OnBehalfOf {
+  /** The token's name in the server config. */
+  name: string;
+  /** The Dataverse user's Microsoft Entra object id. */
+  objectId: string;
+}
+
+// prvActOnBehalfOfAnotherUser is missing from the application user's roles.
+const CANNOT_ACT_ON_BEHALF = "0x8004a110";
+// PrivilegeDenied: the user, or the application user, lacks a privilege.
+const PRIVILEGE_DENIED = "0x80040220";
+
+/**
+ * Dataverse refused (403) a request made on behalf of a user. Its own message
+ * names a systemuserid, which neither the agent nor the operator can map to
+ * a token, so this one names the token and the user it acts as, and keeps
+ * Dataverse's text. Only the two codes whose cause is known get an
+ * explanation; any other 403 (a disabled or unlicensed user, for instance)
+ * is passed on as Dataverse put it.
+ */
+export class DataverseCallerDeniedError extends DataverseApiError {
+  constructor(request: RequestLine, body: string, caller: OnBehalfOf) {
+    super(403, request, body, deniedMessage(body, caller));
+  }
+}
+
+function deniedMessage(body: string, caller: OnBehalfOf): string {
+  const who = `user ${caller.objectId}, on whose behalf token "${caller.name}" acts`;
+  const said = `Dataverse said: ${errorField(body, "message") ?? body}`;
+  switch (errorField(body, "code")?.toLowerCase()) {
+    case CANNOT_ACT_ON_BEHALF:
+      return `Dataverse refused to act for ${who}: the server's application user lacks the "Act on Behalf of Another User" privilege (prvActOnBehalfOfAnotherUser), which must be in a security role assigned to it directly, not through a team. ${said}`;
+    case PRIVILEGE_DENIED:
+      return `Dataverse denied this call for lack of a privilege, to ${who}. The user, and the server's application user, both need it. ${said}`;
+    default:
+      return `Dataverse refused this call made for ${who}. ${said}`;
   }
 }
 
@@ -108,11 +156,48 @@ export class DataverseBusyError extends DataverseError {
   }
 }
 
-function errorCode(body: string): string | undefined {
+/** Which of the server's own checks refused a call. */
+export type RefusalCheck =
+  | "entity-set-name"
+  | "record-id"
+  | "logical-name"
+  | "operation-name"
+  | "binding"
+  | "parameter-name"
+  | "picklist-location"
+  | "allowlist"
+  | "body"
+  | "unknown-entity-set"
+  | "path"
+  | "identity-headers";
+
+/**
+ * A call refused by a check of this server, before or instead of reaching
+ * Dataverse. The message is for the agent and may quote the argument; the
+ * audit log reads only `check`, and `value` only to fingerprint it
+ * (ADR-0001 §12).
+ */
+export class RefusedError extends Error {
+  constructor(
+    readonly check: RefusalCheck,
+    message: string,
+    /** The argument refused for its shape, when there is one. */
+    readonly value?: string,
+  ) {
+    super(message);
+    this.name = "RefusedError";
+  }
+}
+
+/** A string field of the JSON error body (`{"error":{"code":…,"message":…}}`). */
+function errorField(
+  body: string,
+  field: "code" | "message",
+): string | undefined {
   try {
-    const code = (JSON.parse(body) as { error?: { code?: unknown } }).error
-      ?.code;
-    return typeof code === "string" ? code : undefined;
+    const value = (JSON.parse(body) as { error?: Record<string, unknown> })
+      .error?.[field];
+    return typeof value === "string" ? value : undefined;
   } catch {
     return undefined;
   }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RefusedError } from "../../errors.js";
 
 // Where an OptionSet lives: a Local one on an entity attribute, or a Global one
 // by name. Shared by get_picklist_options (metadata-read) and the option writes
@@ -16,12 +17,14 @@ export function validatePicklistLocation(loc: PicklistLocation): void {
   const hasGlobal = !!loc.option_set_name;
 
   if (hasGlobal && (hasEntity || hasAttr)) {
-    throw new Error(
+    throw new RefusedError(
+      "picklist-location",
       "option_set_name (Global OptionSet) is mutually exclusive with entity_logical_name/attribute_logical_name (Local OptionSet).",
     );
   }
   if (!hasGlobal && !(hasEntity && hasAttr)) {
-    throw new Error(
+    throw new RefusedError(
+      "picklist-location",
       "Provide either option_set_name (Global OptionSet) OR both entity_logical_name and attribute_logical_name (Local OptionSet).",
     );
   }

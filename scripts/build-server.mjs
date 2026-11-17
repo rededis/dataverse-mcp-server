@@ -1,0 +1,238 @@
+// Builds the HTTP server into one file for the image (#79, ADR-0001 §1):
+// build/server/server.js with its source map, the licence texts of the bundled
+// packages, and a check that the bundle holds nothing the server must not ship.
+//
+//   SERVER_VERSION=0.1.0 node scripts/build-server.mjs
+//
+// Without SERVER_VERSION the server reports the package.json version marked as
+// not a release (0.9.0-dev). The server release (#96) passes its server-v* tag.
+
+import {
+  copyFileSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { isBuiltin } from "node:module";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { build } from "esbuild";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+export const OUTDIR = "build/server";
+
+/**
+ * Bundles a server entry point in memory: nothing is written, so a bundle
+ * the checks refuse never reaches build/server/. Metafile paths are relative
+ * to the repo root.
+ *
+ * @param {{ entryPoint?: string, version: string, external?: string[] }} options
+ */
+export async function bundleServer({
+  entryPoint = "src/server/index.ts",
+  version,
+  external = [],
+}) {
+  if (typeof version !== "string" || version === "") {
+    throw new Error(
+      "bundleServer: version is required (the server reports it)",
+    );
+  }
+  const result = await build({
+    absWorkingDir: ROOT,
+    entryPoints: { server: entryPoint },
+    bundle: true,
+    platform: "node",
+    target: "node24",
+    format: "cjs",
+    sourcemap: true,
+    external,
+    define: { SERVER_VERSION: JSON.stringify(version) },
+    metafile: true,
+    logLevel: "warning",
+    outdir: OUTDIR,
+    write: false,
+  });
+  /** @param {string} ext */
+  const text = (ext) => {
+    const file = result.outputFiles.find((f) => f.path.endsWith(ext));
+    if (!file) throw new Error(`esbuild wrote no ${ext} file`);
+    return file.text;
+  };
+  return {
+    metafile: result.metafile,
+    outputFiles: result.outputFiles,
+    code: text(".js"),
+    sourcemap: text(".map"),
+  };
+}
+
+const FORBIDDEN = [
+  /^src\/tools\/development\//,
+  /^src\/tools\/all\.ts$/,
+  /^src\/setup\.ts$/,
+  /^src\/index\.ts$/,
+  /(^|\/)node_modules\/dotenv\//,
+  // The version is injected; reading package.json would ship all of it.
+  /^package\.json$/,
+];
+
+/**
+ * What is wrong with a server bundle, from its metafile; empty if nothing.
+ * @param {import("esbuild").Metafile} metafile
+ */
+export function bundleProblems(metafile) {
+  const problems = Object.keys(metafile.inputs)
+    .filter((path) => FORBIDDEN.some((re) => re.test(path)))
+    .map((path) => `forbidden module in the server bundle: ${path}`);
+  // The image has no node_modules: anything esbuild left external must be
+  // part of Node.
+  for (const output of Object.values(metafile.outputs)) {
+    for (const { path, external } of output.imports) {
+      if (external && !isBuiltin(path)) {
+        problems.push(`import left for run time, not a Node built-in: ${path}`);
+      }
+    }
+  }
+  return [...new Set(problems)];
+}
+
+const LICENCE_FILE = /^(licen[cs]e|copying|notice)/i;
+
+// The SDK's internal workspace package, inlined into @modelcontextprotocol/core
+// and /server and published under their licence. Named exactly, so any other
+// package the SDK starts to inline still needs a licence text. The audit of
+// inlined packages (scripts/audit-inlined.mjs) leaves it out as well: it is
+// the SDK's own code, and advisories for it are filed against the SDK
+// packages the lockfile lists. A name added here leaves both checks.
+export const COVERED_BY_SDK = new Set(["@modelcontextprotocol/core-internal"]);
+
+/**
+ * The package a bundled file belongs to: the innermost node_modules/<name>/
+ * of its path, so a package nested in another one, or in pnpm's store
+ * (node_modules/.pnpm/<name>@<version>/node_modules/<name>/), is itself.
+ * `dir` is the package's directory, as far as the path gives it. Shared with
+ * scripts/audit-inlined.mjs, so the licence check and the audit agree on
+ * which package a file belongs to. They differ on purpose in what they do
+ * with a package that is both installed and inlined: licence texts are kept
+ * by name, the audit lists the inlined version.
+ *
+ * @param {string} path a metafile input or a source map source
+ * @returns {{ name: string, dir: string } | undefined} undefined outside node_modules
+ */
+export function packageOf(path) {
+  const match = [
+    // A node_modules directly inside another is a directory, not a package
+    // of that name.
+    ...path.matchAll(
+      /node_modules\/(?!node_modules\/)((?:@[^/]+\/)?[^/.][^/]*)\//g,
+    ),
+  ].at(-1);
+  if (!match?.[1]) return undefined;
+  return {
+    name: match[1],
+    dir: path.slice(0, match.index + match[0].length - 1),
+  };
+}
+
+/**
+ * Where to find the licence texts of every package the bundle holds code
+ * from, keyed by package name, and the packages that have none. Bundling
+ * copies code but not LICENSE files, which the licences (Apache-2.0, MIT)
+ * require to go along with it.
+ *
+ * Packages come from two places: the metafile lists what esbuild took from
+ * node_modules, and the source map also names what those packages had
+ * already bundled into their own dist/ (the MCP SDK inlines Ajv and others).
+ * Those are not installed, so their texts are kept in scripts/licenses/.
+ *
+ * @param {import("esbuild").Metafile} metafile
+ * @param {string} sourcemap the source map, as JSON text
+ */
+export function licenceTexts(metafile, sourcemap) {
+  /** @type {Map<string, string>} */
+  const dirs = new Map();
+  for (const path of Object.keys(metafile.inputs)) {
+    const found = packageOf(path);
+    if (found) dirs.set(found.name, join(ROOT, found.dir));
+  }
+  // Every package a source map entry comes from, whatever tool built the
+  // package that inlined it.
+  for (const source of JSON.parse(sourcemap).sources) {
+    const name = packageOf(source)?.name;
+    if (name && !dirs.has(name) && !COVERED_BY_SDK.has(name)) {
+      dirs.set(name, join(ROOT, "scripts/licenses", name));
+    }
+  }
+  /** @type {Map<string, string[]>} */
+  const texts = new Map();
+  /** @type {string[]} */
+  const missing = [];
+  for (const [name, dir] of [...dirs].sort()) {
+    /** @type {string[]} */
+    let files = [];
+    try {
+      files = readdirSync(dir).filter((f) => LICENCE_FILE.test(f));
+    } catch (err) {
+      if (/** @type {NodeJS.ErrnoException} */ (err).code !== "ENOENT") {
+        throw err;
+      }
+    }
+    if (files.length === 0) missing.push(name);
+    else
+      texts.set(
+        name,
+        files.map((f) => join(dir, f)),
+      );
+  }
+  return { texts, missing };
+}
+
+/**
+ * @param {Map<string, string[]>} texts
+ * @param {string} outdir
+ */
+function copyLicences(texts, outdir) {
+  for (const [name, files] of texts) {
+    const target = join(ROOT, outdir, "licenses", name);
+    mkdirSync(target, { recursive: true });
+    for (const file of files) copyFileSync(file, join(target, basename(file)));
+  }
+  copyFileSync(join(ROOT, "LICENSE"), join(ROOT, outdir, "LICENSE"));
+}
+
+async function main() {
+  const { version: packageVersion } = JSON.parse(
+    readFileSync(join(ROOT, "package.json"), "utf-8"),
+  );
+  const version = process.env.SERVER_VERSION || `${packageVersion}-dev`;
+  // Cleared first, so a refused build leaves no bundle, old or new.
+  rmSync(join(ROOT, OUTDIR), { recursive: true, force: true });
+  const { metafile, outputFiles, sourcemap } = await bundleServer({ version });
+  const { texts, missing } = licenceTexts(metafile, sourcemap);
+  const problems = [
+    ...bundleProblems(metafile),
+    ...missing.map((name) => `no licence text for bundled package ${name}`),
+  ];
+  if (problems.length > 0) {
+    console.error("Server bundle refused:");
+    for (const problem of problems) console.error(`  - ${problem}`);
+    process.exit(1);
+  }
+  mkdirSync(join(ROOT, OUTDIR), { recursive: true });
+  for (const file of outputFiles) writeFileSync(file.path, file.contents);
+  copyLicences(texts, OUTDIR);
+  console.log(`Built ${OUTDIR}/server.js (version ${version})`);
+}
+
+// Node resolves symlinks in import.meta.url but not in argv[1]: compare real
+// paths, or a checkout under a symlink would skip the build and exit 0.
+if (
+  process.argv[1] &&
+  realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  await main();
+}
