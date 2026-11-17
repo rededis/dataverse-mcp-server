@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-17
+
+### Security
+
+- `@hono/node-server` 2.1.6 or later (1.19.18 or later on the 1.x line, which GHSA-qv5m-9pm6-hqp3 does not affect) and `hono` 4.13.16 or later, brought in by `@modelcontextprotocol/node`, which fix [GHSA-jpvv-r467-5p4w](https://github.com/advisories/GHSA-jpvv-r467-5p4w) and [GHSA-qv5m-9pm6-hqp3](https://github.com/advisories/GHSA-qv5m-9pm6-hqp3) in `@hono/node-server` and [GHSA-h7mg-cq63-vhpq](https://github.com/advisories/GHSA-h7mg-cq63-vhpq), [GHSA-4m76-xfj5-7975](https://github.com/advisories/GHSA-4m76-xfj5-7975), [GHSA-4h7h-rv7c-7m2v](https://github.com/advisories/GHSA-4h7h-rv7c-7m2v), [GHSA-46wx-v44x-9hh2](https://github.com/advisories/GHSA-46wx-v44x-9hh2) and [GHSA-3gg2-335m-rxc6](https://github.com/advisories/GHSA-3gg2-335m-rxc6) in `hono`. The dependency ranges are unchanged, so a fresh install already gets the fixed versions; a project whose lockfile pins older ones needs `npm update hono @hono/node-server`. Neither the stdio server nor the HTTP server reaches the code these advisories fix (#184).
+- The not yet released HTTP server under `dist/server/` refuses with 400 a request path that URL parsing would change, such as `/x/..\mcp` or `/%2e%2e/mcp`. Before, it was routed to `/mcp` while a reverse proxy matching the raw path saw a different path, so a path rule at the proxy could be bypassed; `/mcp` still required a bearer token. This is the issue of GHSA-jpvv-r467-5p4w, in the MCP SDK's Node adapter rather than in `@hono/node-server` (#184).
+
+## [0.10.0] - 2026-11-16
+
 ### Changed
 
 - **BREAKING** — Node 24 or later is required. Node 20 reached end of life on 2026-04-30, and Node 22 is in maintenance until 2027-04-30 (#101).
@@ -282,7 +291,9 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.0...v0.10.1
+[0.10.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.8.0...v0.9.0
