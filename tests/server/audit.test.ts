@@ -9,12 +9,12 @@ import {
   DataverseTimeoutError,
 } from "../../src/errors.js";
 import {
+  AuditLog,
   CallMetrics,
   callFields,
   fingerprint,
   JsonLinesAuditLogger,
   outcomeOf,
-  plainOrFingerprint,
   resultFields,
 } from "../../src/server/audit.js";
 
@@ -50,13 +50,22 @@ describe("fingerprint", () => {
   });
 });
 
-describe("plainOrFingerprint", () => {
+// An id another system chose: a JSON-RPC id, an X-Request-Id.
+describe("AuditLog.id", () => {
+  const audit = new AuditLog({ write: () => {} }, KEY);
+
   it.each([-3, "a".repeat(64)])("keeps %j", (v) => {
-    expect(plainOrFingerprint(v)).toBe(v);
+    expect(audit.id(v)).toBe(v);
   });
 
   it.each(["a".repeat(65), "ид"])("fingerprints %j", (v) => {
-    expect(plainOrFingerprint(v, KEY)).toEqual(fingerprint(v, KEY));
+    expect(audit.id(v)).toEqual(fingerprint(v, KEY));
+  });
+
+  it("fingerprints without an HMAC when there is no key", () => {
+    const unkeyed = new AuditLog({ write: () => {} });
+    expect(unkeyed.id("ид")).toEqual(fingerprint("ид"));
+    expect(unkeyed.id("ид")).not.toHaveProperty("hmac");
   });
 });
 

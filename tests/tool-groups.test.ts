@@ -6,19 +6,14 @@ import { registerAllTools } from "../src/tools/all.js";
 import { registerDevelopmentTools } from "../src/tools/development/index.js";
 import { SERVER_TOOL_GROUPS } from "../src/tools/server-groups.js";
 import type { RegisterTools } from "../src/tools/types.js";
-import { stdio } from "./helpers.js";
+import { createMockServer, stdio } from "./helpers.js";
 
 const client = {} as DataverseClient;
 
 function captureTools(register: RegisterTools, allowDelete = false) {
-  const schemas = new Map<string, unknown>();
-  const server = {
-    registerTool: (name: string, config: { inputSchema: unknown }) => {
-      schemas.set(name, config.inputSchema);
-    },
-  };
-  register(server as any, { client, ...stdio(allowDelete) });
-  return schemas;
+  const server = createMockServer();
+  register(server, { client, ...stdio(allowDelete) });
+  return server.tools;
 }
 
 // ADR-0001 §4. The group names are the vocabulary of role configuration, so
@@ -88,8 +83,9 @@ describe("tool groups", () => {
     it(`input schemas are shared between registrations, not rebuilt (allowDelete: ${allowDelete})`, () => {
       const first = captureTools(registerAllTools, allowDelete);
       const second = captureTools(registerAllTools, allowDelete);
-      for (const [name, schema] of first) {
-        expect(second.get(name), name).toBe(schema);
+      for (const [name, tool] of first) {
+        expect(tool.inputSchema, name).toBeDefined();
+        expect(second.get(name)?.inputSchema, name).toBe(tool.inputSchema);
       }
     });
   }
@@ -163,11 +159,16 @@ describe("import boundary", () => {
     }
   });
 
-  function importersOf(): Map<string, string[]> {
-    const files = readdirSync(resolve(root, "src"), { recursive: true })
+  /** Every .ts file under src/, as an absolute path. */
+  function sourceFiles(): string[] {
+    return readdirSync(resolve(root, "src"), { recursive: true })
       .map(String)
       .filter((f) => f.endsWith(".ts"))
       .map((f) => resolve(root, "src", f));
+  }
+
+  function importersOf(): Map<string, string[]> {
+    const files = sourceFiles();
     const importers = new Map<string, string[]>();
     for (const file of files) {
       for (const target of localImports(file)) {
@@ -195,5 +196,40 @@ describe("import boundary", () => {
     );
     expect([...outsideImporters]).toEqual(["src/tools/all.ts"]);
     expect(importers.get("src/tools/all.ts")).toEqual(["src/index.ts"]);
+  });
+
+  // The other direction (#126): src/server builds on the rest of src/, never
+  // the reverse. Biome's noRestrictedImports in biome.json reports it at the
+  // import; this test holds the rule if that configuration is overridden, and
+  // sees some of what the lint rule does not: require(), import() in a type,
+  // and a template literal without substitutions. Neither sees a specifier
+  // built at run time, `declare module` or a triple-slash reference.
+  // The scan reads the text, not the syntax: a path to src/server after
+  // `import` or `from` in a comment or a string fails it too.
+  it("nothing in src/ outside src/server imports src/server", () => {
+    // "src/server" itself is what a specifier such as "./server" resolves to.
+    const isServer = (f: string) =>
+      f === "src/server" || f.startsWith("src/server/");
+    const serverImports = (files: string[]) =>
+      files.flatMap((file) =>
+        [
+          ...readFileSync(file, "utf-8").matchAll(
+            /(?:\bfrom|\bimport|\brequire)\s*\(?\s*["'`](\.[^"'`]+)["'`]/g,
+          ),
+        ]
+          .map((m) => relative(root, resolve(dirname(file), m[1]!)))
+          .filter(isServer)
+          .map((target) => `${relative(root, file)} -> ${target}`),
+      );
+    const inServer = (file: string) => isServer(relative(root, file));
+
+    // The scan does find such imports where they are allowed: without this,
+    // a scan that matches nothing would pass for ever.
+    expect(serverImports(sourceFiles().filter(inServer))).toContain(
+      "src/server/index.ts -> src/server/app.js",
+    );
+    expect(serverImports(sourceFiles().filter((f) => !inServer(f)))).toEqual(
+      [],
+    );
   });
 });

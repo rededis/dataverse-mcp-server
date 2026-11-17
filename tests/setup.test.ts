@@ -12,7 +12,7 @@ async function setupMessage(
   problems: Pick<SetupProblems, "missing" | "invalid">,
 ) {
   const server = createMockServer();
-  registerSetupTool(server as any, { ...paths, ...problems });
+  registerSetupTool(server, { ...paths, ...problems });
   const result = await server.tools.get("dataverse_setup")!.handler({});
   return result.content[0].text as string;
 }

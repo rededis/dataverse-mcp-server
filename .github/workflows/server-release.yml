@@ -8,8 +8,13 @@ on:
   push:
     tags: ["server-v*"]
 
-permissions:
-  contents: read
+# Each job asks for what it needs.
+permissions: {}
+
+# A second run for the same tag waits: a running release is not cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   IMAGE: ghcr.io/rededis/dataverse-mcp-server-http
@@ -17,6 +22,7 @@ env:
 jobs:
   publish:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: write # the GitHub Release
       packages: write # GHCR
@@ -80,12 +86,27 @@ jobs:
             exit 1
           fi
 
+      # No npm cache: a poisoned cache entry would end up in what is published.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          cache: npm
+
+      # The image's bundle is built from the lockfile (npm ci, then esbuild).
+      # The audit sees the lockfile's production packages, dotenv too, though
+      # the bundle leaves it out. It does not see what the SDK inlines into
+      # its own dist/ (Ajv and others, listed in the image's licenses/); the
+      # step after npm ci audits those. audit.yml's schedule covers only
+      # the default branch; this stops a tag before anything is installed
+      # or built. An unreachable registry fails the step too.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - run: npm ci --no-audit --no-fund
+
+      # The same gate for the packages the lockfile does not list (#130).
+      # It needs them installed, to bundle; the image is built after it.
+      - name: Audit packages inlined by the MCP SDK
+        run: node scripts/audit-inlined.mjs
 
       # The image's esbuild bundle does not type-check; tsc in the check does.
       # The check's own server bundle is a gate only: the image build below
@@ -129,7 +150,7 @@ jobs:
           image: server-release-check
           version: ${{ steps.version.outputs.version }}
 
-      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

@@ -15,6 +15,24 @@ export interface Listener {
 }
 
 /**
+ * Whether parsing the request target as a URL changes its path. The app
+ * routes on the parsed path, where `\` is a `/` and dot segments, encoded or
+ * not, are resolved, so `/x/..\mcp` and `/%2e%2e/mcp` reach `/mcp`. A reverse
+ * proxy that matches the raw path sees a different one and its path rules can
+ * be bypassed (GHSA-jpvv-r467-5p4w; the SDK's Node adapter builds the URL
+ * itself, without the fix in `@hono/node-server`).
+ */
+function changedByParsing(target: string): boolean {
+  const end = target.search(/[?#]/);
+  const path = end === -1 ? target : target.slice(0, end);
+  try {
+    return new URL(target, "http://localhost").pathname !== path;
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Serves the app over node:http through the SDK's Node adapter, which bounds
  * the request body while reading it, honours write backpressure and aborts the
  * request when the client goes away.
@@ -34,6 +52,10 @@ export function listen(
     // it with a 500; this says what is happening instead.
     if (stopped) {
       res.writeHead(503, { Connection: "close" }).end();
+      return;
+    }
+    if (changedByParsing(req.url ?? "/")) {
+      res.writeHead(400).end();
       return;
     }
     void handle(req, res);

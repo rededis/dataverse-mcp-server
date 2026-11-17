@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const OUTDIR = "build/server";
+export const OUTDIR = "build/server";
 
 /**
  * Bundles a server entry point in memory: nothing is written, so a bundle
@@ -104,8 +104,39 @@ const LICENCE_FILE = /^(licen[cs]e|copying|notice)/i;
 
 // The SDK's internal workspace package, inlined into @modelcontextprotocol/core
 // and /server and published under their licence. Named exactly, so any other
-// package the SDK starts to inline still needs a licence text.
-const COVERED_BY_SDK = new Set(["@modelcontextprotocol/core-internal"]);
+// package the SDK starts to inline still needs a licence text. The audit of
+// inlined packages (scripts/audit-inlined.mjs) leaves it out as well: it is
+// the SDK's own code, and advisories for it are filed against the SDK
+// packages the lockfile lists. A name added here leaves both checks.
+export const COVERED_BY_SDK = new Set(["@modelcontextprotocol/core-internal"]);
+
+/**
+ * The package a bundled file belongs to: the innermost node_modules/<name>/
+ * of its path, so a package nested in another one, or in pnpm's store
+ * (node_modules/.pnpm/<name>@<version>/node_modules/<name>/), is itself.
+ * `dir` is the package's directory, as far as the path gives it. Shared with
+ * scripts/audit-inlined.mjs, so the licence check and the audit agree on
+ * which package a file belongs to. They differ on purpose in what they do
+ * with a package that is both installed and inlined: licence texts are kept
+ * by name, the audit lists the inlined version.
+ *
+ * @param {string} path a metafile input or a source map source
+ * @returns {{ name: string, dir: string } | undefined} undefined outside node_modules
+ */
+export function packageOf(path) {
+  const match = [
+    // A node_modules directly inside another is a directory, not a package
+    // of that name.
+    ...path.matchAll(
+      /node_modules\/(?!node_modules\/)((?:@[^/]+\/)?[^/.][^/]*)\//g,
+    ),
+  ].at(-1);
+  if (!match?.[1]) return undefined;
+  return {
+    name: match[1],
+    dir: path.slice(0, match.index + match[0].length - 1),
+  };
+}
 
 /**
  * Where to find the licence texts of every package the bundle holds code
@@ -125,16 +156,13 @@ export function licenceTexts(metafile, sourcemap) {
   /** @type {Map<string, string>} */
   const dirs = new Map();
   for (const path of Object.keys(metafile.inputs)) {
-    const [, dir, name] =
-      path.match(/^(.*node_modules\/((?:@[^/]+\/)?[^/]+))\//) ?? [];
-    if (dir && name) dirs.set(name, join(ROOT, dir));
+    const found = packageOf(path);
+    if (found) dirs.set(found.name, join(ROOT, found.dir));
   }
-  // Every package a source map entry comes from, by its innermost
-  // node_modules/ segment, whatever tool built the package that inlined it.
+  // Every package a source map entry comes from, whatever tool built the
+  // package that inlined it.
   for (const source of JSON.parse(sourcemap).sources) {
-    const name = [
-      ...source.matchAll(/node_modules\/((?:@[^/]+\/)?[^/.][^/]*)\//g),
-    ].at(-1)?.[1];
+    const name = packageOf(source)?.name;
     if (name && !dirs.has(name) && !COVERED_BY_SDK.has(name)) {
       dirs.set(name, join(ROOT, "scripts/licenses", name));
     }

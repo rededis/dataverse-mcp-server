@@ -33,7 +33,7 @@ export const CHOICE_ATTRIBUTE_CASTS = [
 export const OPTION_SET_IDENTITY_SELECT = "Name,IsGlobal,MetadataId";
 export const OPTION_SET_EXPAND = `OptionSet($select=${OPTION_SET_IDENTITY_SELECT},Options)`;
 
-export interface OptionLabel {
+interface OptionLabel {
   LocalizedLabels?: Array<{ Label?: string; LanguageCode?: number }>;
   UserLocalizedLabel?: { Label?: string; LanguageCode?: number };
 }

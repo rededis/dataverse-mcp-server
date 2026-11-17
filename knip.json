@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["src/index.ts!", "src/server/index.ts!"],
+  "project": ["src/**/*.ts!"],
+  "include": [
+    "files",
+    "dependencies",
+    "optionalPeerDependencies",
+    "unlisted",
+    "binaries",
+    "unresolved",
+    "exports",
+    "nsExports",
+    "types",
+    "nsTypes",
+    "enumMembers",
+    "namespaceMembers",
+    "duplicates",
+    "cycles"
+  ],
+  "rules": { "cycles": "error" }
+}

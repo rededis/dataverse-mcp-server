@@ -8,7 +8,7 @@ export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
  * operation after 2 minutes, so waiting longer than that buys nothing; it is
  * also far below the 2^31 ms where Node timers overflow to 1 ms.
  */
-export const MAX_REQUEST_TIMEOUT_MS = 120_000;
+const MAX_REQUEST_TIMEOUT_MS = 120_000;
 
 /** DATAVERSE_MAX_CONCURRENCY when unset. */
 export const DEFAULT_MAX_CONCURRENCY = 8;
@@ -40,7 +40,7 @@ export const DEFAULT_MAX_RETRY_WAIT_MS = 15_000;
  * range the bound does not hold: a resent request may carry an expired token,
  * and the call then fails with a 401.
  */
-export const MAX_WAIT_MS = 120_000;
+const MAX_WAIT_MS = 120_000;
 
 type NumberSetting =
   | { ok: true; value: number | undefined }

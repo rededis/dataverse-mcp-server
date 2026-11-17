@@ -19,7 +19,7 @@ describe("list_entities filters", () => {
         ],
       }),
     } as any;
-    registerAllTools(server as any, {
+    registerAllTools(server, {
       client,
       entityPrefix: "contoso_",
       ...stdio(),
@@ -48,7 +48,7 @@ describe("list_entities filters", () => {
         value: [{ LogicalName: "account" }, { LogicalName: "contoso_x" }],
       }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("list_entities")!.handler({});
     expect(client.get).toHaveBeenCalledTimes(1);
@@ -72,7 +72,7 @@ describe("list_entities filters", () => {
           value: [{ LogicalName: "contoso_b" }, { LogicalName: "account" }],
         }),
     } as any;
-    registerAllTools(server as any, {
+    registerAllTools(server, {
       client,
       entityPrefix: "contoso_",
       ...stdio(),
@@ -106,7 +106,7 @@ describe("list_entities filters", () => {
           value: [{ LogicalName: "contoso_a" }, { LogicalName: "contoso_b" }],
         }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("list_entities")!
@@ -158,7 +158,7 @@ describe("list_entities filters", () => {
           value: [{ LogicalName: "contoso_a" }, { LogicalName: "account" }],
         }),
     } as any;
-    registerAllTools(server as any, {
+    registerAllTools(server, {
       client,
       entityPrefix: "contoso_",
       ...stdio(),
@@ -189,7 +189,7 @@ describe("list_entities filters", () => {
         .mockResolvedValueOnce({ value: [{ solutionid: solutionId }] })
         .mockResolvedValueOnce({ value: [] }),
     } as any;
-    registerAllTools(server as any, {
+    registerAllTools(server, {
       client,
       ...stdio(false),
       solutionName: "DefaultSol",
@@ -208,7 +208,7 @@ describe("list_entities filters", () => {
   it("empty-string solution parameter disables default solution filter", async () => {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerAllTools(server as any, {
+    registerAllTools(server, {
       client,
       ...stdio(false),
       solutionName: "DefaultSol",
@@ -226,7 +226,7 @@ describe("list_entities filters", () => {
     const client = {
       get: vi.fn().mockResolvedValueOnce({ value: [] }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("list_entities")!.handler({ solution: "Missing" }),
@@ -242,7 +242,7 @@ describe("list_entities filters", () => {
         .mockResolvedValueOnce({ value: [{ solutionid: solutionId }] })
         .mockResolvedValueOnce({ value: [] }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("list_entities")!
@@ -269,7 +269,7 @@ describe("list_entities filters", () => {
         .mockResolvedValueOnce({ value: [{ objectid: entityB }] })
         .mockResolvedValueOnce({ value: [] }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("list_entities")!.handler({ solution: "Paged" });
 
@@ -302,7 +302,7 @@ describe("list_entities filters", () => {
         })
         .mockResolvedValue({ value: [] }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools.get("list_entities")!.handler({ solution: "Huge" });
 
@@ -341,7 +341,7 @@ describe("get_entity_schema", () => {
   it("issues the base request plus one cast request per concrete choice type", async () => {
     const server = createMockServer();
     const client = schemaClient([STRING_ATTR]);
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await server.tools
       .get("get_entity_schema")!
@@ -390,7 +390,7 @@ describe("get_entity_schema", () => {
         },
       ],
     });
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -423,7 +423,7 @@ describe("get_entity_schema", () => {
         },
       ],
     });
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -450,7 +450,7 @@ describe("get_entity_schema", () => {
         },
       ],
     });
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -471,7 +471,7 @@ describe("get_entity_schema", () => {
         },
       ],
     });
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -512,7 +512,7 @@ describe("get_entity_schema", () => {
         ],
       },
     );
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -548,7 +548,7 @@ describe("get_entity_schema", () => {
         return { value: [STRING_ATTR, PICKLIST_ATTR] };
       }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -573,7 +573,7 @@ describe("get_entity_schema", () => {
     const client = schemaClient([PICKLIST_ATTR], {
       PicklistAttributeMetadata: [{ LogicalName: "fundai_source" }],
     });
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -591,7 +591,7 @@ describe("get_entity_schema", () => {
   it("emits no warning block when every cast succeeds", async () => {
     const server = createMockServer();
     const client = schemaClient([STRING_ATTR]);
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools
       .get("get_entity_schema")!
@@ -610,7 +610,7 @@ describe("get_entity_schema", () => {
         throw new Error("Dataverse API error (404): table not found");
       }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools
@@ -626,7 +626,7 @@ describe("get_entity_schema", () => {
     async (entity_logical_name) => {
       const server = createMockServer();
       const client = schemaClient([]);
-      registerAllTools(server as any, { client, ...stdio() });
+      registerAllTools(server, { client, ...stdio() });
 
       await expect(
         server.tools.get("get_entity_schema")!.handler({ entity_logical_name }),
@@ -671,7 +671,7 @@ describe("get_picklist_options", () => {
         ],
       }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("get_picklist_options")!.handler({
       entity_logical_name: "fundai_x",
@@ -744,7 +744,7 @@ describe("get_picklist_options", () => {
         ],
       }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("get_picklist_options")!.handler({
       entity_logical_name: "opportunity",
@@ -793,7 +793,7 @@ describe("get_picklist_options", () => {
           : { value: [] },
       ),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("get_picklist_options")!.handler({
       entity_logical_name: "opportunity",
@@ -823,7 +823,7 @@ describe("get_picklist_options", () => {
         ],
       }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("get_picklist_options")!.handler({
       option_set_name: "MyGlobalSet",
@@ -852,7 +852,7 @@ describe("get_picklist_options", () => {
   it("throws when the choice attribute is not found", async () => {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("get_picklist_options")!.handler({
@@ -873,7 +873,7 @@ describe("get_picklist_options", () => {
           : { value: [] },
       ),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("get_picklist_options")!.handler({
@@ -895,7 +895,7 @@ describe("get_picklist_options", () => {
         return { value: [] };
       }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("get_picklist_options")!.handler({
@@ -910,7 +910,7 @@ describe("get_picklist_options", () => {
     const client = {
       get: vi.fn().mockRejectedValue(notFound()),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("get_picklist_options")!.handler({
@@ -929,7 +929,7 @@ describe("get_picklist_options", () => {
       "upstream returned 404 while resolving the plugin",
     );
     const client = { get: vi.fn().mockRejectedValue(failure) } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("get_picklist_options")!.handler({
@@ -945,7 +945,7 @@ describe("get_picklist_options", () => {
         .fn()
         .mockResolvedValue({ Name: "Empty", IsGlobal: true, Options: [] }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("get_picklist_options")!.handler({
       option_set_name: "Empty",
@@ -971,7 +971,7 @@ describe("get_picklist_options", () => {
         ],
       }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("get_picklist_options")!.handler({
       entity_logical_name: "fundai_x",
@@ -1010,7 +1010,7 @@ describe("list_entity_keys", () => {
         ],
       }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("list_entity_keys")!.handler({
       entity_logical_name: "contoso_record",
@@ -1049,7 +1049,7 @@ describe("list_entity_keys", () => {
         ],
       }),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("list_entity_keys")!.handler({
       entity_logical_name: "e",
@@ -1061,7 +1061,7 @@ describe("list_entity_keys", () => {
   it("returns an empty array when no keys are defined", async () => {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     const result = await server.tools.get("list_entity_keys")!.handler({
       entity_logical_name: "e",
@@ -1074,7 +1074,7 @@ describe("list_entity_keys", () => {
     const client = {
       get: vi.fn().mockRejectedValue(notFound()),
     } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("list_entity_keys")!.handler({
@@ -1086,7 +1086,7 @@ describe("list_entity_keys", () => {
   it("refuses a name that is not a logical name (path traversal)", async () => {
     const server = createMockServer();
     const client = { get: vi.fn().mockResolvedValue({ value: [] }) } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("list_entity_keys")!.handler({
@@ -1111,7 +1111,7 @@ describe("get_picklist_options names", () => {
   ])("refuses %j before any request", async (params, error) => {
     const server = createMockServer();
     const client = { get: vi.fn() } as any;
-    registerAllTools(server as any, { client, ...stdio() });
+    registerAllTools(server, { client, ...stdio() });
 
     await expect(
       server.tools.get("get_picklist_options")!.handler(params),
