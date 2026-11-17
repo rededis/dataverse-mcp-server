@@ -1,3 +1,4 @@
+import { connect } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import type { DataverseClient } from "../../src/client.js";
 import { createServerApp } from "../../src/server/app.js";
@@ -121,5 +122,46 @@ describe("listen", () => {
     const res = await fetch(`${base}/mcp`, { method: "POST" });
     expect(res.status).toBe(401);
     expect(res.headers.get("www-authenticate")).toMatch(/^Bearer /);
+  });
+
+  // fetch normalises the path before sending, so the target goes out raw.
+  async function statusOf(base: string, target: string) {
+    const { port } = new URL(base);
+    const response = await new Promise<string>((resolve, reject) => {
+      let text = "";
+      const socket = connect(Number(port), "127.0.0.1", () =>
+        socket.write(
+          `GET ${target} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n`,
+        ),
+      );
+      socket.on("data", (chunk) => {
+        text += chunk;
+      });
+      socket.on("end", () => resolve(text));
+      socket.on("error", reject);
+    });
+    return Number(response.split(" ", 2)[1]);
+  }
+
+  it.each([
+    "/x/..\\mcp",
+    "/x\\..\\mcp",
+    "/%2e%2e/mcp",
+    "/public/%2E%2E/mcp",
+    "/public/../mcp",
+    "/./mcp",
+  ])("refuses %s, which parsing would route to /mcp", async (target) => {
+    const base = await start();
+    expect(await statusOf(base, target)).toBe(400);
+  });
+
+  it.each([
+    ["/mcp", 401],
+    ["/mcp?x=/../y", 401],
+    ["/health", 200],
+    ["/nope", 404],
+  ])("routes %s as given", async (target, status) => {
+    const base = await start();
+    expect(await statusOf(base, target)).toBe(status);
   });
 });
