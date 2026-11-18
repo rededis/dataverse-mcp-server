@@ -662,8 +662,8 @@ const WAIT_AND_CHECK =
 // outcomes: a flat "do not call create_entity again" would stop an agent from
 // retrying a table that was never created (#117). Without additional columns
 // there is nothing for add_attribute to add.
-const TABLE_CHECK_LATER = `${WAIT_AND_CHECK} If the table exists, do not call create_entity again for it; if it does not, call create_entity again.`;
-const TABLE_WITH_COLUMNS_CHECK_LATER = `${WAIT_AND_CHECK} If the table exists, add the missing columns with add_attribute and do not call create_entity again for it; if it does not, call create_entity again.`;
+const TABLE_CHECK_LATER = `${WAIT_AND_CHECK} If the table exists, do not call create_entity again for it; if get_entity_schema answers Entity not found, call create_entity again.`;
+const TABLE_WITH_COLUMNS_CHECK_LATER = `${WAIT_AND_CHECK} If the table exists, add the missing columns with add_attribute and do not call create_entity again for it; if get_entity_schema answers Entity not found, call create_entity again with the same columns.`;
 
 // After a column timeout the table is known to exist.
 const COLUMN_CHECK_LATER = `${WAIT_AND_CHECK} The table exists: add the missing columns with add_attribute and do not call create_entity again for it.`;

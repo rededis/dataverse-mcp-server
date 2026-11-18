@@ -607,8 +607,8 @@ describe("create_entity", () => {
     const request = { method: "POST", url: "https://org/api/data/v9.2/x" };
     const WAIT_AND_CHECK =
       "Dataverse keeps working on a request for up to 2 minutes: wait that long, then check with get_entity_schema.";
-    const TABLE_WITH_COLUMNS_CHECK_LATER = `${WAIT_AND_CHECK} If the table exists, add the missing columns with add_attribute and do not call create_entity again for it; if it does not, call create_entity again.`;
-    const TABLE_CHECK_LATER = `${WAIT_AND_CHECK} If the table exists, do not call create_entity again for it; if it does not, call create_entity again.`;
+    const TABLE_WITH_COLUMNS_CHECK_LATER = `${WAIT_AND_CHECK} If the table exists, add the missing columns with add_attribute and do not call create_entity again for it; if get_entity_schema answers Entity not found, call create_entity again with the same columns.`;
+    const TABLE_CHECK_LATER = `${WAIT_AND_CHECK} If the table exists, do not call create_entity again for it; if get_entity_schema answers Entity not found, call create_entity again.`;
     const COLUMN_CHECK_LATER = `${WAIT_AND_CHECK} The table exists: add the missing columns with add_attribute and do not call create_entity again for it.`;
 
     it("says on a table timeout that the outcome is unknown and no column was sent", async () => {
