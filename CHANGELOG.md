@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-11-18
+
 ### Fixed
 
-- The hint after a `create_entity` table timeout no longer forbids a retry when the table was not created. It now says to call `create_entity` again, with the same columns, if `get_entity_schema` answers that the table is not found, and, if it does, not to call `create_entity` again, adding any requested columns with `add_attribute`; after a column timeout it says that the table exists. Before, both hints ended with "do not call `create_entity` again", which read as a rule for every case (#117).
+- The hint after a `create_entity` table timeout no longer forbids a retry when the table was not created. It now says to call `create_entity` again, with the same columns, if `get_entity_schema` answers that the table is not found, and, if the table exists, not to call `create_entity` again but to add any requested columns with `add_attribute`; after a column timeout it says that the table exists. Before, both hints ended with "do not call `create_entity` again", which read as a rule for every case (#117).
 
 ## [0.10.1] - 2026-11-17
 
@@ -295,7 +297,8 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.2...HEAD
+[0.10.2]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.1...v0.9.2
