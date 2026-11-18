@@ -608,6 +608,7 @@ describe("create_entity", () => {
     const WAIT_AND_CHECK =
       "Dataverse keeps working on a request for up to 2 minutes: wait that long, then check with get_entity_schema.";
     const TABLE_CHECK_LATER = `${WAIT_AND_CHECK} If the table exists, add the missing columns with add_attribute and do not call create_entity again for it; if it does not, call create_entity again.`;
+    const BARE_TABLE_CHECK_LATER = `${WAIT_AND_CHECK} If the table exists, do not call create_entity again for it; if it does not, call create_entity again.`;
     const COLUMN_CHECK_LATER = `${WAIT_AND_CHECK} The table exists: add the missing columns with add_attribute and do not call create_entity again for it.`;
 
     it("says on a table timeout that the outcome is unknown and no column was sent", async () => {
@@ -710,7 +711,7 @@ describe("create_entity", () => {
         .catch((e: unknown) => e as Error);
 
       expect(err.message).toBe(
-        `Dataverse did not answer within 30000 ms while creating table 'contoso_adconversion'. The table may not exist, may exist in part, or may still be in progress. ${TABLE_CHECK_LATER}`,
+        `Dataverse did not answer within 30000 ms while creating table 'contoso_adconversion'. The table may not exist, may exist in part, or may still be in progress. ${BARE_TABLE_CHECK_LATER}`,
       );
     });
 
