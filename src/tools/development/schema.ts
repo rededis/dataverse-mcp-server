@@ -657,8 +657,8 @@ const WAIT_AND_CHECK =
   "Dataverse keeps working on a request for up to 2 minutes: wait that long, then check with get_entity_schema.";
 
 // After a table timeout the table may not exist, so the advice covers both
-// outcomes; read as a rule for every case, "do not call create_entity again"
-// left a table that was never created uncreated (#117).
+// outcomes: a flat "do not call create_entity again" would stop an agent from
+// retrying a table that was never created (#117).
 const TABLE_CHECK_LATER = `${WAIT_AND_CHECK} If the table exists, add the missing columns with add_attribute and do not call create_entity again for it; if it does not, call create_entity again.`;
 
 // After a column timeout the table is known to exist.
