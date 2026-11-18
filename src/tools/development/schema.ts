@@ -601,11 +601,13 @@ function tableTimedOut(
   attributes: AttributeInput[],
   err: DataverseTimeoutError,
 ): Error {
-  const unsent = attributes.length
+  const withColumns = attributes.length > 0;
+  const unsent = withColumns
     ? ` None of the additional columns were sent: ${logicalNames(attributes)}.`
     : "";
+  const next = withColumns ? TABLE_WITH_COLUMNS_CHECK_LATER : TABLE_CHECK_LATER;
   return new Error(
-    `Dataverse did not answer within ${err.timeoutMs} ms while creating table '${table}'. The table may not exist, may exist in part, or may still be in progress.${unsent} ${CHECK_LATER}`,
+    `Dataverse did not answer within ${err.timeoutMs} ms while creating table '${table}'. The table may not exist, may exist in part, or may still be in progress.${unsent} ${next}`,
     { cause: err },
   );
 }
@@ -636,7 +638,7 @@ function columnFailed(
   const unsentText = unsent.length ? ` Not sent: ${logicalNames(unsent)}.` : "";
   const next =
     err instanceof DataverseTimeoutError
-      ? CHECK_LATER
+      ? COLUMN_CHECK_LATER
       : "Missing columns can be added with add_attribute.";
   return new Error(
     `Table '${table}' was created. ${createdText} ${failedText}${unsentText} ${next}`,
@@ -653,8 +655,18 @@ function entityIdMissing(table: string, attributes: AttributeInput[]): Error {
 // Dataverse keeps working on a request for up to 2 minutes, and table
 // definitions read meanwhile may come from a cache that lags behind, so a
 // check made at once can miss what is still being created.
-const CHECK_LATER =
-  "Dataverse keeps working on a request for up to 2 minutes: wait that long, then check with get_entity_schema. If the table exists, missing columns can be added with add_attribute; do not call create_entity again for it.";
+const WAIT_AND_CHECK =
+  "Dataverse keeps working on a request for up to 2 minutes: wait that long, then check with get_entity_schema.";
+
+// After a table timeout the table may not exist, so the advice covers both
+// outcomes: a flat "do not call create_entity again" would stop an agent from
+// retrying a table that was never created (#117). Without additional columns
+// there is nothing for add_attribute to add.
+const TABLE_CHECK_LATER = `${WAIT_AND_CHECK} If the table exists, do not call create_entity again for it; if get_entity_schema answers Entity not found, call create_entity again.`;
+const TABLE_WITH_COLUMNS_CHECK_LATER = `${WAIT_AND_CHECK} If the table exists, add the missing columns with add_attribute and do not call create_entity again for it; if get_entity_schema answers Entity not found, call create_entity again with the same columns.`;
+
+// After a column timeout the table is known to exist.
+const COLUMN_CHECK_LATER = `${WAIT_AND_CHECK} The table exists: add the missing columns with add_attribute and do not call create_entity again for it.`;
 
 function logicalNames(attributes: AttributeInput[]): string {
   return attributes.map((a) => a.logical_name).join(", ");

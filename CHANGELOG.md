@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The hint after a `create_entity` table timeout no longer forbids a retry when the table was not created. It now says to call `create_entity` again, with the same columns, if `get_entity_schema` answers that the table is not found, and, if it does, not to call `create_entity` again, adding any requested columns with `add_attribute`; after a column timeout it says that the table exists. Before, both hints ended with "do not call `create_entity` again", which read as a rule for every case (#117).
+
 ## [0.10.1] - 2026-11-17
 
 ### Security
