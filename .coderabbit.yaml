@@ -15,6 +15,10 @@ reviews:
       - "dependabot[bot]"
   # Review comments only: nothing commits to the branch.
   finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
     autofix:
       enabled: false
     fix_ci:
