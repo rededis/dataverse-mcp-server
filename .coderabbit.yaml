@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit review settings (#190).
+language: en-US
+reviews:
+  # Generated output and the lock file are not reviewed.
+  path_filters:
+    - "!dist/**"
+    - "!build/**"
+    - "!package-lock.json"
+  auto_review:
+    enabled: true
+    drafts: false
+    # Dependency bumps are checked by CI.
+    ignore_usernames:
+      - "dependabot[bot]"
+  # Review comments only: nothing commits to the branch.
+  finishing_touches:
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+    autofix:
+      enabled: false
+    fix_ci:
+      enabled: false
+    resolve_merge_conflict:
+      enabled: false
