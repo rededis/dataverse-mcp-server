@@ -685,7 +685,7 @@ export function registerSchemaTools(
     "create_entity",
     {
       description:
-        "Create a custom table with its primary name column and, optionally, additional columns. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. Add columns later with add_attribute and records with create_record.",
+        "Create a custom table with its primary name column and, optionally, additional columns. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. Add columns later with add_attribute and records with create_record. No solution is named in the request, so the table is not added to your solution and list_entities does not show it while DATAVERSE_SOLUTION_NAME filters by that solution.",
       inputSchema: CREATE_ENTITY_INPUT,
     },
     async (params) => {
@@ -832,7 +832,7 @@ export function registerSchemaTools(
     "add_attribute",
     {
       description:
-        "Add one column to an existing table. Returns the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute.",
+        "Add one column to an existing table. Returns the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. No solution is named in the request, so the column is not added to your solution.",
       inputSchema: ADD_ATTRIBUTE_INPUT,
     },
     async ({ entity_logical_name, attribute }) => {
