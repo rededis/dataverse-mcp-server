@@ -685,7 +685,7 @@ export function registerSchemaTools(
     "create_entity",
     {
       description:
-        "Create a custom table with its primary name column and, optionally, additional columns; logical_name carries the publisher prefix ('contoso_newtable'). Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. Add columns later with add_attribute and records with create_record.",
+        "Create a custom table with its primary name column and, optionally, additional columns. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. Add columns later with add_attribute and records with create_record.",
       inputSchema: CREATE_ENTITY_INPUT,
     },
     async (params) => {
@@ -1058,7 +1058,7 @@ export function registerSchemaTools(
       "delete_attribute",
       {
         description:
-          "Delete a column from a Dataverse table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
+          "Delete a column from a table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
         inputSchema: DELETE_ATTRIBUTE_DISABLED_INPUT,
       },
       async () => ({
@@ -1200,7 +1200,7 @@ export function registerSchemaTools(
       "delete_entity_key",
       {
         description:
-          "Permanently delete an alternate key from a Dataverse table. ⚠️ Drops the supporting unique index; any client code relying on keyed-PATCH upserts against this key will stop working. The underlying attributes and their data are NOT affected — only the key definition and its index are removed. list_entity_keys shows the table's keys.",
+          "Permanently delete an alternate key from a table: its unique index is dropped, so upserts by this key stop working, while the key's columns and their data stay. Returns a confirmation text; a key that does not exist is an error. list_entity_keys shows the table's keys.",
         inputSchema: DELETE_ENTITY_KEY_INPUT,
       },
       async ({ entity_logical_name, key_logical_name }) => {
@@ -1224,7 +1224,7 @@ export function registerSchemaTools(
       "delete_entity_key",
       {
         description:
-          "Delete an alternate key from a Dataverse table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
+          "Delete an alternate key from a table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
         inputSchema: DELETE_ENTITY_KEY_INPUT,
       },
       async () => ({

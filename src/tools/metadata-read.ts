@@ -106,7 +106,7 @@ export function registerMetadataReadTools(
     "list_entities",
     {
       description:
-        "List tables as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. Read-only. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
+        "List tables, read-only, as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. A solution that does not exist is an error; list_solutions shows the names. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
       inputSchema: LIST_ENTITIES_INPUT,
     },
     async ({ prefix, solution }) => {
@@ -276,7 +276,7 @@ export function registerMetadataReadTools(
     "get_picklist_options",
     {
       description:
-        "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns; get_entity_schema shows which columns of a table are choices.",
+        "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns; a column or option set that does not exist is an error. get_entity_schema shows which columns of a table are choices, and get_attribute_dependencies what uses a column.",
       inputSchema: LOCATION_INPUT,
     },
     async (params) => {

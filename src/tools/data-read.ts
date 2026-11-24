@@ -47,7 +47,7 @@ export function registerDataReadTools(
     "query_records",
     {
       description:
-        "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and nothing says whether more exist, so narrow the query with filter or top before counting or summing. To read one record by its id, use get_record.",
+        "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and nothing says whether more exist, so narrow the query with filter or top before counting or summing. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
       inputSchema: QUERY_RECORDS_INPUT,
     },
     async ({ entity_set, select, filter, top, orderby, expand }) => {

@@ -216,7 +216,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "add_picklist_option",
   },
   {
-    "description": "Create a custom table with its primary name column and, optionally, additional columns; logical_name carries the publisher prefix ('contoso_newtable'). Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. Add columns later with add_attribute and records with create_record.",
+    "description": "Create a custom table with its primary name column and, optionally, additional columns. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. Add columns later with add_attribute and records with create_record.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -450,7 +450,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "create_relationship",
   },
   {
-    "description": "Delete a column from a Dataverse table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
+    "description": "Delete a column from a table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -472,7 +472,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "delete_attribute",
   },
   {
-    "description": "Delete an alternate key from a Dataverse table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
+    "description": "Delete an alternate key from a table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -529,7 +529,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "delete_picklist_option",
   },
   {
-    "description": "Delete a record from a Dataverse table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
+    "description": "Delete a record from a table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -590,7 +590,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "get_entity_schema",
   },
   {
-    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns; get_entity_schema shows which columns of a table are choices.",
+    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns; a column or option set that does not exist is an error. get_entity_schema shows which columns of a table are choices, and get_attribute_dependencies what uses a column.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -708,7 +708,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "invoke_function",
   },
   {
-    "description": "List tables as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. Read-only. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
+    "description": "List tables, read-only, as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. A solution that does not exist is an error; list_solutions shows the names. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -757,7 +757,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "list_solutions",
   },
   {
-    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and nothing says whether more exist, so narrow the query with filter or top before counting or summing. To read one record by its id, use get_record.",
+    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and nothing says whether more exist, so narrow the query with filter or top before counting or summing. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1195,7 +1195,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "add_picklist_option",
   },
   {
-    "description": "Create a custom table with its primary name column and, optionally, additional columns; logical_name carries the publisher prefix ('contoso_newtable'). Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. Add columns later with add_attribute and records with create_record.",
+    "description": "Create a custom table with its primary name column and, optionally, additional columns. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. Add columns later with add_attribute and records with create_record.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1451,7 +1451,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "delete_attribute",
   },
   {
-    "description": "Permanently delete an alternate key from a Dataverse table. ⚠️ Drops the supporting unique index; any client code relying on keyed-PATCH upserts against this key will stop working. The underlying attributes and their data are NOT affected — only the key definition and its index are removed. list_entity_keys shows the table's keys.",
+    "description": "Permanently delete an alternate key from a table: its unique index is dropped, so upserts by this key stop working, while the key's columns and their data stay. Returns a confirmation text; a key that does not exist is an error. list_entity_keys shows the table's keys.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1569,7 +1569,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "get_entity_schema",
   },
   {
-    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns; get_entity_schema shows which columns of a table are choices.",
+    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns; a column or option set that does not exist is an error. get_entity_schema shows which columns of a table are choices, and get_attribute_dependencies what uses a column.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1687,7 +1687,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "invoke_function",
   },
   {
-    "description": "List tables as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. Read-only. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
+    "description": "List tables, read-only, as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. A solution that does not exist is an error; list_solutions shows the names. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1736,7 +1736,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "list_solutions",
   },
   {
-    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and nothing says whether more exist, so narrow the query with filter or top before counting or summing. To read one record by its id, use get_record.",
+    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and nothing says whether more exist, so narrow the query with filter or top before counting or summing. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
