@@ -32,6 +32,7 @@ describe("delete_record on stdio", () => {
     const deleteTool = server.tools.get("delete_record");
     expect(deleteTool).toBeDefined();
     expect(deleteTool!.description).toContain("disabled");
+    expect(deleteTool!.description).toContain("DATAVERSE_ALLOW_DELETE=true");
 
     const result = await deleteTool!.handler({ entity_set: "leads", id: GUID });
     expect(result.isError).toBe(true);

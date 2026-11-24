@@ -161,6 +161,7 @@ describe("delete_picklist_option", () => {
 
     const tool = server.tools.get("delete_picklist_option")!;
     expect(tool.description).toContain("disabled");
+    expect(tool.description).toContain("DATAVERSE_ALLOW_DELETE=true");
 
     const result = await tool.handler({
       option_set_name: "MyGlobalSet",

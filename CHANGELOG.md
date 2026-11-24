@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The descriptions of `query_records`, `get_record`, `create_record`, `update_record`, `delete_record`, `list_entities`, `list_solutions`, `get_picklist_options`, `create_entity`, `add_attribute`, `create_relationship` and `delete_entity_key` say what the tool changes or that it only reads, what it returns, its typical errors and which tool to use instead where one fits. `query_records` says it returns one page, up to 5000 rows by default. The `attribute` parameter of `add_attribute` has a description. The `prefix` field of `list_entities` says an empty string disables the default filter. With `DATAVERSE_ALLOW_DELETE` off, the descriptions of the four delete tools say that setting it to `true` turns them on (#192).
+
 ## [0.10.2] - 2026-11-18
 
 ### Fixed

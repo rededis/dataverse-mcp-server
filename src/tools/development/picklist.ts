@@ -188,7 +188,7 @@ export function registerPicklistWriteTools(
       "delete_picklist_option",
       {
         description:
-          "Remove an option from a Local or Global OptionSet (currently disabled for safety)",
+          "Remove an option from a Local or Global OptionSet. This tool is disabled on this server: a call fails with a message on how to enable it. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
         inputSchema: DELETE_PICKLIST_OPTION_INPUT,
       },
       async () => ({

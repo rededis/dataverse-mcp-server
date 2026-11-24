@@ -71,7 +71,7 @@ const LIST_ENTITIES_INPUT = z.object({
     .string()
     .optional()
     .describe(
-      "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified.",
+      "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified. Pass an empty string to disable the default filter.",
     ),
   solution: z
     .string()
@@ -105,8 +105,9 @@ export function registerMetadataReadTools(
   server.registerTool(
     "list_entities",
     {
+      // Rewrite the field list and the unfiltered-size sentence when #182 lands.
       description:
-        "List Dataverse tables (entities) with optional prefix and solution filters",
+        "List tables, read-only, as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. A solution that does not exist is an error. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
       inputSchema: LIST_ENTITIES_INPUT,
     },
     async ({ prefix, solution }) => {
@@ -276,7 +277,7 @@ export function registerMetadataReadTools(
     "get_picklist_options",
     {
       description:
-        "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns.",
+        "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns; a column or option set that does not exist is an error. get_entity_schema shows which columns of a table are choices.",
       inputSchema: LOCATION_INPUT,
     },
     async (params) => {

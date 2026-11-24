@@ -3,11 +3,12 @@
 exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
 [
   {
-    "description": "Add a column (attribute) to an existing Dataverse table",
+    "description": "Add one column to an existing table and return the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. The column lands in the Default Solution; it is in your solution only if its table was added there with all its subcomponents, otherwise add it to the solution by hand.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "attribute": {
+          "description": "The column to add: logical_name with the publisher prefix, type and display_name, plus the settings for its type (max_length, options, date_format and so on).",
           "properties": {
             "date_behavior": {
               "description": "DateTime only: storage/projection semantics. 'UserLocal' (default) shifts by viewer's TZ; 'DateOnly' stores a calendar date (requires date_format=DateOnly); 'TimeZoneIndependent' stores wall-clock time identical across TZs. Per Microsoft docs, changing DateTimeBehavior on an existing column is a one-way operation (UserLocal → other) and cannot be reverted.",
@@ -215,7 +216,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "add_picklist_option",
   },
   {
-    "description": "Create a new Dataverse table (entity) with specified attributes",
+    "description": "Create a custom table with its primary name column and, optionally, additional columns; add_attribute adds columns later and create_record adds records. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. The table lands in the Default Solution, not in yours, so list_entities filtered by your solution, by default or by its solution field, does not show it.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -379,7 +380,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "create_entity",
   },
   {
-    "description": "Create a new record in a Dataverse table",
+    "description": "Create a record in a table (entity set) from column values keyed by logical name; get_entity_schema lists the columns and their types. Returns the new record's URL, which ends in its id, not the record itself. An unknown table or column, or a value already taken under an alternate key, is an error. Every call creates a new record, so a retry after an error that may have reached Dataverse can create a duplicate.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -405,7 +406,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "create_record",
   },
   {
-    "description": "Create a relationship between two Dataverse tables",
+    "description": "Create a relationship between two tables. OneToMany adds a lookup column on related_entity that points to one primary_entity record; ManyToMany links records on both sides through an intersect table. Returns the relationship's URL; a schema_name that is taken is an error. This server has no tool to list or delete relationships.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -449,7 +450,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "create_relationship",
   },
   {
-    "description": "Delete a column from a Dataverse table (currently disabled for safety)",
+    "description": "Delete a column from a table. This tool is disabled on this server: a call fails with a message on how to enable it. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -471,7 +472,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "delete_attribute",
   },
   {
-    "description": "Delete an alternate key from a Dataverse table (currently disabled for safety)",
+    "description": "Delete an alternate key from a table. This tool is disabled on this server: a call fails with a message on how to enable it. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -493,7 +494,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "delete_entity_key",
   },
   {
-    "description": "Remove an option from a Local or Global OptionSet (currently disabled for safety)",
+    "description": "Remove an option from a Local or Global OptionSet. This tool is disabled on this server: a call fails with a message on how to enable it. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -528,7 +529,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "delete_picklist_option",
   },
   {
-    "description": "Delete a record from a Dataverse table (currently disabled for safety)",
+    "description": "Delete a record from a table. This tool is disabled on this server: a call fails with a message on how to enable it. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -589,7 +590,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "get_entity_schema",
   },
   {
-    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns.",
+    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns; a column or option set that does not exist is an error. get_entity_schema shows which columns of a table are choices.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -611,7 +612,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "get_picklist_options",
   },
   {
-    "description": "Get a single record by ID from a Dataverse table",
+    "description": "Read one record by its GUID from a table (entity set), optionally only the select columns and the expand relations; returns the record as JSON. An id that is not a GUID is refused before the request; a record that does not exist is a 404 error from Dataverse. To find records by their values rather than by id, use query_records.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -707,12 +708,12 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "invoke_function",
   },
   {
-    "description": "List Dataverse tables (entities) with optional prefix and solution filters",
+    "description": "List tables, read-only, as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. A solution that does not exist is an error. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "prefix": {
-          "description": "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified.",
+          "description": "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified. Pass an empty string to disable the default filter.",
           "type": "string",
         },
         "solution": {
@@ -742,7 +743,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "list_entity_keys",
   },
   {
-    "description": "List Dataverse solutions (uniquename is used to filter list_entities)",
+    "description": "List the visible solutions with solutionid, uniquename, friendlyname, version and ismanaged; unmanaged only unless include_managed is true. Read-only. A uniquename is the solution filter of list_entities.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -756,7 +757,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "list_solutions",
   },
   {
-    "description": "Query records from a Dataverse table with OData filters",
+    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back (up to 5000 rows by default, 500 for elastic tables), and a result that fills it or is shortened by top may be incomplete, so do not count or sum over such a result. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -945,7 +946,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "update_picklist_option",
   },
   {
-    "description": "Update an existing record in a Dataverse table",
+    "description": "Change the given columns of an existing record by its GUID; columns not in data keep their values. A record that does not exist is a 404 error: this tool never creates one (use create_record). Returns a confirmation text, not the record; read it back with get_record if needed.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -981,11 +982,12 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
 exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
 [
   {
-    "description": "Add a column (attribute) to an existing Dataverse table",
+    "description": "Add one column to an existing table and return the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. The column lands in the Default Solution; it is in your solution only if its table was added there with all its subcomponents, otherwise add it to the solution by hand.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "attribute": {
+          "description": "The column to add: logical_name with the publisher prefix, type and display_name, plus the settings for its type (max_length, options, date_format and so on).",
           "properties": {
             "date_behavior": {
               "description": "DateTime only: storage/projection semantics. 'UserLocal' (default) shifts by viewer's TZ; 'DateOnly' stores a calendar date (requires date_format=DateOnly); 'TimeZoneIndependent' stores wall-clock time identical across TZs. Per Microsoft docs, changing DateTimeBehavior on an existing column is a one-way operation (UserLocal → other) and cannot be reverted.",
@@ -1193,7 +1195,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "add_picklist_option",
   },
   {
-    "description": "Create a new Dataverse table (entity) with specified attributes",
+    "description": "Create a custom table with its primary name column and, optionally, additional columns; add_attribute adds columns later and create_record adds records. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. The table lands in the Default Solution, not in yours, so list_entities filtered by your solution, by default or by its solution field, does not show it.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1357,7 +1359,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "create_entity",
   },
   {
-    "description": "Create a new record in a Dataverse table",
+    "description": "Create a record in a table (entity set) from column values keyed by logical name; get_entity_schema lists the columns and their types. Returns the new record's URL, which ends in its id, not the record itself. An unknown table or column, or a value already taken under an alternate key, is an error. Every call creates a new record, so a retry after an error that may have reached Dataverse can create a duplicate.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1383,7 +1385,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "create_record",
   },
   {
-    "description": "Create a relationship between two Dataverse tables",
+    "description": "Create a relationship between two tables. OneToMany adds a lookup column on related_entity that points to one primary_entity record; ManyToMany links records on both sides through an intersect table. Returns the relationship's URL; a schema_name that is taken is an error. This server has no tool to list or delete relationships.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1449,7 +1451,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "delete_attribute",
   },
   {
-    "description": "Permanently delete an alternate key from a Dataverse table. ⚠️ Drops the supporting unique index; any client code relying on keyed-PATCH upserts against this key will stop working. The underlying attributes and their data are NOT affected — only the key definition and its index are removed.",
+    "description": "Permanently delete an alternate key from a table: its unique index is dropped, so upserts by this key stop working, while the key's columns and their data stay. Returns a confirmation text; a key that does not exist is an error. list_entity_keys shows the table's keys.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1506,7 +1508,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "delete_picklist_option",
   },
   {
-    "description": "Delete a record from a Dataverse table",
+    "description": "Permanently delete a record by its GUID; Dataverse may also delete or detach related records, as the relationships' cascade rules say. A record that does not exist is a 404 error. Returns a confirmation text.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1567,7 +1569,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "get_entity_schema",
   },
   {
-    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns.",
+    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns; a column or option set that does not exist is an error. get_entity_schema shows which columns of a table are choices.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1589,7 +1591,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "get_picklist_options",
   },
   {
-    "description": "Get a single record by ID from a Dataverse table",
+    "description": "Read one record by its GUID from a table (entity set), optionally only the select columns and the expand relations; returns the record as JSON. An id that is not a GUID is refused before the request; a record that does not exist is a 404 error from Dataverse. To find records by their values rather than by id, use query_records.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1685,12 +1687,12 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "invoke_function",
   },
   {
-    "description": "List Dataverse tables (entities) with optional prefix and solution filters",
+    "description": "List tables, read-only, as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. A solution that does not exist is an error. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "prefix": {
-          "description": "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified.",
+          "description": "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified. Pass an empty string to disable the default filter.",
           "type": "string",
         },
         "solution": {
@@ -1720,7 +1722,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "list_entity_keys",
   },
   {
-    "description": "List Dataverse solutions (uniquename is used to filter list_entities)",
+    "description": "List the visible solutions with solutionid, uniquename, friendlyname, version and ismanaged; unmanaged only unless include_managed is true. Read-only. A uniquename is the solution filter of list_entities.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1734,7 +1736,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "list_solutions",
   },
   {
-    "description": "Query records from a Dataverse table with OData filters",
+    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back (up to 5000 rows by default, 500 for elastic tables), and a result that fills it or is shortened by top may be incomplete, so do not count or sum over such a result. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1923,7 +1925,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "update_picklist_option",
   },
   {
-    "description": "Update an existing record in a Dataverse table",
+    "description": "Change the given columns of an existing record by its GUID; columns not in data keep their values. A record that does not exist is a 404 error: this tool never creates one (use create_record). Returns a confirmation text, not the record; read it back with get_record if needed.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
