@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-11-24
+
 ### Changed
 
-- The descriptions of `query_records`, `get_record`, `create_record`, `update_record`, `delete_record`, `list_entities`, `list_solutions`, `get_picklist_options`, `create_entity`, `add_attribute`, `create_relationship` and `delete_entity_key` say what the tool changes or that it only reads, what it returns, its typical errors and which tool to use instead where one fits. `query_records` says it returns one page, up to 5000 rows by default. The `attribute` parameter of `add_attribute` has a description. The `prefix` field of `list_entities` says an empty string disables the default filter. With `DATAVERSE_ALLOW_DELETE` off, the descriptions of the four delete tools say that setting it to `true` turns them on (#192).
+- The descriptions of `query_records`, `get_record`, `create_record`, `update_record`, `delete_record`, `list_entities`, `list_solutions`, `get_picklist_options`, `create_entity`, `add_attribute`, `create_relationship` and `delete_entity_key` say what the tool changes or that it only reads, what it returns, its typical errors and which tool to use instead where one fits. `query_records` says it returns one page, up to 5000 rows by default (500 for elastic tables), and that a full page or a result cut by `top` may be incomplete. The `attribute` parameter of `add_attribute` has a description. The `prefix` field of `list_entities` says an empty string disables the default filter. With `DATAVERSE_ALLOW_DELETE` off, the descriptions of the four delete tools say that setting it to `true` turns them on (#192).
 
 ## [0.10.2] - 2026-11-18
 
@@ -301,7 +303,8 @@ All picklist tools accept either `entity_logical_name` + `attribute_logical_name
 - Dataverse Web API v9.2 with OAuth 2.0 client-credentials authentication
 - Supports `@odata.nextLink` pagination for large solutions
 
-[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.3...HEAD
+[0.10.3]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/rededis/dataverse-mcp-server/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/rededis/dataverse-mcp-server/compare/v0.9.2...v0.10.0
