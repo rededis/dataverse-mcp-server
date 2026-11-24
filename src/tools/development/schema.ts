@@ -832,7 +832,7 @@ export function registerSchemaTools(
     "add_attribute",
     {
       description:
-        "Add one column to an existing table; Dataverse creates it at once. Returns the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute.",
+        "Add one column to an existing table. Returns the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute.",
       inputSchema: ADD_ATTRIBUTE_INPUT,
     },
     async ({ entity_logical_name, attribute }) => {
@@ -1058,7 +1058,7 @@ export function registerSchemaTools(
       "delete_attribute",
       {
         description:
-          "Delete a column from a table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
+          "Delete a column from a table. This tool is disabled on this server: a call fails with a message on how to enable it. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
         inputSchema: DELETE_ATTRIBUTE_DISABLED_INPUT,
       },
       async () => ({
@@ -1224,7 +1224,7 @@ export function registerSchemaTools(
       "delete_entity_key",
       {
         description:
-          "Delete an alternate key from a table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
+          "Delete an alternate key from a table. This tool is disabled on this server: a call fails with a message on how to enable it. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
         inputSchema: DELETE_ENTITY_KEY_INPUT,
       },
       async () => ({

@@ -130,7 +130,7 @@ export function registerDataWriteTools(
       "delete_record",
       {
         description:
-          "Delete a record from a table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
+          "Delete a record from a table. This tool is disabled on this server: a call fails with a message on how to enable it. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
         inputSchema: DELETE_RECORD_DISABLED_INPUT,
       },
       async () => ({
