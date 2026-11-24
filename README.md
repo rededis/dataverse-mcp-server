@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/github/package-json/dependency-version/rededis/dataverse-mcp-server/dev/typescript?color=3178C6)](https://www.typescriptlang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-MCP (Model Context Protocol) server for Microsoft Dataverse API with [safe-by-default](#safety) configuration. Works with any Dataverse / Dynamics 365 environment.
+MCP (Model Context Protocol) server for Microsoft Dataverse — the data platform behind Dynamics 365 CRM (Sales, Customer Service) and Power Apps — with [safe-by-default](#safety) configuration. Works with any Dataverse / Dynamics 365 environment.
 
 ## Tools
 
