@@ -3,7 +3,7 @@
 exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
 [
   {
-    "description": "Add one column to an existing table and return the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. The column lands in the Default Solution and reaches your solution only if its table was added there with all its subcomponents.",
+    "description": "Add one column to an existing table and return the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. The column lands in the Default Solution; it is in your solution only if its table was added there with all its subcomponents, otherwise add it to the solution by hand.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -757,7 +757,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "list_solutions",
   },
   {
-    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and a result that fills the page may be cut off, so before counting or summing narrow the query with filter until fewer rows come back; top only caps the rows returned. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
+    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and a result that fills the page may be cut off, so before counting or summing leave top out and narrow the query with filter until fewer rows come back; top only caps the rows returned, so a result shortened by top is incomplete too. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -982,7 +982,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
 exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
 [
   {
-    "description": "Add one column to an existing table and return the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. The column lands in the Default Solution and reaches your solution only if its table was added there with all its subcomponents.",
+    "description": "Add one column to an existing table and return the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. The column lands in the Default Solution; it is in your solution only if its table was added there with all its subcomponents, otherwise add it to the solution by hand.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1736,7 +1736,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "list_solutions",
   },
   {
-    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and a result that fills the page may be cut off, so before counting or summing narrow the query with filter until fewer rows come back; top only caps the rows returned. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
+    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and a result that fills the page may be cut off, so before counting or summing leave top out and narrow the query with filter until fewer rows come back; top only caps the rows returned, so a result shortened by top is incomplete too. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {

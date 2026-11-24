@@ -834,7 +834,7 @@ export function registerSchemaTools(
     {
       // Remove the Default Solution sentence when #68 lands.
       description:
-        "Add one column to an existing table and return the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. The column lands in the Default Solution and reaches your solution only if its table was added there with all its subcomponents.",
+        "Add one column to an existing table and return the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. The column lands in the Default Solution; it is in your solution only if its table was added there with all its subcomponents, otherwise add it to the solution by hand.",
       inputSchema: ADD_ATTRIBUTE_INPUT,
     },
     async ({ entity_logical_name, attribute }) => {
