@@ -713,7 +713,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "prefix": {
-          "description": "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified.",
+          "description": "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified. Pass an empty string to disable the default filter.",
           "type": "string",
         },
         "solution": {
@@ -757,7 +757,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "list_solutions",
   },
   {
-    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and nothing says whether more exist, so narrow the query with filter until the whole result fits in one page before counting or summing; top only caps the rows returned. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
+    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and a result that fills the page may be cut off, so before counting or summing narrow the query with filter until fewer rows come back; top only caps the rows returned. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1692,7 +1692,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "prefix": {
-          "description": "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified.",
+          "description": "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified. Pass an empty string to disable the default filter.",
           "type": "string",
         },
         "solution": {
@@ -1736,7 +1736,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "list_solutions",
   },
   {
-    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and nothing says whether more exist, so narrow the query with filter until the whole result fits in one page before counting or summing; top only caps the rows returned. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
+    "description": "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and a result that fills the page may be cut off, so before counting or summing narrow the query with filter until fewer rows come back; top only caps the rows returned. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {

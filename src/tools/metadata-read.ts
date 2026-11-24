@@ -71,7 +71,7 @@ const LIST_ENTITIES_INPUT = z.object({
     .string()
     .optional()
     .describe(
-      "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified.",
+      "Filter entities by logical name prefix (e.g. 'contoso_'). Uses DATAVERSE_ENTITY_PREFIX env if not specified. Pass an empty string to disable the default filter.",
     ),
   solution: z
     .string()
