@@ -686,7 +686,7 @@ export function registerSchemaTools(
     {
       // Remove the Default Solution sentence when #68 lands.
       description:
-        "Create a custom table with its primary name column and, optionally, additional columns; add_attribute adds columns later and create_record adds records. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. The table lands in the Default Solution, not in yours, so list_entities does not show it while DATAVERSE_SOLUTION_NAME filters by your solution.",
+        "Create a custom table with its primary name column and, optionally, additional columns; add_attribute adds columns later and create_record adds records. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. The table lands in the Default Solution, not in yours, so list_entities filtered by your solution, by default or by its solution field, does not show it.",
       inputSchema: CREATE_ENTITY_INPUT,
     },
     async (params) => {

@@ -105,6 +105,7 @@ export function registerMetadataReadTools(
   server.registerTool(
     "list_entities",
     {
+      // Rewrite the field list and the unfiltered-size sentence when #182 lands.
       description:
         "List tables, read-only, as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. A solution that does not exist is an error. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
       inputSchema: LIST_ENTITIES_INPUT,

@@ -46,6 +46,7 @@ export function registerDataReadTools(
   server.registerTool(
     "query_records",
     {
+      // Remove the one-page sentence when #193 lands.
       description:
         "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and nothing says whether more exist, so narrow the query with filter until the whole result fits in one page before counting or summing; top only caps the rows returned. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
       inputSchema: QUERY_RECORDS_INPUT,
