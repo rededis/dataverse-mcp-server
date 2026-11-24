@@ -684,8 +684,9 @@ export function registerSchemaTools(
   server.registerTool(
     "create_entity",
     {
+      // Remove the Default Solution sentence when #68 lands.
       description:
-        "Create a custom table with its primary name column and, optionally, additional columns. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. Add columns later with add_attribute and records with create_record. No solution is named in the request, so the table is not added to your solution and list_entities does not show it while DATAVERSE_SOLUTION_NAME filters by that solution.",
+        "Create a custom table with its primary name column and, optionally, additional columns; add_attribute adds columns later and create_record adds records. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. The table lands in the Default Solution, not in yours, so list_entities does not show it while DATAVERSE_SOLUTION_NAME filters by your solution.",
       inputSchema: CREATE_ENTITY_INPUT,
     },
     async (params) => {
@@ -831,8 +832,9 @@ export function registerSchemaTools(
   server.registerTool(
     "add_attribute",
     {
+      // Remove the Default Solution sentence when #68 lands.
       description:
-        "Add one column to an existing table. Returns the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. No solution is named in the request, so the column is not added to your solution.",
+        "Add one column to an existing table and return the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. The column lands in the Default Solution and reaches your solution only if its table was added there with all its subcomponents.",
       inputSchema: ADD_ATTRIBUTE_INPUT,
     },
     async ({ entity_logical_name, attribute }) => {

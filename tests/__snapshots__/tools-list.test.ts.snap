@@ -3,7 +3,7 @@
 exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
 [
   {
-    "description": "Add one column to an existing table. Returns the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. No solution is named in the request, so the column is not added to your solution.",
+    "description": "Add one column to an existing table and return the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. The column lands in the Default Solution and reaches your solution only if its table was added there with all its subcomponents.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -216,7 +216,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "add_picklist_option",
   },
   {
-    "description": "Create a custom table with its primary name column and, optionally, additional columns. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. Add columns later with add_attribute and records with create_record. No solution is named in the request, so the table is not added to your solution and list_entities does not show it while DATAVERSE_SOLUTION_NAME filters by that solution.",
+    "description": "Create a custom table with its primary name column and, optionally, additional columns; add_attribute adds columns later and create_record adds records. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. The table lands in the Default Solution, not in yours, so list_entities does not show it while DATAVERSE_SOLUTION_NAME filters by your solution.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -380,7 +380,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "create_entity",
   },
   {
-    "description": "Create a record in a table (entity set) from column values keyed by logical name; get_entity_schema lists the columns and their types. Returns the new record's URL, which ends in its id, not the record itself. Every call creates a new record, so a retry after an error that may have reached Dataverse can create a duplicate.",
+    "description": "Create a record in a table (entity set) from column values keyed by logical name; get_entity_schema lists the columns and their types. Returns the new record's URL, which ends in its id, not the record itself. An unknown table or column, or a value already taken under an alternate key, is an error. Every call creates a new record, so a retry after an error that may have reached Dataverse can create a duplicate.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -590,7 +590,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "get_entity_schema",
   },
   {
-    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns; a column or option set that does not exist is an error. get_entity_schema shows which columns of a table are choices, and get_attribute_dependencies what uses a column.",
+    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns; a column or option set that does not exist is an error. get_entity_schema shows which columns of a table are choices.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -612,7 +612,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "get_picklist_options",
   },
   {
-    "description": "Read one record by its GUID from a table (entity set), optionally only the select columns and the expand relations; returns the record as JSON. A record that does not exist is a 404 error from Dataverse. To find records by their values rather than by id, use query_records.",
+    "description": "Read one record by its GUID from a table (entity set), optionally only the select columns and the expand relations; returns the record as JSON. An id that is not a GUID is refused before the request; a record that does not exist is a 404 error from Dataverse. To find records by their values rather than by id, use query_records.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -708,7 +708,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "invoke_function",
   },
   {
-    "description": "List tables, read-only, as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. A solution that does not exist is an error; list_solutions shows the names. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
+    "description": "List tables, read-only, as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. A solution that does not exist is an error. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -982,7 +982,7 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
 exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
 [
   {
-    "description": "Add one column to an existing table. Returns the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. No solution is named in the request, so the column is not added to your solution.",
+    "description": "Add one column to an existing table and return the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute. The column lands in the Default Solution and reaches your solution only if its table was added there with all its subcomponents.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1195,7 +1195,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "add_picklist_option",
   },
   {
-    "description": "Create a custom table with its primary name column and, optionally, additional columns. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. Add columns later with add_attribute and records with create_record. No solution is named in the request, so the table is not added to your solution and list_entities does not show it while DATAVERSE_SOLUTION_NAME filters by that solution.",
+    "description": "Create a custom table with its primary name column and, optionally, additional columns; add_attribute adds columns later and create_record adds records. Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. The table lands in the Default Solution, not in yours, so list_entities does not show it while DATAVERSE_SOLUTION_NAME filters by your solution.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1359,7 +1359,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "create_entity",
   },
   {
-    "description": "Create a record in a table (entity set) from column values keyed by logical name; get_entity_schema lists the columns and their types. Returns the new record's URL, which ends in its id, not the record itself. Every call creates a new record, so a retry after an error that may have reached Dataverse can create a duplicate.",
+    "description": "Create a record in a table (entity set) from column values keyed by logical name; get_entity_schema lists the columns and their types. Returns the new record's URL, which ends in its id, not the record itself. An unknown table or column, or a value already taken under an alternate key, is an error. Every call creates a new record, so a retry after an error that may have reached Dataverse can create a duplicate.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1569,7 +1569,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "get_entity_schema",
   },
   {
-    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns; a column or option set that does not exist is an error. get_entity_schema shows which columns of a table are choices, and get_attribute_dependencies what uses a column.",
+    "description": "Read a Local or Global OptionSet as { option_set: { name, is_global, metadata_id }, options: [{ value, label }] }. Use is_global to tell whether a column holds a local copy of the values or is bound to a shared Global OptionSet — matching values alone do not prove a binding. Works for Choice, Status, State and MultiSelect columns; a column or option set that does not exist is an error. get_entity_schema shows which columns of a table are choices.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1591,7 +1591,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "get_picklist_options",
   },
   {
-    "description": "Read one record by its GUID from a table (entity set), optionally only the select columns and the expand relations; returns the record as JSON. A record that does not exist is a 404 error from Dataverse. To find records by their values rather than by id, use query_records.",
+    "description": "Read one record by its GUID from a table (entity set), optionally only the select columns and the expand relations; returns the record as JSON. An id that is not a GUID is refused before the request; a record that does not exist is a 404 error from Dataverse. To find records by their values rather than by id, use query_records.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1687,7 +1687,7 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
     "name": "invoke_function",
   },
   {
-    "description": "List tables, read-only, as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. A solution that does not exist is an error; list_solutions shows the names. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
+    "description": "List tables, read-only, as a JSON array of LogicalName, DisplayName, EntitySetName, Description and IsCustomEntity. The prefix and solution filters have server defaults (see each field); with no filter in effect, the list holds every table in the org and is very large. A solution that does not exist is an error. EntitySetName is the entity_set of the record tools; get_entity_schema shows a table's columns.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {

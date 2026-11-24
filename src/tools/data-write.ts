@@ -54,7 +54,7 @@ export function registerDataWriteTools(
       "create_record",
       {
         description:
-          "Create a record in a table (entity set) from column values keyed by logical name; get_entity_schema lists the columns and their types. Returns the new record's URL, which ends in its id, not the record itself. Every call creates a new record, so a retry after an error that may have reached Dataverse can create a duplicate.",
+          "Create a record in a table (entity set) from column values keyed by logical name; get_entity_schema lists the columns and their types. Returns the new record's URL, which ends in its id, not the record itself. An unknown table or column, or a value already taken under an alternate key, is an error. Every call creates a new record, so a retry after an error that may have reached Dataverse can create a duplicate.",
         inputSchema: CREATE_RECORD_INPUT,
       },
       async ({ entity_set, data }) => {

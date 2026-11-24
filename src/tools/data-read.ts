@@ -78,7 +78,7 @@ export function registerDataReadTools(
     "get_record",
     {
       description:
-        "Read one record by its GUID from a table (entity set), optionally only the select columns and the expand relations; returns the record as JSON. A record that does not exist is a 404 error from Dataverse. To find records by their values rather than by id, use query_records.",
+        "Read one record by its GUID from a table (entity set), optionally only the select columns and the expand relations; returns the record as JSON. An id that is not a GUID is refused before the request; a record that does not exist is a 404 error from Dataverse. To find records by their values rather than by id, use query_records.",
       inputSchema: GET_RECORD_INPUT,
     },
     async ({ entity_set, id, select, expand }) => {
