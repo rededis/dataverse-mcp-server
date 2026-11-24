@@ -20,7 +20,7 @@ export function registerSolutionTools(
     "list_solutions",
     {
       description:
-        "List Dataverse solutions (uniquename is used to filter list_entities)",
+        "List the visible solutions with solutionid, uniquename, friendlyname, version and ismanaged; unmanaged only unless include_managed is true. Read-only. A uniquename is the solution filter of list_entities.",
       inputSchema: LIST_SOLUTIONS_INPUT,
     },
     async ({ include_managed }) => {

@@ -1079,6 +1079,7 @@ describe("delete_attribute", () => {
 
     const tool = server.tools.get("delete_attribute")!;
     expect(tool.description).toContain("disabled");
+    expect(tool.description).toContain("DATAVERSE_ALLOW_DELETE=true");
 
     const result = await tool.handler({
       entity_logical_name: "fundai_x",
@@ -1457,6 +1458,7 @@ describe("delete_entity_key", () => {
 
     const tool = server.tools.get("delete_entity_key")!;
     expect(tool.description).toContain("disabled");
+    expect(tool.description).toContain("DATAVERSE_ALLOW_DELETE=true");
 
     const result = await tool.handler({
       entity_logical_name: "contoso_record",

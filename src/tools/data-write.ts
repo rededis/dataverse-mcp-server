@@ -53,7 +53,8 @@ export function registerDataWriteTools(
     server.registerTool(
       "create_record",
       {
-        description: "Create a new record in a Dataverse table",
+        description:
+          "Create a record in a table (entity set) from column values keyed by logical name; get_entity_schema lists the columns and their types. Returns the new record's URL, which ends in its id, not the record itself. Every call creates a new record, so a retry after an error that may have reached Dataverse can create a duplicate.",
         inputSchema: CREATE_RECORD_INPUT,
       },
       async ({ entity_set, data }) => {
@@ -75,7 +76,8 @@ export function registerDataWriteTools(
     server.registerTool(
       "update_record",
       {
-        description: "Update an existing record in a Dataverse table",
+        description:
+          "Change the given columns of an existing record by its GUID; columns not in data keep their values. A record that does not exist is a 404 error: this tool never creates one (use create_record). Returns a confirmation text, not the record; read it back with get_record if needed.",
         inputSchema: UPDATE_RECORD_INPUT,
       },
       async ({ entity_set, id, data }) => {
@@ -103,7 +105,8 @@ export function registerDataWriteTools(
     server.registerTool(
       "delete_record",
       {
-        description: "Delete a record from a Dataverse table",
+        description:
+          "Permanently delete a record by its GUID; Dataverse may also delete or detach related records, as the relationships' cascade rules say. A record that does not exist is a 404 error. Returns a confirmation text.",
         inputSchema: DELETE_RECORD_INPUT,
       },
       async ({ entity_set, id }) => {
@@ -127,7 +130,7 @@ export function registerDataWriteTools(
       "delete_record",
       {
         description:
-          "Delete a record from a Dataverse table (currently disabled for safety)",
+          "Delete a record from a Dataverse table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
         inputSchema: DELETE_RECORD_DISABLED_INPUT,
       },
       async () => ({

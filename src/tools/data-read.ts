@@ -46,7 +46,8 @@ export function registerDataReadTools(
   server.registerTool(
     "query_records",
     {
-      description: "Query records from a Dataverse table with OData filters",
+      description:
+        "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back, up to 5000 rows by default, and nothing says whether more exist, so narrow the query with filter or top before counting or summing. To read one record by its id, use get_record.",
       inputSchema: QUERY_RECORDS_INPUT,
     },
     async ({ entity_set, select, filter, top, orderby, expand }) => {
@@ -76,7 +77,8 @@ export function registerDataReadTools(
   server.registerTool(
     "get_record",
     {
-      description: "Get a single record by ID from a Dataverse table",
+      description:
+        "Read one record by its GUID from a table (entity set), optionally only the select columns and the expand relations; returns the record as JSON. A record that does not exist is a 404 error from Dataverse. To find records by their values rather than by id, use query_records.",
       inputSchema: GET_RECORD_INPUT,
     },
     async ({ entity_set, id, select, expand }) => {

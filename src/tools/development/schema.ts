@@ -466,7 +466,9 @@ const CREATE_ENTITY_INPUT = z.object({
 
 const ADD_ATTRIBUTE_INPUT = z.object({
   entity_logical_name: z.string().describe("Logical name of the entity"),
-  attribute: AttributeSchema,
+  attribute: AttributeSchema.describe(
+    "The column to add: logical_name with the publisher prefix, type and display_name, plus the settings for its type (max_length, options, date_format and so on).",
+  ),
 });
 
 const CREATE_RELATIONSHIP_INPUT = z.object({
@@ -683,7 +685,7 @@ export function registerSchemaTools(
     "create_entity",
     {
       description:
-        "Create a new Dataverse table (entity) with specified attributes",
+        "Create a custom table with its primary name column and, optionally, additional columns; logical_name carries the publisher prefix ('contoso_newtable'). Returns the new table's URL; a name that is taken is an error. If a column fails, the error says which columns were created and how to add the rest. Add columns later with add_attribute and records with create_record.",
       inputSchema: CREATE_ENTITY_INPUT,
     },
     async (params) => {
@@ -829,7 +831,8 @@ export function registerSchemaTools(
   server.registerTool(
     "add_attribute",
     {
-      description: "Add a column (attribute) to an existing Dataverse table",
+      description:
+        "Add one column to an existing table; Dataverse creates it at once. Returns the new column's URL. A table that does not exist or a logical name that is taken is an error; get_entity_schema shows both. To create a table together with its columns use create_entity, and to change a column later update_attribute.",
       inputSchema: ADD_ATTRIBUTE_INPUT,
     },
     async ({ entity_logical_name, attribute }) => {
@@ -854,7 +857,8 @@ export function registerSchemaTools(
   server.registerTool(
     "create_relationship",
     {
-      description: "Create a relationship between two Dataverse tables",
+      description:
+        "Create a relationship between two tables. OneToMany adds a lookup column on related_entity that points to one primary_entity record; ManyToMany links records on both sides through an intersect table. Returns the relationship's URL; a schema_name that is taken is an error. This server has no tool to list or delete relationships.",
       inputSchema: CREATE_RELATIONSHIP_INPUT,
     },
     async (params) => {
@@ -1054,7 +1058,7 @@ export function registerSchemaTools(
       "delete_attribute",
       {
         description:
-          "Delete a column from a Dataverse table (currently disabled for safety)",
+          "Delete a column from a Dataverse table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
         inputSchema: DELETE_ATTRIBUTE_DISABLED_INPUT,
       },
       async () => ({
@@ -1196,7 +1200,7 @@ export function registerSchemaTools(
       "delete_entity_key",
       {
         description:
-          "Permanently delete an alternate key from a Dataverse table. ⚠️ Drops the supporting unique index; any client code relying on keyed-PATCH upserts against this key will stop working. The underlying attributes and their data are NOT affected — only the key definition and its index are removed.",
+          "Permanently delete an alternate key from a Dataverse table. ⚠️ Drops the supporting unique index; any client code relying on keyed-PATCH upserts against this key will stop working. The underlying attributes and their data are NOT affected — only the key definition and its index are removed. list_entity_keys shows the table's keys.",
         inputSchema: DELETE_ENTITY_KEY_INPUT,
       },
       async ({ entity_logical_name, key_logical_name }) => {
@@ -1220,7 +1224,7 @@ export function registerSchemaTools(
       "delete_entity_key",
       {
         description:
-          "Delete an alternate key from a Dataverse table (currently disabled for safety)",
+          "Delete an alternate key from a Dataverse table. This tool is disabled on this server: a call only returns a message. Setting DATAVERSE_ALLOW_DELETE=true and restarting the server turns it on.",
         inputSchema: DELETE_ENTITY_KEY_INPUT,
       },
       async () => ({
