@@ -48,7 +48,7 @@ export function registerDataReadTools(
     {
       // Remove the one-page sentence when #193 lands.
       description:
-        "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back (up to 5000 rows by default, 500 for elastic tables), and a result that fills it or is shortened by top may be incomplete, so do not count or sum over such a result. An unknown entity set or a bad OData expression is an error. To read one record by its id, use get_record.",
+        "Read records from a table (entity set) with optional OData select, filter, orderby, top and expand; returns a JSON array of records. Only one page comes back (up to 5000 rows by default, 500 for elastic tables), and a result that fills it or is shortened by top may be incomplete, so do not count or sum over such a result. An unknown entity set, a bad OData expression or a filter with too many conditions across relationships is an error; for a long list of ids use Microsoft.Dynamics.CRM.In(...) instead of an or chain. To read one record by its id, use get_record.",
       inputSchema: QUERY_RECORDS_INPUT,
     },
     async ({ entity_set, select, filter, top, orderby, expand }) => {

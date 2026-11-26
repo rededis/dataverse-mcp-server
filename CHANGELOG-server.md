@@ -24,6 +24,7 @@ A `server-vX.Y.Z` tag needs a `## [X.Y.Z]` section here; a pre-release
 ### Changed
 
 - The descriptions of `query_records`, `get_record`, `create_record`, `update_record`, `delete_record`, `list_entities` and `get_picklist_options` say what the tool changes or that it only reads, what it returns, its typical errors and which tool to use instead where one fits; `query_records` says it returns one page, up to 5000 rows by default (500 for elastic tables), and that a full page or a result cut by `top` may be incomplete; the `prefix` field of `list_entities` says an empty string disables the default filter (#192).
+- The `query_records` description says that a filter with too many conditions across relationships is an error, and to use `Microsoft.Dynamics.CRM.In(...)` for a long list of ids (#47).
 - The startup and shutdown messages are written to stderr; stdout carries only audit lines (#78).
 - `@modelcontextprotocol/server` 2.4 instead of 2.3 (#119).
 
