@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The `query_records` description says that a filter with too many conditions across relationships is an error, and to use `Microsoft.Dynamics.CRM.In(...)` for a long list of ids (#47).
+
 ## [0.10.3] - 2026-11-24
 
 ### Changed
