@@ -134,25 +134,28 @@ async function tableOf(
  * The file's path inside the record's folder, as SharePoint names it.
  * `relativelocation` is the path in the document library: the record's
  * folder (a document location's `relativeurl`), the subfolders as they are
- * named, and the file name percent-encoded. The file name is taken from
- * `fullname` rather than decoded, so a `%` in a folder name is left alone;
- * only without `fullname` is the last segment decoded. When no location's
- * folder starts the path, the whole path is kept.
+ * named, and the file name percent-encoded. The record's folder need not
+ * come first: when it sits inside another record's folder, the path starts
+ * with that one. The folder's name carries the record's id, so it is found
+ * as a whole segment wherever it is; when it is not found, the whole path is
+ * kept. The file name is taken from `fullname` rather than decoded, so a `%`
+ * in a folder name is left alone; only without `fullname` is the last
+ * segment decoded.
  */
 function pathInFolder(row: DocumentRow, folders: string[]): string | null {
   const location = row.relativelocation;
   if (location === undefined) return fileName(row);
-  const folder = folders
-    .filter((f) => location.startsWith(`${f}/`))
-    .reduce<string | undefined>(
-      (longest, f) => (longest && longest.length >= f.length ? longest : f),
-      undefined,
-    );
-  const segments = (
-    folder === undefined ? location : location.slice(folder.length + 1)
-  ).split("/");
+  const start = Math.max(0, ...folders.map((f) => afterFolder(location, f)));
+  const segments = location.slice(start).split("/");
   segments[segments.length - 1] = fileName(row) ?? "";
   return segments.join("/");
+}
+
+/** Where the path continues after `folder`, or 0 when it is not in it. */
+function afterFolder(location: string, folder: string): number {
+  if (location.startsWith(`${folder}/`)) return folder.length + 1;
+  const at = location.indexOf(`/${folder}/`);
+  return at < 0 ? 0 : at + folder.length + 2;
 }
 
 /** `fullname`; without it, the last segment of `relativelocation`, decoded. */
@@ -205,7 +208,8 @@ export function registerDocumentsReadTools(
     "list_record_documents",
     {
       // Remove "and no tool here downloads a file" when #94 lands.
-      description: `List the files in a record's SharePoint document folder, the ones its Documents tab shows, files in subfolders included; only reads. Returns { files: [{ name, path, file_type, size_bytes, modified_on, modified_by, url }], total }: at most ${MAX_FILES} files, most recently modified first, where path is relative to the record's folder and url is the file's SharePoint address as Dataverse gives it; when the folder holds more files, a note says so, and total gives their number when Dataverse could count them all (up to 5000). A record without a document folder the caller can see gets a message saying so instead of a list. An unknown entity set, a table with document management off, a record that does not exist or that the caller may not read, and a missing one-time admin setup for reading SharePoint documents through the Dataverse API are errors. It returns no file content, and no tool here downloads a file. To read the record itself, use get_record.`,
+      // Remove the sentence on Account or Contact folders when #202 lands.
+      description: `List the files in a record's SharePoint document folder, the ones its Documents tab shows, files in subfolders included; only reads. Returns { files: [{ name, path, file_type, size_bytes, modified_on, modified_by, url }], total }: at most ${MAX_FILES} files, most recently modified first, where path is relative to the record's folder and url is the file's SharePoint address as Dataverse gives it; when the folder holds more files, a note says so, and total gives their number when Dataverse could count them all (up to 5000). A record without a document folder the caller can see gets a message saying so instead of a list. An unknown entity set, a table with document management off, a record that does not exist or that the caller may not read, and a missing one-time admin setup for reading SharePoint documents through the Dataverse API are errors. With a folder structure based on Account or Contact, the list for an account or contact also holds the files in the folders of its related records, and the caller's access to those records is not checked. It returns no file content, and no tool here downloads a file. To read the record itself, use get_record.`,
       inputSchema: LIST_RECORD_DOCUMENTS_INPUT,
     },
     async ({ entity_set, id }) => {

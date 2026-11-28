@@ -304,7 +304,22 @@ describe("list_record_documents", () => {
     expect(paths(requests)).not.toContain("/sharepointdocuments?");
   });
 
-  it("keeps the whole path when no location's folder starts it", async () => {
+  // With a folder structure based on Account or Contact, a contact's folder
+  // sits inside its account's.
+  it("finds the record's folder inside another record's folder", async () => {
+    const { text } = await list({
+      ...ANSWERS,
+      documents: documents([
+        {
+          ...AT_TOP,
+          relativelocation: `Contoso_${"2".repeat(32)}/contact/${FOLDER}/Scans/scan_2026-01-10.png`,
+        },
+      ]),
+    });
+    expect(JSON.parse(text).files[0].path).toBe("Scans/scan_2026-01-10.png");
+  });
+
+  it("keeps the whole path when no location's folder is in it", async () => {
     const { text } = await list({
       ...ANSWERS,
       locations: { value: [{ relativeurl: "Another folder" }] },
