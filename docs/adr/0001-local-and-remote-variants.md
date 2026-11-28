@@ -483,6 +483,11 @@ line is built:
   `error: {class, status, code, reason}`, each only when known; or `error`
   with `error: {class}`. Other lines have `event`: `auth-refused` (with
   `reason`, and `token` for an expired one) or `origin-refused`.
+- `records` is how many records a call returned. A tool whose result is a
+  list of its own counts that list: the options of `get_picklist_options`,
+  the files of `list_record_documents`. A result without such a list, like
+  the sentence `list_record_documents` gives for a record without a
+  document folder, has no `records`. _Added 2026-11-28 (#200)._
 - `dataverseRequests` counts HTTP requests sent to Dataverse, resends after
   a 429 included (so `retries` is also part of it), and the entity-set
   lookup a call caused. A request the concurrency limit or a throttling

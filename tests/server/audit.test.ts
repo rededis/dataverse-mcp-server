@@ -7,6 +7,7 @@ import {
   DataverseCallerDeniedError,
   DataverseError,
   DataverseTimeoutError,
+  ExplainedDataverseError,
 } from "../../src/errors.js";
 import {
   AuditLog,
@@ -133,6 +134,18 @@ describe("outcomeOf", () => {
         code: "0x80040217",
       },
     });
+    // A tool that retells the error for the agent keeps what is logged.
+    const retold = outcomeOf(
+      new ExplainedDataverseError(
+        new DataverseApiError(400, request, body),
+        "CANARY in the tool's words",
+      ),
+    );
+    expect(retold).toEqual({
+      outcome: "dataverse-error",
+      error: { class: "DataverseApiError", status: 400, code: "0x80040217" },
+    });
+    expect(JSON.stringify(retold)).not.toContain("CANARY");
   });
 
   it("classifies the other Dataverse errors by their safe fields", () => {

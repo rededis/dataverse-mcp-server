@@ -14,7 +14,7 @@ interface FetchCondition {
 }
 
 /** An inner join (`link-entity`) to another table, filtered on its own columns. */
-interface FetchLink {
+export interface FetchLink {
   /** The joined table's logical name. */
   entity: string;
   /** Its column that holds the value of `to`. */

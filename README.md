@@ -209,6 +209,8 @@ The setup gives Dataverse an Entra app of its own for SharePoint. That app has n
 
 Then call `list_record_documents` for a record whose Documents tab shows files.
 
+A limitation, until [#202](https://github.com/rededis/dataverse-mcp-server/issues/202): with a folder structure based on Account or Contact in the document management settings, the folders of related records sit inside the folder of their account or contact. The list for such an account or contact then includes the files of those related records too, and the caller's access to them is not checked.
+
 ### Build
 
 ```bash

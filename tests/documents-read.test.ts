@@ -194,15 +194,25 @@ describe("list_record_documents", () => {
     expect(decodeURIComponent(requests[1]!.path)).toBe(
       `/leads(${GUID})?$select=leadid`,
     );
-    expect(
-      new URLSearchParams(requests[2]!.path.split("?")[1]).get("$filter"),
-    ).toBe(`_regardingobjectid_value eq ${GUID}`);
     // Every request is a read: get, or request without a method.
     expect(
       requests.every(
         (r) => !JSON.stringify(r.options ?? {}).includes("method"),
       ),
     ).toBe(true);
+  });
+
+  // A record of another table with the same id, or an inactive location,
+  // must not pass for the record's folder.
+  it("looks for the record's active document locations, joined to its table", async () => {
+    const { requests } = await list(ANSWERS);
+    expect(fetchXmlOf(requests[2]!.path)).toBe(
+      '<fetch><entity name="sharepointdocumentlocation">' +
+        '<attribute name="sharepointdocumentlocationid"/><attribute name="relativeurl"/>' +
+        '<filter type="and"><condition attribute="statecode" operator="eq" value="0"/></filter>' +
+        `<link-entity name="lead" from="leadid" to="regardingobjectid" link-type="inner"><filter type="and"><condition attribute="leadid" operator="eq" value="${GUID}"/></filter></link-entity>` +
+        "</entity></fetch>",
+    );
   });
 
   it("asks for at most 100 files in all subfolders, joined to the record, newest first, with the total", async () => {
@@ -239,7 +249,8 @@ describe("list_record_documents", () => {
     );
   });
 
-  it("says when the folder holds more files than Dataverse counts", async () => {
+  // Beyond 5000, Dataverse's count is its limit, not the folder's total.
+  it("gives no total when the folder holds more files than Dataverse counts", async () => {
     const rows = Array.from({ length: 100 }, () => AT_TOP);
     const { text } = await list({
       ...ANSWERS,
@@ -248,8 +259,24 @@ describe("list_record_documents", () => {
         "@Microsoft.Dynamics.CRM.totalrecordcountlimitexceeded": true,
       },
     });
-    expect(JSON.parse(text).note).toBe(
+    const result = JSON.parse(text);
+    expect(result.total).toBeUndefined();
+    expect(result.note).toBe(
       "Only the 100 most recently modified files are listed; the folder holds more than 5000.",
+    );
+  });
+
+  it("says the folder holds more when the count limit comes without a count", async () => {
+    const rows = Array.from({ length: 100 }, () => AT_TOP);
+    const { text } = await list({
+      ...ANSWERS,
+      documents: {
+        "@Microsoft.Dynamics.CRM.totalrecordcountlimitexceeded": true,
+        value: rows,
+      },
+    });
+    expect(JSON.parse(text).note).toBe(
+      "Only the 100 most recently modified files are listed; the folder holds more than 100.",
     );
   });
 
@@ -276,7 +303,7 @@ describe("list_record_documents", () => {
       locations: { value: [] },
     });
     expect(text).toBe(
-      `The record leads(${GUID}) has no SharePoint document folder: no document location points to it, so there are no documents to list.`,
+      `The record leads(${GUID}) has no SharePoint document folder that this caller can see: no active document location points to it, so there are no documents to list.`,
     );
     expect(paths(requests)).not.toContain("/sharepointdocuments?");
   });
@@ -289,6 +316,21 @@ describe("list_record_documents", () => {
     });
     expect(JSON.parse(text).files[0].path).toBe(
       `${FOLDER}/scan_2026-01-10.png`,
+    );
+  });
+
+  it("decodes the file name of a path when the row has no fullname", async () => {
+    const { fullname: _a, ...encoded } = IN_SUBFOLDER;
+    const { fullname: _b, ...malformed } = {
+      ...AT_TOP,
+      relativelocation: `${FOLDER}/100%.txt`,
+    };
+    const { text } = await list({
+      ...ANSWERS,
+      documents: documents([encoded, malformed]),
+    });
+    expect(JSON.parse(text).files.map((f: { path: string }) => f.path)).toEqual(
+      ["Verträge 2026/Ångström report.docx", "100%.txt"],
     );
   });
 
@@ -367,7 +409,10 @@ describe("list_record_documents", () => {
     const error = await tool(dataverse.client)
       .handler({ entity_set: "leads", id: GUID })
       .catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(Error);
+    // The audit line logs the status and code of a DataverseApiError.
+    expect(error).toBeInstanceOf(DataverseApiError);
+    expect((error as DataverseApiError).status).toBe(500);
+    expect((error as DataverseApiError).code).toBe("0x800608B4");
     expect((error as Error).message).toMatch(
       /^SharePoint refused Dataverse access to the record's documents \(0x800608b4, SharePointAuthorizationFailure\)\. Reading SharePoint documents through the Dataverse API needs a one-time setup by an administrator/,
     );
@@ -390,11 +435,15 @@ describe("list_record_documents", () => {
       }),
     );
     const dataverse = fakeDataverse({ ...ANSWERS, documents: failure });
-    await expect(
-      tool(dataverse.client).handler({ entity_set: "leads", id: GUID }),
-    ).rejects.toThrow(
-      "Document management is not enabled for the table 'lead' (entity set 'leads')",
+    const error = await tool(dataverse.client)
+      .handler({ entity_set: "leads", id: GUID })
+      .catch((e: unknown) => e);
+    expect((error as Error).message).toBe(
+      "Document management is not enabled for the table 'lead' (entity set 'leads'), so its records have no SharePoint documents.",
     );
+    expect(error).toBeInstanceOf(DataverseApiError);
+    expect((error as DataverseApiError).code).toBe("0x8006073b");
+    expect((error as Error).cause).toBe(failure);
   });
 
   it("passes other Dataverse errors on", async () => {

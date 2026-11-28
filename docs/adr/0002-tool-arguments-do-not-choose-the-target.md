@@ -114,6 +114,13 @@ table only gets an error from Dataverse.
 The stdio package does not do this: it grants every group and every operation
 anyway, and the lookup would cost a request per new entity set.
 
+_Added 2026-11-28 (#200)._ `list_record_documents` reads more of the table's
+metadata than this check does: its logical name, its primary id column and
+whether document management is on. It reads them in a request of its own,
+on stdio as well, made with the call's client: for a token with `actAs`, as
+that user, like the rest of the call. The existence check above stays the
+application user's.
+
 ### 5. A write does only what its tool says
 
 - `update_record` sends `If-Match: *`, so a missing record is a 404 and not a
