@@ -123,7 +123,9 @@ SharePoint folder. It is a group of its own, so a role grants it separately:
 record documents often hold personal data, and reading them through the
 Dataverse API needs a one-time admin setup that not every installation has.
 Like `data-read`, it takes no list of entity sets (§8): the tool reads the
-record before its documents, so the caller's Dataverse privileges apply. It
+record before its documents, so the caller's Dataverse privileges apply,
+except to the folders of related records nested in the record's folder,
+which #202 covers. It
 comes last in `SERVER_TOOL_GROUPS`, so the tools existing roles see keep
 their order (§9).
 

@@ -4,13 +4,13 @@ import {
   type FetchQuery,
   runFetchXml,
 } from "../../src/tools/shared/fetchxml.js";
+import { fetchXmlOf } from "../helpers.js";
 
 /** The FetchXML that runFetchXml sends for a query. */
 async function toFetchXml(query: FetchQuery): Promise<string> {
   const client = { request: vi.fn(async (_path: string) => ({ value: [] })) };
   await runFetchXml(client as unknown as DataverseClient, "accounts", query);
-  const path = client.request.mock.calls[0]![0];
-  return decodeURIComponent(path.slice(path.indexOf("fetchXml=") + 9));
+  return fetchXmlOf(client.request.mock.calls[0]![0]);
 }
 
 describe("the FetchXML of a query", () => {
@@ -19,15 +19,13 @@ describe("the FetchXML of a query", () => {
       await toFetchXml({
         entity: "sharepointdocument",
         attributes: ["fullname", "modified"],
-        conditions: [
-          { attribute: "isrecursivefetch", operator: "eq", value: "1" },
-        ],
+        conditions: [{ attribute: "isrecursivefetch", value: "1" }],
         links: [
           {
             entity: "lead",
             from: "leadid",
             to: "regardingobjectid",
-            conditions: [{ attribute: "leadid", operator: "eq", value: "x" }],
+            conditions: [{ attribute: "leadid", value: "x" }],
           },
         ],
         order: { attribute: "modified", descending: true },
@@ -60,7 +58,6 @@ describe("the FetchXML of a query", () => {
       conditions: [
         {
           attribute: "name",
-          operator: "eq",
           value: `a"/><condition attribute="x" operator="eq" value='&<>`,
         },
       ],

@@ -9,7 +9,6 @@ import { assertEntitySetName, assertLogicalName } from "./paths.js";
 /** `<condition attribute=… operator="eq" value=…/>`: only equality is needed so far. */
 interface FetchCondition {
   attribute: string;
-  operator: "eq";
   value: string;
 }
 
@@ -74,7 +73,7 @@ function filterXml(conditions: FetchCondition[] | undefined): string {
   const inner = conditions
     .map(
       (c) =>
-        `<condition attribute="${logicalName(c.attribute)}" operator="${c.operator}" value="${escapeAttribute(c.value)}"/>`,
+        `<condition attribute="${logicalName(c.attribute)}" operator="eq" value="${escapeAttribute(c.value)}"/>`,
     )
     .join("");
   return `<filter type="and">${inner}</filter>`;

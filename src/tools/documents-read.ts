@@ -170,7 +170,7 @@ function recordLink(table: Table, id: string): FetchLink {
     entity: table.logicalName,
     from: table.primaryId,
     to: "regardingobjectid",
-    conditions: [{ attribute: table.primaryId, operator: "eq", value: id }],
+    conditions: [{ attribute: table.primaryId, value: id }],
   };
 }
 
@@ -199,8 +199,7 @@ export function registerDocumentsReadTools(
     "list_record_documents",
     {
       // Remove "and no tool here downloads a file" when #94 lands.
-      description:
-        "List the files in a record's SharePoint document folder, the ones its Documents tab shows, files in subfolders included; only reads. Returns { files: [{ name, path, file_type, size_bytes, modified_on, modified_by, url }], total }: at most 100 files, most recently modified first, where path is relative to the record's folder and url is the file's SharePoint address as Dataverse gives it; when the folder holds more files, a note says so, and total gives their number when Dataverse could count them all (up to 5000). A record without a document folder the caller can see gets a message saying so instead of a list. An unknown entity set, a table with document management off, a record that does not exist or that the caller may not read, and a missing one-time admin setup for reading SharePoint documents through the Dataverse API are errors. It returns no file content, and no tool here downloads a file. To read the record itself, use get_record.",
+      description: `List the files in a record's SharePoint document folder, the ones its Documents tab shows, files in subfolders included; only reads. Returns { files: [{ name, path, file_type, size_bytes, modified_on, modified_by, url }], total }: at most ${MAX_FILES} files, most recently modified first, where path is relative to the record's folder and url is the file's SharePoint address as Dataverse gives it; when the folder holds more files, a note says so, and total gives their number when Dataverse could count them all (up to 5000). A record without a document folder the caller can see gets a message saying so instead of a list. An unknown entity set, a table with document management off, a record that does not exist or that the caller may not read, and a missing one-time admin setup for reading SharePoint documents through the Dataverse API are errors. It returns no file content, and no tool here downloads a file. To read the record itself, use get_record.`,
       inputSchema: LIST_RECORD_DOCUMENTS_INPUT,
     },
     async ({ entity_set, id }) => {
@@ -215,7 +214,8 @@ export function registerDocumentsReadTools(
 
       // Dataverse does not check access to the record behind its documents:
       // reading the record first applies the caller's privileges, so the
-      // tool shows no more than get_record would.
+      // tool shows no more than get_record would. Not yet for the folders of
+      // other records nested inside this one's (#202).
       await client.get(
         `/${entity_set}(${id})${buildODataQuery({ $select: table.primaryId })}`,
       );
@@ -229,7 +229,7 @@ export function registerDocumentsReadTools(
         {
           entity: "sharepointdocumentlocation",
           attributes: ["sharepointdocumentlocationid", "relativeurl"],
-          conditions: [{ attribute: "statecode", operator: "eq", value: "0" }],
+          conditions: [{ attribute: "statecode", value: "0" }],
           links: [recordLink(table, id)],
         },
       );
@@ -256,9 +256,7 @@ export function registerDocumentsReadTools(
           entity: "sharepointdocument",
           attributes: DOCUMENT_ATTRIBUTES,
           // Files from every subfolder, and no rows for the folders.
-          conditions: [
-            { attribute: "isrecursivefetch", operator: "eq", value: "1" },
-          ],
+          conditions: [{ attribute: "isrecursivefetch", value: "1" }],
           // A condition on regardingobjectid alone is refused (0x8006073b);
           // the join to the record's table is what Dataverse accepts.
           links: [recordLink(table, id)],

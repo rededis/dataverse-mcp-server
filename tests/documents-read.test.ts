@@ -7,7 +7,7 @@ import {
 } from "../src/errors.js";
 import { registerDocumentsReadTools } from "../src/tools/documents-read.js";
 import { EntitySetCatalog } from "../src/tools/shared/paths.js";
-import { createMockServer, GUID, notFound } from "./helpers.js";
+import { createMockServer, fetchXmlOf, GUID, notFound } from "./helpers.js";
 
 // Responses below have the shape the dev org returned for the same requests
 // (2026-11-28), with names, hosts and ids replaced.
@@ -137,10 +137,6 @@ async function list(
   const result = await tool(dataverse.client).handler(args);
   const text = result.content[0].text as string;
   return { text, requests: dataverse.requests };
-}
-
-function fetchXmlOf(path: string): string {
-  return decodeURIComponent(path.slice(path.indexOf("fetchXml=") + 9));
 }
 
 const paths = (requests: { path: string }[]) =>

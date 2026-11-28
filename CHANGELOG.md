@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `list_record_documents` lists the files in a record's SharePoint folder, the ones its Documents tab shows, files in subfolders included: name, path inside the folder, file type, size, modified date and by whom, and URL. It lists at most 100 files, most recently modified first, and gives the total when the folder holds more. It reads the record first, so a caller who may not read the record gets no documents, and it answers a record without a document folder the caller can see with a message saying so. It returns no file content. Reading SharePoint documents through the Dataverse API needs a one-time admin setup, described in the README; without it the tool says so and links Microsoft's article (#200).
+- `list_record_documents` lists the files in a record's SharePoint folder, the ones its Documents tab shows, files in subfolders included: name, path inside the folder, file type, size, modified date and by whom, and URL. It lists at most 100 files, most recently modified first, and gives the total when the folder holds more, if Dataverse could count them all (up to 5000). It reads the record first, so a caller who may not read the record gets no documents (the folders of related records nested in its folder are not checked yet, #202), and it answers a record without a document folder the caller can see with a message saying so. It returns no file content. Reading SharePoint documents through the Dataverse API needs a one-time admin setup, described in the README; without it the tool says so and links Microsoft's article (#200).
 
 ### Changed
 
