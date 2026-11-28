@@ -2,10 +2,11 @@ import { z } from "zod";
 import type { DataverseClient } from "../client.js";
 import { DataverseApiError } from "../errors.js";
 import { type FetchResult, runFetchXml } from "./shared/fetchxml.js";
-import { buildODataQuery, escapeODataString } from "./shared/odata.js";
+import { buildODataQuery } from "./shared/odata.js";
 import {
   assertEntitySetName,
   assertRecordId,
+  findEntitySet,
   unknownEntitySet,
 } from "./shared/paths.js";
 import type { ToolDeps, ToolRegistrar } from "./types.js";
@@ -40,6 +41,14 @@ interface TableDefinition {
   IsDocumentManagementEnabled?: boolean;
 }
 
+/** What the tool needs of the record's table. */
+interface Table {
+  entitySet: string;
+  logicalName: string;
+  primaryId: string;
+  documentManagement: boolean;
+}
+
 interface DocumentRow {
   documentid?: number;
   fullname?: string;
@@ -64,13 +73,9 @@ const DOCUMENT_ATTRIBUTES = [
   "absoluteurl",
 ] satisfies (keyof DocumentRow)[];
 
-function documentManagementOff(
-  entitySet: string,
-  table: string,
-  cause?: unknown,
-): Error {
+function documentManagementOff(table: Table, cause?: unknown): Error {
   return new Error(
-    `Document management is not enabled for the table '${table}' (entity set '${entitySet}'), so its records have no SharePoint documents.`,
+    `Document management is not enabled for the table '${table.logicalName}' (entity set '${table.entitySet}'), so its records have no SharePoint documents.`,
     cause === undefined ? undefined : { cause },
   );
 }
@@ -78,8 +83,7 @@ function documentManagementOff(
 /** What the agent is told when the list is not the whole folder. */
 function partialNote(
   listed: number,
-  total: number | undefined,
-  exceeded: boolean,
+  { totalCount: total, totalCountExceeded: exceeded }: FetchResult<unknown>,
 ): string | undefined {
   if (exceeded) {
     return `Only the ${listed} most recently modified files are listed; the folder holds more than ${total}.`;
@@ -97,25 +101,20 @@ function partialNote(
 async function tableOf(
   client: DataverseClient,
   entitySet: string,
-): Promise<{ logicalName: string; primaryId: string; documents: boolean }> {
-  const query = buildODataQuery({
-    $select:
-      "EntitySetName,LogicalName,PrimaryIdAttribute,IsDocumentManagementEnabled",
-    $filter: `EntitySetName eq '${escapeODataString(entitySet)}'`,
-  });
-  const result = (await client.get(`/EntityDefinitions${query}`)) as {
-    value?: TableDefinition[];
-  };
-  // The metadata filter is case-sensitive, as is the Web API; compare
-  // exactly all the same.
-  const table = result.value?.find((t) => t.EntitySetName === entitySet);
+): Promise<Table> {
+  const table = await findEntitySet<TableDefinition>(
+    client,
+    entitySet,
+    "EntitySetName,LogicalName,PrimaryIdAttribute,IsDocumentManagementEnabled",
+  );
   if (!table?.LogicalName || !table.PrimaryIdAttribute) {
     throw unknownEntitySet(entitySet);
   }
   return {
+    entitySet,
     logicalName: table.LogicalName,
     primaryId: table.PrimaryIdAttribute,
-    documents: table.IsDocumentManagementEnabled === true,
+    documentManagement: table.IsDocumentManagementEnabled === true,
   };
 }
 
@@ -145,7 +144,8 @@ function pathInFolder(row: DocumentRow, folders: string[]): string | null {
   return segments.join("/");
 }
 
-function explained(err: unknown, entitySet: string, table: string): unknown {
+/** A failed documents query in the agent's terms, or the error as it was. */
+function toAgentError(err: unknown, table: Table): unknown {
   if (!(err instanceof DataverseApiError)) return err;
   switch (err.code?.toLowerCase()) {
     case SHAREPOINT_AUTHORIZATION_FAILURE:
@@ -154,7 +154,7 @@ function explained(err: unknown, entitySet: string, table: string): unknown {
         { cause: err },
       );
     case SP_NOT_ENABLED_FOR_ENTITY:
-      return documentManagementOff(entitySet, table, err);
+      return documentManagementOff(table, err);
     default:
       return err;
   }
@@ -179,8 +179,8 @@ export function registerDocumentsReadTools(
       await entitySets?.assertExists(entity_set);
 
       const table = await tableOf(client, entity_set);
-      if (!table.documents) {
-        throw documentManagementOff(entity_set, table.logicalName);
+      if (!table.documentManagement) {
+        throw documentManagementOff(table);
       }
 
       // Dataverse does not check access to the record behind its documents:
@@ -239,7 +239,7 @@ export function registerDocumentsReadTools(
           totalCount: true,
         });
       } catch (err) {
-        throw explained(err, entity_set, table.logicalName);
+        throw toAgentError(err, table);
       }
 
       const files = result.rows.map((row) => ({
@@ -252,11 +252,7 @@ export function registerDocumentsReadTools(
         url: row.absoluteurl ?? null,
       }));
       const total = result.totalCount;
-      const note = partialNote(
-        files.length,
-        total,
-        result.totalCountExceeded === true,
-      );
+      const note = partialNote(files.length, result);
       return {
         content: [
           {

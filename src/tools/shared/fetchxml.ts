@@ -4,7 +4,7 @@
 // the role. Here the code that builds a query fixes its tables.
 
 import type { DataverseClient } from "../../client.js";
-import { LOGICAL_NAME } from "./paths.js";
+import { assertEntitySetName, assertLogicalName } from "./paths.js";
 
 /** `<condition attribute=… operator="eq" value=…/>`: only equality is needed so far. */
 interface FetchCondition {
@@ -54,10 +54,9 @@ const TOTAL_COUNT_EXCEEDED =
   "Microsoft.Dynamics.CRM.totalrecordcountlimitexceeded";
 const TOTAL_COUNT_PREFER = `odata.include-annotations="${TOTAL_COUNT},${TOTAL_COUNT_EXCEEDED}"`;
 
-function name(value: string): string {
-  if (!LOGICAL_NAME.test(value)) {
-    throw new Error(`Not a logical name for FetchXML: '${value}'`);
-  }
+/** A table or column name, checked before it goes into the XML. */
+function logicalName(value: string): string {
+  assertLogicalName(value, "FetchXML name");
   return value;
 }
 
@@ -70,12 +69,12 @@ function escapeAttribute(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function filter(conditions: FetchCondition[] | undefined): string {
+function filterXml(conditions: FetchCondition[] | undefined): string {
   if (!conditions || conditions.length === 0) return "";
   const inner = conditions
     .map(
       (c) =>
-        `<condition attribute="${name(c.attribute)}" operator="${c.operator}" value="${escapeAttribute(c.value)}"/>`,
+        `<condition attribute="${logicalName(c.attribute)}" operator="${c.operator}" value="${escapeAttribute(c.value)}"/>`,
     )
     .join("");
   return `<filter type="and">${inner}</filter>`;
@@ -88,18 +87,18 @@ function toFetchXml(query: FetchQuery): string {
     query.totalCount && `returntotalrecordcount="true"`,
   ].filter(Boolean);
   const attributes = query.attributes
-    .map((a) => `<attribute name="${name(a)}"/>`)
+    .map((a) => `<attribute name="${logicalName(a)}"/>`)
     .join("");
   const order = query.order
-    ? `<order attribute="${name(query.order.attribute)}" descending="${query.order.descending}"/>`
+    ? `<order attribute="${logicalName(query.order.attribute)}" descending="${query.order.descending}"/>`
     : "";
   const links = (query.links ?? [])
     .map(
       (l) =>
-        `<link-entity name="${name(l.entity)}" from="${name(l.from)}" to="${name(l.to)}" link-type="inner">${filter(l.conditions)}</link-entity>`,
+        `<link-entity name="${logicalName(l.entity)}" from="${logicalName(l.from)}" to="${logicalName(l.to)}" link-type="inner">${filterXml(l.conditions)}</link-entity>`,
     )
     .join("");
-  return `<fetch${fetch.map((a) => ` ${a}`).join("")}><entity name="${name(query.entity)}">${attributes}${order}${filter(query.conditions)}${links}</entity></fetch>`;
+  return `<fetch${fetch.map((a) => ` ${a}`).join("")}><entity name="${logicalName(query.entity)}">${attributes}${order}${filterXml(query.conditions)}${links}</entity></fetch>`;
 }
 
 /**
@@ -112,6 +111,7 @@ export async function runFetchXml<T>(
   entitySet: string,
   query: FetchQuery,
 ): Promise<FetchResult<T>> {
+  assertEntitySetName(entitySet);
   const path = `/${entitySet}?fetchXml=${encodeURIComponent(toFetchXml(query))}`;
   const page = (await client.request(
     path,

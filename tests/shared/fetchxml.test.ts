@@ -92,7 +92,7 @@ describe("the FetchXML of a query", () => {
     ],
   ])("refuses a %s that is not a logical name", async (_what, query) => {
     await expect(toFetchXml(query as FetchQuery)).rejects.toThrow(
-      /Not a logical name/,
+      /Invalid FetchXML name/,
     );
   });
 });
@@ -158,6 +158,18 @@ describe("runFetchXml", () => {
         totalCount: true,
       }),
     ).toEqual({ rows: [], totalCount: 5000, totalCountExceeded: true });
+  });
+
+  // The entity set goes into the path, so it is checked like a tool's.
+  it("refuses an entity set that is not a plain name, before any request", async () => {
+    const c = client({ value: [] });
+    await expect(
+      runFetchXml(c as unknown as DataverseClient, "accounts/../WhoAmI", {
+        entity: "account",
+        attributes: ["name"],
+      }),
+    ).rejects.toThrow(/Invalid entity set name/);
+    expect(c.request).not.toHaveBeenCalled();
   });
 
   // Dataverse answers -1 when the count was not computed.

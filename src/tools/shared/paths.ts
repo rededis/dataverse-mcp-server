@@ -157,18 +157,30 @@ export class EntitySetCatalog {
 
   async assertExists(name: string): Promise<void> {
     if (this.known.has(name)) return;
-    const filter = `EntitySetName eq '${escapeODataString(name)}'`;
-    const result = (await this.client.get(
-      `/EntityDefinitions?$select=EntitySetName&$filter=${encodeURIComponent(filter)}`,
-    )) as { value?: { EntitySetName?: string }[] };
-    // The metadata filter is case-sensitive, as is the Web API; compare
-    // exactly all the same.
-    if (result.value?.some((e) => e.EntitySetName === name)) {
+    if (await findEntitySet(this.client, name, "EntitySetName")) {
       this.known.add(name);
       return;
     }
     throw unknownEntitySet(name);
   }
+}
+
+/**
+ * The metadata of the table whose entity set is `name`, with the `select`
+ * columns, or undefined when there is none.
+ */
+export async function findEntitySet<T extends { EntitySetName?: string }>(
+  client: DataverseClient,
+  name: string,
+  select: string,
+): Promise<T | undefined> {
+  const filter = `EntitySetName eq '${escapeODataString(name)}'`;
+  const result = (await client.get(
+    `/EntityDefinitions?$select=${select}&$filter=${encodeURIComponent(filter)}`,
+  )) as { value?: T[] };
+  // The metadata filter is case-sensitive, as is the Web API; compare
+  // exactly all the same.
+  return result.value?.find((e) => e.EntitySetName === name);
 }
 
 /** What a tool says of an entity set the metadata does not have. */
