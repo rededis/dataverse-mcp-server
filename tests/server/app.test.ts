@@ -31,7 +31,14 @@ const SUPPORT: Role = {
 
 // Every group, listed in reverse to show the role's order does not matter.
 const EVERYTHING: Role = {
-  groups: ["functions", "actions", "data-write", "data-read", "metadata-read"],
+  groups: [
+    "documents-read",
+    "functions",
+    "actions",
+    "data-write",
+    "data-read",
+    "metadata-read",
+  ],
   permissions: {
     create: ["accounts", "emails", "tasks"],
     update: ["accounts", "tasks"],
@@ -467,6 +474,7 @@ describe("roles", () => {
       "delete_record",
       "invoke_action",
       "invoke_function",
+      "list_record_documents",
     ]);
   });
 
@@ -556,6 +564,18 @@ describe("roles", () => {
   it("keeps query_records from calling a function, even with every group", async () => {
     const result = await call("erin-token", "query_records", {
       entity_set: "WhoAmI",
+    });
+    expect(result).toEqual({
+      isError: true,
+      text: expect.stringContaining("Unknown entity set: 'WhoAmI'"),
+    });
+    expect(requests).toEqual([]);
+  });
+
+  it("checks list_record_documents' entity set as for the other data tools", async () => {
+    const result = await call("erin-token", "list_record_documents", {
+      entity_set: "WhoAmI",
+      id: GUID,
     });
     expect(result).toEqual({
       isError: true,

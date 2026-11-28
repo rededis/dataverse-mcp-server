@@ -101,7 +101,8 @@ stdio package keeps `"*"`: it grants every table anyway.
 ### 4. On the server, an entity set must exist
 
 The server checks the `entity_set` of each data tool (`query_records`,
-`get_record`, `create_record`, `update_record`, `delete_record`) against the
+`get_record`, `create_record`, `update_record`, `delete_record`,
+`list_record_documents`) against the
 metadata (`EntityDefinitions?$filter=EntitySetName eq '…'`, looked up as the
 application user, found names cached for the life of the process), so that a
 data tool cannot reach an unbound function or action by its name. There the

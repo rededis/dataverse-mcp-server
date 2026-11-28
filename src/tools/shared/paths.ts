@@ -167,9 +167,14 @@ export class EntitySetCatalog {
       this.known.add(name);
       return;
     }
-    throw new RefusedError(
-      "unknown-entity-set",
-      `Unknown entity set: '${name}'. Use the plural entity set name, e.g. 'accounts' (list_entities shows them).`,
-    );
+    throw unknownEntitySet(name);
   }
+}
+
+/** What a tool says of an entity set the metadata does not have. */
+export function unknownEntitySet(name: string): RefusedError {
+  return new RefusedError(
+    "unknown-entity-set",
+    `Unknown entity set: '${name}'. Use the plural entity set name, e.g. 'accounts' (list_entities shows them).`,
+  );
 }

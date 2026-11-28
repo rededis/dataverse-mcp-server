@@ -221,6 +221,28 @@ describe("resultFields", () => {
       ),
     ).toEqual({ records: 2 });
   });
+
+  it("list_record_documents: the files listed, none for a record without a folder", () => {
+    const none = new CallMetrics();
+    expect(
+      resultFields(
+        "list_record_documents",
+        text({ files: [{}, {}], total: 2 }),
+        none,
+      ),
+    ).toEqual({ records: 2 });
+    expect(
+      resultFields(
+        "list_record_documents",
+        {
+          content: [
+            { type: "text", text: "The record has no document folder." },
+          ],
+        },
+        none,
+      ),
+    ).toEqual({});
+  });
 });
 
 describe("JsonLinesAuditLogger", () => {

@@ -43,7 +43,7 @@ flag that a misconfiguration could flip.
 *Mechanism* (#72):
 
 - The server entry point takes its tools from `src/tools/server-groups.ts`
-  (`SERVER_TOOL_GROUPS`, the five server-safe groups). Nothing reachable from
+  (`SERVER_TOOL_GROUPS`, every group but `development`). Nothing reachable from
   it imports `development/`.
 - `development/` has exactly one importer, `src/tools/all.ts`
   (`registerAllTools`: every group, development included), and `all.ts` has
@@ -111,11 +111,21 @@ configuration (#72, #77):
 | `data-write` | `create_record`, `update_record`, `delete_record` |
 | `actions` | `invoke_action` |
 | `functions` | `invoke_function` |
+| `documents-read` | `list_record_documents` |
 | `development` | `list_solutions`, `get_attribute_dependencies`, `create_entity`, `add_attribute`, `update_attribute`, `delete_attribute`, `create_relationship`, `add_entity_key`, `delete_entity_key`, `add_picklist_option`, `update_picklist_option`, `delete_picklist_option` |
 
-The npm package registers all six. The server image contains the first five;
-each role picks from those. The server gets them from `SERVER_TOOL_GROUPS`,
-keyed by these names.
+The npm package registers all seven. The server image contains every group
+but `development`; each role picks from those. The server gets them from
+`SERVER_TOOL_GROUPS`, keyed by these names.
+
+_Added 2026-11-28 (#200)._ `documents-read` lists the files in a record's
+SharePoint folder. It is a group of its own, so a role grants it separately:
+record documents often hold personal data, and reading them through the
+Dataverse API needs a one-time admin setup that not every installation has.
+Like `data-read`, it takes no list of entity sets (§8): the tool reads the
+record before its documents, so the caller's Dataverse privileges apply. It
+comes last in `SERVER_TOOL_GROUPS`, so the tools existing roles see keep
+their order (§9).
 
 Solutions and dependency checks sit in `development` because they serve
 packaging customizations and preparing destructive schema changes. An agent

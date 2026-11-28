@@ -280,6 +280,14 @@ export function resultFields(
       );
       return records === undefined ? {} : { records };
     }
+    // The files listed. A record without a folder gets a sentence, which
+    // carries no count.
+    case "list_record_documents": {
+      const records = lengthOf(
+        (firstText(result) as Record<string, unknown>)?.files,
+      );
+      return records === undefined ? {} : { records };
+    }
     default: {
       const records = lengthOf(firstText(result));
       return records === undefined ? {} : { records };

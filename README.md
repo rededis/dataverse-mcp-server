@@ -22,6 +22,7 @@ MCP (Model Context Protocol) server for Microsoft Dataverse — the data platfor
 | `create_record` | Create a record |
 | `update_record` | Update a record |
 | `delete_record` | Delete a record (disabled by default, see [Safety](#safety)) |
+| `list_record_documents` | List the files in a record's SharePoint folder, as its Documents tab shows them: name, path, type, size, modified date and by whom, URL. Needs a [one-time admin setup](#reading-record-documents-from-sharepoint) |
 
 > Note: `solution` / `DATAVERSE_SOLUTION_NAME` only scopes `list_entities` (schema browsing). Data tools (`query_records`, `get_record`, `create_record`, …) keep full access to any table regardless of solution membership — shared tables like `account` or `contact` remain reachable.
 
@@ -182,6 +183,31 @@ The concurrency limit alone does not prevent throttling, since Dataverse also li
 2. Add API permission: **Dynamics CRM > user_impersonation** (or Application permissions)
 3. Create a client secret
 4. Grant the app a security role in Dataverse (e.g. System Administrator for full access)
+
+### Reading record documents from SharePoint
+
+`list_record_documents` reads a record's files through Dataverse's `sharepointdocument` table, which is what the Documents tab of a model-driven app shows. It needs server-based SharePoint integration, set up so that the Documents tab already shows files to users, and document management enabled for the record's table. Outside the Documents tab, Dataverse reads SharePoint only after a one-time setup by an administrator, described in Microsoft's [Configure Azure app for SharePoint access](https://learn.microsoft.com/en-us/power-platform/admin/configure-azure-app-with-sharepoint-access). Without it the tool fails with `0x800608b4` (`SharePointAuthorizationFailure`).
+
+The setup gives Dataverse an Entra app of its own for SharePoint. That app has no secret: Dataverse gets its tokens through a federated credential. The app this server signs in with is not changed. Keep the two apps separate, so that this server's client secret does not also carry access to SharePoint.
+
+1. **Register an app** in Microsoft Entra ID for accounts in your directory only. Under **API permissions**, add **SharePoint → Application permissions → `Sites.FullControl.All`**, then **Grant admin consent**. Microsoft names `Sites.Selected` as the narrower option: it reaches only the SharePoint sites granted to the app, which here is the site that holds the document libraries. This server was tested with `Sites.FullControl.All`.
+2. **Create two rows in Dataverse** with the Web API, as a System Administrator (with the stdio package, `create_record` can send them):
+   - in `managedidentities`: `applicationid` is the new app's client id, `tenantid` the directory (tenant) id, `credentialsource` is `2` and `subjectscope` is `1`. Note the `managedidentityid` of the new row;
+   - in `sharepointmanagedidentities`: `uniquename` is `new_ppmiforsharepointauth`, `name` is `Managed Identity For SharePoint Auth`, and `ManagedIdentityId@odata.bind` is `/managedidentities(<managedidentityid>)`. Note the `sharepointmanagedidentityid` of the new row.
+3. **Add a federated credential** to the app: **Certificates & secrets → Federated credentials → Add credential**, scenario **Other issuer**, audience left at its default (`api://AzureADTokenExchange`):
+   - issuer: `https://login.microsoftonline.com/<tenant id>/v2.0`;
+   - subject identifier: `/eid1/c/pub/t/<encoded tenant id>/a/<encoded app id>/Env/<environment id>/sharepointmanagedidentity/<sharepointmanagedidentityid>`.
+
+   Build the subject the way the article's PowerShell script does, which is the form that worked with this server; the article's text describes it differently. `<encoded app id>` encodes the fixed Power Platform app id `58e835ab-2e39-46a9-b797-accce6633447`, not your app's client id. `<environment id>` is the Power Platform environment id, not the organization id: it is `EnvironmentId` in the answer of the `RetrieveCurrentOrganization` function, and also shown in the Power Platform admin center. An encoded id is the GUID's bytes in .NET order, in base64url without padding:
+
+   ```bash
+   node -e 'const b = Buffer.from(process.argv[1].replace(/-/g, ""), "hex");
+     b.subarray(0, 4).reverse(); b.subarray(4, 6).reverse(); b.subarray(6, 8).reverse();
+     console.log(b.toString("base64url"))' 58e835ab-2e39-46a9-b797-accce6633447
+   # qzXoWDkuqUa3l6zM5mM0Rw
+   ```
+
+Then call `list_record_documents` for a record whose Documents tab shows files.
 
 ### Build
 

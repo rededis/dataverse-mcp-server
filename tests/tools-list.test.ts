@@ -67,6 +67,7 @@ describe("tools/list", () => {
         "delete_record",
         "invoke_action",
         "invoke_function",
+        "list_record_documents",
         "list_solutions",
         "create_entity",
         "add_attribute",
