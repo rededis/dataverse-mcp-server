@@ -7,6 +7,7 @@ import {
   DataverseCallerDeniedError,
   DataverseError,
   DataverseTimeoutError,
+  ExplainedDataverseError,
 } from "../../src/errors.js";
 import {
   AuditLog,
@@ -133,6 +134,37 @@ describe("outcomeOf", () => {
         code: "0x80040217",
       },
     });
+    // A tool that retells the error for the agent keeps what is logged.
+    const retold = outcomeOf(
+      new ExplainedDataverseError(
+        new DataverseApiError(400, request, body),
+        "CANARY in the tool's words",
+      ),
+    );
+    expect(retold).toEqual({
+      outcome: "dataverse-error",
+      error: { class: "DataverseApiError", status: 400, code: "0x80040217" },
+    });
+    expect(JSON.stringify(retold)).not.toContain("CANARY");
+    // With actAs, a 403 is a DataverseCallerDeniedError; retold, it stays one.
+    expect(
+      outcomeOf(
+        new ExplainedDataverseError(
+          new DataverseCallerDeniedError(request, body, {
+            name: "n",
+            objectId: GUID,
+          }),
+          "CANARY in the tool's words",
+        ),
+      ),
+    ).toEqual({
+      outcome: "dataverse-error",
+      error: {
+        class: "DataverseCallerDeniedError",
+        status: 403,
+        code: "0x80040217",
+      },
+    });
   });
 
   it("classifies the other Dataverse errors by their safe fields", () => {
@@ -220,6 +252,28 @@ describe("resultFields", () => {
         none,
       ),
     ).toEqual({ records: 2 });
+  });
+
+  it("list_record_documents: the files listed, none for a record without a folder", () => {
+    const none = new CallMetrics();
+    expect(
+      resultFields(
+        "list_record_documents",
+        text({ files: [{}, {}], total: 2 }),
+        none,
+      ),
+    ).toEqual({ records: 2 });
+    expect(
+      resultFields(
+        "list_record_documents",
+        {
+          content: [
+            { type: "text", text: "The record has no document folder." },
+          ],
+        },
+        none,
+      ),
+    ).toEqual({});
   });
 });
 

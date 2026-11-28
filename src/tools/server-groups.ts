@@ -1,6 +1,7 @@
 import { registerActionTools } from "./actions.js";
 import { registerDataReadTools } from "./data-read.js";
 import { registerDataWriteTools } from "./data-write.js";
+import { registerDocumentsReadTools } from "./documents-read.js";
 import { registerFunctionTools } from "./functions.js";
 import { registerMetadataReadTools } from "./metadata-read.js";
 import type { RegisterTools, ToolGroup } from "./types.js";
@@ -12,6 +13,10 @@ import type { RegisterTools, ToolGroup } from "./types.js";
  */
 export type ServerToolGroup = Exclude<ToolGroup, "development">;
 
+/**
+ * The key order is the order of `tools/list` (ADR-0001 §9): a new group goes
+ * last, so the tools existing roles see keep their places.
+ */
 export const SERVER_TOOL_GROUPS: Readonly<
   Record<ServerToolGroup, RegisterTools>
 > = {
@@ -20,4 +25,5 @@ export const SERVER_TOOL_GROUPS: Readonly<
   "data-write": registerDataWriteTools,
   actions: registerActionTools,
   functions: registerFunctionTools,
+  "documents-read": registerDocumentsReadTools,
 };

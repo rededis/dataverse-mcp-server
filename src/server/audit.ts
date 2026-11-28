@@ -21,6 +21,7 @@ import {
   DataverseError,
   DataverseNetworkError,
   DataverseTimeoutError,
+  ExplainedDataverseError,
   RefusedError,
 } from "../errors.js";
 import type { RequestObserver } from "../http.js";
@@ -177,6 +178,12 @@ export function callFields(
  * `constructor.name` is not reliable.
  */
 function dataverseErrorClass(error: DataverseError): string {
+  // A tool's retelling is logged as the error it retells.
+  if (
+    error instanceof ExplainedDataverseError &&
+    error.cause instanceof DataverseError
+  )
+    return dataverseErrorClass(error.cause);
   if (error instanceof DataverseCallerDeniedError)
     return "DataverseCallerDeniedError";
   if (error instanceof DataverseApiError) return "DataverseApiError";
@@ -238,6 +245,14 @@ function firstText(result: CallToolResult): unknown {
 const lengthOf = (value: unknown) =>
   Array.isArray(value) ? value.length : undefined;
 
+/** `records` from the length of one list in the tool's own JSON result. */
+function countOf(result: CallToolResult, key: string): { records?: number } {
+  const records = lengthOf(
+    (firstText(result) as Record<string, unknown> | undefined)?.[key],
+  );
+  return records === undefined ? {} : { records };
+}
+
 // The record a create made, from OData-EntityId: `…/emails(<GUID>)`. A
 // compound key (an elastic table's partitionid) is a value the caller chose,
 // and is not logged.
@@ -274,12 +289,12 @@ export function resultFields(
     case "invoke_action":
     case "invoke_function":
       return metrics.records === undefined ? {} : { records: metrics.records };
-    case "get_picklist_options": {
-      const records = lengthOf(
-        (firstText(result) as Record<string, unknown>)?.options,
-      );
-      return records === undefined ? {} : { records };
-    }
+    case "get_picklist_options":
+      return countOf(result, "options");
+    // The files listed. A record without a folder gets a sentence, which
+    // carries no count.
+    case "list_record_documents":
+      return countOf(result, "files");
     default: {
       const records = lengthOf(firstText(result));
       return records === undefined ? {} : { records };

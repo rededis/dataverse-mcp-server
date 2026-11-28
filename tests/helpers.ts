@@ -46,6 +46,13 @@ export function createMockServer() {
 
 export const GUID = "11111111-1111-1111-1111-111111111111";
 
+/** The FetchXML in a `/<entity_set>?fetchXml=…` request path, decoded. */
+export function fetchXmlOf(path: string): string {
+  return new URLSearchParams(path.slice(path.indexOf("?") + 1)).get(
+    "fetchXml",
+  ) as string;
+}
+
 // What DataverseClient throws when Dataverse answers 404.
 export function notFound(body = "not found") {
   return new DataverseApiError(

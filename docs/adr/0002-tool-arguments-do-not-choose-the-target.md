@@ -101,7 +101,8 @@ stdio package keeps `"*"`: it grants every table anyway.
 ### 4. On the server, an entity set must exist
 
 The server checks the `entity_set` of each data tool (`query_records`,
-`get_record`, `create_record`, `update_record`, `delete_record`) against the
+`get_record`, `create_record`, `update_record`, `delete_record`,
+`list_record_documents`) against the
 metadata (`EntityDefinitions?$filter=EntitySetName eq '…'`, looked up as the
 application user, found names cached for the life of the process), so that a
 data tool cannot reach an unbound function or action by its name. There the
@@ -112,6 +113,13 @@ table only gets an error from Dataverse.
 
 The stdio package does not do this: it grants every group and every operation
 anyway, and the lookup would cost a request per new entity set.
+
+_Added 2026-11-28 (#200)._ `list_record_documents` reads more of the table's
+metadata than this check does: its logical name, its primary id column and
+whether document management is on. It reads them in a request of its own,
+on stdio as well, made with the call's client: for a token with `actAs`, as
+that user, like the rest of the call. The existence check above stays the
+application user's.
 
 ### 5. A write does only what its tool says
 

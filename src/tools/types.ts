@@ -13,6 +13,7 @@ export type ToolGroup =
   | "data-write"
   | "actions"
   | "functions"
+  | "documents-read"
   | "development";
 
 export interface ToolDeps {

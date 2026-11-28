@@ -48,6 +48,7 @@ const ROLE_GROUPS = [
   "data-write",
   "actions",
   "functions",
+  "documents-read",
 ] as const satisfies readonly ServerToolGroup[];
 
 // Allowlist entries have the shapes the tools accept, so a name that could

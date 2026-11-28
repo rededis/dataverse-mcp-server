@@ -29,6 +29,7 @@ const EXPECTED_GROUPS = {
   "data-write": ["create_record", "update_record", "delete_record"],
   actions: ["invoke_action"],
   functions: ["invoke_function"],
+  "documents-read": ["list_record_documents"],
   development: [
     "list_solutions",
     "get_attribute_dependencies",
@@ -46,7 +47,7 @@ const EXPECTED_GROUPS = {
 };
 
 describe("tool groups", () => {
-  it("the server-safe groups are exactly the five non-development groups", () => {
+  it("the server-safe groups are exactly the non-development groups", () => {
     expect(Object.keys(SERVER_TOOL_GROUPS).sort()).toEqual(
       Object.keys(EXPECTED_GROUPS)
         .filter((g) => g !== "development")

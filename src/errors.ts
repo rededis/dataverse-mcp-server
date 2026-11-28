@@ -41,12 +41,31 @@ export class DataverseApiError extends DataverseError {
     body: string,
     /** Replaces the default text; set here so `stack` carries it too. */
     message?: string,
+    /** `code` stands in for the body's, when the body is not at hand. */
+    options?: { cause?: unknown; code?: string },
   ) {
     // Same text as before typed errors existed; callers may still show it.
-    super(message ?? `Dataverse API error (${status}): ${body}`);
+    super(
+      message ?? `Dataverse API error (${status}): ${body}`,
+      options?.cause === undefined ? undefined : { cause: options.cause },
+    );
     this.method = request.method;
     this.url = request.url;
-    this.code = errorField(body, "code");
+    this.code = options?.code ?? errorField(body, "code");
+  }
+}
+
+/**
+ * A Dataverse error told in a tool's terms. It keeps the status, the code
+ * and the request of the error it replaces, which the audit log records,
+ * and has that error as its cause.
+ */
+export class ExplainedDataverseError extends DataverseApiError {
+  constructor(original: DataverseApiError, message: string) {
+    super(original.status, original, "", message, {
+      cause: original,
+      code: original.code,
+    });
   }
 }
 

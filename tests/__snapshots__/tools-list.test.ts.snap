@@ -743,6 +743,28 @@ exports[`tools/list > matches the snapshot with deletes disabled 1`] = `
     "name": "list_entity_keys",
   },
   {
+    "description": "List the files in a record's SharePoint document folder, the ones its Documents tab shows, files in subfolders included; only reads. Returns { files: [{ name, path, file_type, size_bytes, modified_on, modified_by, url }], total }: at most 100 files, most recently modified first, where path is relative to the record's folder and url is the file's SharePoint address as Dataverse gives it; when the folder holds more files, a note says so, and total gives their number when Dataverse could count them all (up to 5000). A record without a document folder the caller can see gets a message saying so instead of a list. An unknown entity set, a table with document management off, a record that does not exist or that the caller may not read, and a missing one-time admin setup for reading SharePoint documents through the Dataverse API are errors. With a folder structure based on Account or Contact, the list for an account or contact also holds the files in the folders of its related records, and the caller's access to those records is not checked. It returns no file content, and no tool here downloads a file. To read the record itself, use get_record.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "entity_set": {
+          "description": "Entity set name of the record's table (plural, e.g. 'accounts', 'leads')",
+          "type": "string",
+        },
+        "id": {
+          "description": "Record GUID",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_set",
+        "id",
+      ],
+      "type": "object",
+    },
+    "name": "list_record_documents",
+  },
+  {
     "description": "List the visible solutions with solutionid, uniquename, friendlyname, version and ismanaged; unmanaged only unless include_managed is true. Read-only. A uniquename is the solution filter of list_entities.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1720,6 +1742,28 @@ exports[`tools/list > matches the snapshot with deletes enabled 1`] = `
       "type": "object",
     },
     "name": "list_entity_keys",
+  },
+  {
+    "description": "List the files in a record's SharePoint document folder, the ones its Documents tab shows, files in subfolders included; only reads. Returns { files: [{ name, path, file_type, size_bytes, modified_on, modified_by, url }], total }: at most 100 files, most recently modified first, where path is relative to the record's folder and url is the file's SharePoint address as Dataverse gives it; when the folder holds more files, a note says so, and total gives their number when Dataverse could count them all (up to 5000). A record without a document folder the caller can see gets a message saying so instead of a list. An unknown entity set, a table with document management off, a record that does not exist or that the caller may not read, and a missing one-time admin setup for reading SharePoint documents through the Dataverse API are errors. With a folder structure based on Account or Contact, the list for an account or contact also holds the files in the folders of its related records, and the caller's access to those records is not checked. It returns no file content, and no tool here downloads a file. To read the record itself, use get_record.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "entity_set": {
+          "description": "Entity set name of the record's table (plural, e.g. 'accounts', 'leads')",
+          "type": "string",
+        },
+        "id": {
+          "description": "Record GUID",
+          "type": "string",
+        },
+      },
+      "required": [
+        "entity_set",
+        "id",
+      ],
+      "type": "object",
+    },
+    "name": "list_record_documents",
   },
   {
     "description": "List the visible solutions with solutionid, uniquename, friendlyname, version and ismanaged; unmanaged only unless include_managed is true. Read-only. A uniquename is the solution filter of list_entities.",
