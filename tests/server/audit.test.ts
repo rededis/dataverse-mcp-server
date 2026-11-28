@@ -146,6 +146,25 @@ describe("outcomeOf", () => {
       error: { class: "DataverseApiError", status: 400, code: "0x80040217" },
     });
     expect(JSON.stringify(retold)).not.toContain("CANARY");
+    // With actAs, a 403 is a DataverseCallerDeniedError; retold, it stays one.
+    expect(
+      outcomeOf(
+        new ExplainedDataverseError(
+          new DataverseCallerDeniedError(request, body, {
+            name: "n",
+            objectId: GUID,
+          }),
+          "CANARY in the tool's words",
+        ),
+      ),
+    ).toEqual({
+      outcome: "dataverse-error",
+      error: {
+        class: "DataverseCallerDeniedError",
+        status: 403,
+        code: "0x80040217",
+      },
+    });
   });
 
   it("classifies the other Dataverse errors by their safe fields", () => {

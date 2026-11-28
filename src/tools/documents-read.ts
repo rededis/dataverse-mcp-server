@@ -141,7 +141,7 @@ async function tableOf(
  */
 function pathInFolder(row: DocumentRow, folders: string[]): string | null {
   const location = row.relativelocation;
-  if (location === undefined) return row.fullname ?? null;
+  if (location === undefined) return fileName(row);
   const folder = folders
     .filter((f) => location.startsWith(`${f}/`))
     .reduce<string | undefined>(
@@ -151,9 +151,15 @@ function pathInFolder(row: DocumentRow, folders: string[]): string | null {
   const segments = (
     folder === undefined ? location : location.slice(folder.length + 1)
   ).split("/");
-  const last = segments.length - 1;
-  segments[last] = row.fullname ?? decoded(segments[last] ?? "");
+  segments[segments.length - 1] = fileName(row) ?? "";
   return segments.join("/");
+}
+
+/** `fullname`; without it, the last segment of `relativelocation`, decoded. */
+function fileName(row: DocumentRow): string | null {
+  if (row.fullname !== undefined) return row.fullname;
+  const last = row.relativelocation?.split("/").pop();
+  return last === undefined ? null : decoded(last);
 }
 
 function decoded(segment: string): string {
@@ -238,7 +244,8 @@ export function registerDocumentsReadTools(
         .filter((f): f is string => typeof f === "string" && f !== "");
       // The documents query must not run for a record without a folder:
       // Dataverse then creates a document location for the record, a write,
-      // and answers with an empty list, the same as for an empty folder.
+      // and answers with an empty list, the same as for an empty folder. A
+      // location removed between this check and that query is not caught.
       if (locations.rows.length === 0) {
         return {
           content: [
@@ -269,7 +276,7 @@ export function registerDocumentsReadTools(
       }
 
       const files = result.rows.map((row) => ({
-        name: row.fullname ?? null,
+        name: fileName(row),
         path: pathInFolder(row, folders),
         file_type: row.filetype ?? null,
         size_bytes: row.filesize ?? null,

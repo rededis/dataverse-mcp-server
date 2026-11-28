@@ -315,7 +315,7 @@ describe("list_record_documents", () => {
     );
   });
 
-  it("decodes the file name of a path when the row has no fullname", async () => {
+  it("takes the name and the path's file name from relativelocation, decoded, when the row has no fullname", async () => {
     const { fullname: _a, ...encoded } = IN_SUBFOLDER;
     const { fullname: _b, ...malformed } = {
       ...AT_TOP,
@@ -325,9 +325,11 @@ describe("list_record_documents", () => {
       ...ANSWERS,
       documents: documents([encoded, malformed]),
     });
-    expect(JSON.parse(text).files.map((f: { path: string }) => f.path)).toEqual(
-      ["Verträge 2026/Ångström report.docx", "100%.txt"],
-    );
+    const files = JSON.parse(text).files as { name: string; path: string }[];
+    expect(files.map((f) => [f.name, f.path])).toEqual([
+      ["Ångström report.docx", "Verträge 2026/Ångström report.docx"],
+      ["100%.txt", "100%.txt"],
+    ]);
   });
 
   it("refuses a table with document management off before any record or document request", async () => {

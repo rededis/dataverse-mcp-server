@@ -21,6 +21,7 @@ import {
   DataverseError,
   DataverseNetworkError,
   DataverseTimeoutError,
+  ExplainedDataverseError,
   RefusedError,
 } from "../errors.js";
 import type { RequestObserver } from "../http.js";
@@ -177,6 +178,12 @@ export function callFields(
  * `constructor.name` is not reliable.
  */
 function dataverseErrorClass(error: DataverseError): string {
+  // A tool's retelling is logged as the error it retells.
+  if (
+    error instanceof ExplainedDataverseError &&
+    error.cause instanceof DataverseError
+  )
+    return dataverseErrorClass(error.cause);
   if (error instanceof DataverseCallerDeniedError)
     return "DataverseCallerDeniedError";
   if (error instanceof DataverseApiError) return "DataverseApiError";
